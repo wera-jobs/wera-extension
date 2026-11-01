@@ -75,7 +75,7 @@ jobs:
       - name: Check out the API
         uses: actions/checkout@v7
         with:
-          repository: jessechumo/Wera
+          repository: wera-jobs/Wera
           ref: ${{ github.base_ref == 'main' && 'main' || 'dev' }}
           path: api
           token: ${{ secrets.WERA_API_REPO_TOKEN || github.token }}
