@@ -12,11 +12,11 @@ export function syncTheme(doc: Document): () => void {
   const obs = new MutationObserver(() => save());
   const save = () => {
     if (!extensionAlive()) return obs.disconnect(); // the extension was reloaded
-    let pref = 'system';
+    let pref = 'light';
     try {
       pref = asPref(localStorage.getItem(DASHBOARD_THEME_KEY));
     } catch {
-      // Storage blocked: keep following the system.
+      // Storage blocked: the dashboard's default.
     }
     if (pref === last) return;
     last = pref;
