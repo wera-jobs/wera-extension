@@ -7,6 +7,8 @@ describe('theme', () => {
     expect(resolveTheme('dark', true)).toBe('dark');
     expect(resolveTheme('system', true)).toBe('light');
     expect(resolveTheme('system', false)).toBe('dark');
-    expect(asPref('nonsense')).toBe('system');
+    expect(asPref('nonsense')).toBe('light');
+    expect(asPref(null)).toBe('light');
+    expect(asPref('system')).toBe('system');
   });
 });

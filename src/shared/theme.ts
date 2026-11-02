@@ -12,7 +12,7 @@ export const THEME_KEY = 'wera.theme';
 export const DASHBOARD_THEME_KEY = 'wera-theme';
 
 export function asPref(v: unknown): ThemePref {
-  return v === 'light' || v === 'dark' ? v : 'system';
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'light';
 }
 
 /** The theme to draw: the choice, or the system's when the choice is "system" (as the dashboard does). */
@@ -24,7 +24,7 @@ export async function loadThemePref(): Promise<ThemePref> {
   try {
     return asPref((await chrome.storage.local.get(THEME_KEY))[THEME_KEY]);
   } catch {
-    return 'system';
+    return 'light';
   }
 }
 
@@ -33,7 +33,7 @@ export async function loadThemePref(): Promise<ThemePref> {
  * dashboard, or the system's when following it). Returns a stop.
  */
 export function followTheme(apply: (t: Theme) => void): () => void {
-  let pref: ThemePref = 'system';
+  let pref: ThemePref = 'light';
   const draw = () => apply(resolveTheme(pref));
   void loadThemePref().then((p) => {
     pref = p;
