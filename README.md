@@ -1,13 +1,14 @@
 # Wera for Chrome
 
-[![CI](https://github.com/jessechumo/wera-extension/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jessechumo/wera-extension/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jessechumo/wera-extension/badges/coverage.json)](https://github.com/jessechumo/wera-extension/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/jessechumo/wera-extension?sort=semver&display_name=tag)](https://github.com/jessechumo/wera-extension/releases)
+[![CI](https://github.com/wera-jobs/wera-extension/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/wera-jobs/wera-extension/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wera-jobs/wera-extension/badges/coverage.json)](https://github.com/wera-jobs/wera-extension/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/wera-jobs/wera-extension?sort=semver&display_name=tag)](https://github.com/wera-jobs/wera-extension/releases)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](manifest.json)
 [![Tested with Playwright](https://img.shields.io/badge/e2e-Playwright-2EAD33?logo=playwright&logoColor=white)](e2e)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+[![License](https://img.shields.io/github/license/wera-jobs/wera-extension)](LICENSE)
 
-A Chrome extension for [Wera](https://github.com/jessechumo/Wera): on any job page, save the job to your Wera lists, see how well it fits, write a cover letter, tailor your resume and fill in the application. **Wera never submits an application.** It fills what it knows, outlines what you should check, and you click Submit yourself.
+A Chrome extension for [Wera](https://github.com/wera-jobs/Wera): on any job page, save the job to your Wera lists, see how well it fits, write a cover letter, tailor your resume and fill in the application. **Wera never submits an application.** It fills what it knows, outlines what you should check, and you click Submit yourself.
 
 ## What it does
 
@@ -62,21 +63,25 @@ The server side lives in the Wera repository (`/api/ext/*`, `/api/applicant`, `/
 ## Privacy and permissions
 
 - Permissions: `storage`, `activeTab`, `scripting`, `contextMenus`, and access to the sites you visit (Chrome shows it as "read and change all your data on all websites"). Wera needs it to tell a job page from any other on its own and to fill forms there, including forms embedded from another site. On other pages it only checks, in the page, whether they are one; nothing is sent.
-- The extension talks only to your own Wera server, from its service worker. Your password is sent once to get a token; the token is stored in `chrome.storage.local` and can be revoked in Wera's Settings.
+- The extension talks only to your Wera server, from its service worker. Your password is sent once to get a token; the token is stored in `chrome.storage.local` and can be revoked in Wera's Settings.
 - What Wera draws on pages sits in closed shadow roots: the page cannot read your fit score or drafts.
 - Page text sent to the AI is what a person can read, without what is aimed at AI tools, and is fenced as untrusted data in every prompt.
 - On a job page, Wera sends your Wera server the page's address (and, on a posting, its schema.org job data) to look the job up; on a page that says your application went through, its address.
-- The dashboard bridge runs only on your own Wera server's pages and accepts messages only from that origin; it passes job ids and posting addresses, nothing else.
-- Answers you give on forms are saved to your own Wera server (turn learning off in Settings; forget them in the dashboard). Self-identification answers are never sent to the AI.
+- The dashboard bridge runs only on your Wera server's pages and accepts messages only from that origin; it passes job ids and posting addresses, nothing else.
+- Answers you give on forms are saved to your Wera server (turn learning off in Settings; forget them in the dashboard). Self-identification answers are never sent to the AI.
 
-## Install (development)
+## Install
+
+Wera for Chrome is in private pilot and not on the Chrome Web Store yet. Pilot users install the zip from the [latest release](https://github.com/wera-jobs/wera-extension/releases/latest): unzip it, then use **Load unpacked** as below on the unzipped folder.
+
+To build it yourself:
 
 ```sh
 npm install
 npm run build          # dist/
 ```
 
-Open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and choose `dist/`. Open a job page: the Wera panel appears (or click the Wera icon). Sign in there with your Wera address (for example `http://192.168.4.68:3000`).
+Open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and choose `dist/`. Open a job page: the Wera panel appears (or click the Wera icon). Sign in there. The address starts as `https://www.wera-jobs.com`; change it to use another Wera server.
 
 `npm run dev` rebuilds on change.
 

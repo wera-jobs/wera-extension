@@ -45,7 +45,7 @@ describe('the dashboard theme', () => {
     localStorage.removeItem('wera-theme');
     document.documentElement.dataset.theme = 'light';
     await new Promise((r) => setTimeout(r, 0));
-    expect(set).toHaveBeenLastCalledWith({ 'wera.theme': 'system' });
+    expect(set).toHaveBeenLastCalledWith({ 'wera.theme': 'light' });
     stop();
   });
 

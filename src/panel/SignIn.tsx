@@ -3,7 +3,7 @@ import { rpc } from '../shared/rpc';
 import { describeError } from '../shared/errors';
 import { Button, Field, INPUT, Notice } from './ui';
 
-export const DEFAULT_SERVER = 'http://192.168.4.68:3000';
+export const DEFAULT_SERVER = 'https://www.wera-jobs.com';
 
 /** Connects this browser to the user's Wera (the background signs in and keeps the key). */
 export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
