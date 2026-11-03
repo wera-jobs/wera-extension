@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.11.0...wera-extension-v0.12.0) (2026-11-03)
+
+
+### Features
+
+* **panel:** sign in at wera-jobs.com by default ([2e23c8b](https://github.com/wera-jobs/wera-extension/commit/2e23c8b7688a44671d1ec18a6320f9ea88524062))
+* **theme:** start in light mode like the dashboard ([46a4e00](https://github.com/wera-jobs/wera-extension/commit/46a4e00cc98aa7e330da9331215652d340bd01a2))
+
+
+### Documentation
+
+* **contributing:** say pull requests go to dev first ([#73](https://github.com/wera-jobs/wera-extension/issues/73)) ([a522db3](https://github.com/wera-jobs/wera-extension/commit/a522db34e590e8db08190daa987791d8543df757))
+* **readme:** point links at the wera-jobs org ([5792203](https://github.com/wera-jobs/wera-extension/commit/5792203d79da9a4de0ca5bc5b3ff86f43e3a55c3))
+* **readme:** say how pilot users install the extension ([87b5cb2](https://github.com/wera-jobs/wera-extension/commit/87b5cb2202b24ff6a40ca83c38908deb72beb64b))
+
 ## [0.11.0](https://github.com/jessechumo/wera-extension/compare/wera-extension-v0.10.0...wera-extension-v0.11.0) (2026-10-31)
 
 
