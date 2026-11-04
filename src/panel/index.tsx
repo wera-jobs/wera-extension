@@ -5,6 +5,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { PageHandle } from '../page';
+import type { ApplicationStatus } from '../shared/api';
 import { loadFonts } from '../page/ui';
 import { extensionAlive } from '../shared/alive';
 import { remoteApi } from '../shared/rpc';
@@ -107,12 +108,19 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
   const page = usePanelPage(handle, !!server, show.formFrames);
   const [settings, setSettings] = useSettings();
   const [open, setOpen] = useState(show.initial);
-  // The confirmation the user chose to stay on (the alert does not come back for it).
-  const [stayed, setStayed] = useState<unknown>(null);
+  // The confirmation whose alert is over (it does not come back for it).
+  const [seenReply, setSeenReply] = useState<unknown>(null);
   // A new request from the background: open (asked to fill, or to show), or show/hide (toolbar icon).
   const [seen, setSeen] = useState(show);
-  // The user turned Wera off on this site: gone until they call it from the toolbar.
+  // The user turned Wera off on this site, or applied here: gone until they call it from the
+  // toolbar. After applying it is gone from this address only: a single-page board that moves
+  // on to another job brings it back.
   const [gone, setGone] = useState(false);
+  const [goneAt, setGoneAt] = useState('');
+  if (goneAt && location.href !== goneAt && handle.kind) {
+    setGoneAt('');
+    setGone(false);
+  }
   if (seen !== show) {
     setSeen(show);
     if (gone) {
@@ -142,13 +150,31 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
   const shown = server !== undefined && !gone && (jobPage || page.loading || show.opens > 0 || show.toggles > 0 || show.fills > 0);
   usePageRoom(shown && open && isForm);
   if (!shown) return null;
-  // The user sent the application and the site confirmed it: say so, then close the tab.
-  const sent = page.submitted && page.submitted.state !== 'off' && page.submitted.close ? page.submitted : null;
+  // The site confirmed the application: say so, then leave the page (or close the tab).
+  const confirmed = page.submitted && page.submitted.state !== 'off' && page.submitted !== seenReply ? page.submitted : null;
+  const marked = confirmed?.state === 'marked' ? confirmed : null;
   return (
     <>
-      <Panel api={api} page={page} settings={settings} setSettings={setSettings} tabId={show.tabId} open={open} onOpen={onOpen}
-        fillRequest={show.fills} onSignedIn={reload} onSignedOut={reload} onHideSite={() => setGone(true)} />
-      {sent && sent !== stayed && <AppliedAlert api={api} reply={sent} onStay={() => setStayed(sent)} />}
+      {!confirmed && (
+        <Panel api={api} page={page} settings={settings} setSettings={setSettings} tabId={show.tabId} open={open} onOpen={onOpen}
+          fillRequest={show.fills} onSignedIn={reload} onSignedOut={reload} onHideSite={() => setGone(true)} />
+      )}
+      {confirmed && (
+        <AppliedAlert api={api} reply={confirmed}
+          onDone={() => {
+            setSeenReply(confirmed);
+            setGone(true);
+            setGoneAt(location.href);
+          }}
+          onStay={() => {
+            // After Undo: the panel stays, without the note that it was applied.
+            setSeenReply(confirmed);
+            page.clearSubmitted();
+          }}
+          onUndo={api && marked ? async () => {
+            page.setJob(await api.setStatus(marked.job.id, (marked.previous ?? 'saved') as ApplicationStatus));
+          } : undefined} />
+      )}
     </>
   );
 }

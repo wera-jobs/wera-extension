@@ -183,13 +183,14 @@ test('fill a multi-step application, then mark it applied', async () => {
   await shot(job, 'steps');
 
   // The user writes their own answer (CI's API has no AI to draft one), then submits; Wera sees the
-  // thank-you, moves the job to Applied, says so, then closes the tab.
+  // thank-you, moves the job to Applied, says "Job applied", then closes the tab.
   await job.locator('#why').fill('I want to keep a fleet of robots online, and Fixture runs the biggest one.');
   const closed = job.waitForEvent('close', { timeout: 30_000 });
   await job.locator('#submit').click();
-  await expect(panel.getByRole('alertdialog', { name: 'Application submitted' })).toBeVisible({ timeout: 15_000 });
+  await expect(panel.getByRole('alertdialog', { name: 'Job applied' })).toBeVisible({ timeout: 15_000 });
   await expect(panel.getByText(/is now Applied in your Wera tracker/)).toBeVisible();
-  await expect(panel.getByText(/Application sent. Marked as applied/)).toBeVisible();
+  // The alert stands in for the panel: Wera is leaving.
+  await expect(panel.getByRole('dialog', { name: 'Wera' })).toHaveCount(0);
   await shot(job, 'applied');
   await closed;
   // The answer on the form the user submitted is remembered for the next one.

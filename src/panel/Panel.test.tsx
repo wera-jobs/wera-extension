@@ -493,6 +493,28 @@ describe('the Wera panel', () => {
     await waitFor(() => expect(calls.some((c) => c.name === 'scan')).toBe(true));
   });
 
+  it('tailors the resume from a posting and shows the new fit score', async () => {
+    let doc: unknown = null;
+    const { calls } = fakeBackground({
+      job,
+      api: {
+        jobResume: () => doc,
+        jobKeywords: () => ({ keywords: [], coverage: { matched: [], missing: [], percent: 55 } }),
+        tailorResume: () => {
+          doc = { id: 2, job_id: job.id, coverage: { matched: [], missing: [], percent: 82 }, fit_score: { before: 70, after: 78 } };
+          return { resume: doc, coverage_before: { matched: [], missing: [], percent: 55 } };
+        },
+      },
+    });
+    render(<App handle={handle('posting')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Tailor$/ }));
+    const line = await screen.findByLabelText('What the tailored resume scores');
+    expect(line).toHaveTextContent('Fit7078');
+    expect(line).toHaveTextContent('Keywords55%82%');
+    expect(screen.getByText('Resume tailored for this job')).toBeInTheDocument();
+    expect(calls.find((c) => c.name === 'tailorResume')?.args[0]).toBe(job.id);
+  });
+
   it('settings: turns things off, and signs out', async () => {
     const { store } = fakeBackground({ job });
     render(<App handle={handle('posting')} show={show()} />);
@@ -505,14 +527,26 @@ describe('the Wera panel', () => {
 });
 
 describe('AI answers that cannot be right', () => {
-  it('after the user sends an application, shows the alert over the page; staying keeps the panel\'s note', async () => {
+  it('after the site confirms an application, says "Job applied", then leaves the page', async () => {
     fakeBackground();
-    const sent = { state: 'marked' as const, job: { id: 9, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved', close: true };
-    render(<App handle={{ ...handle('form'), submitted: sent }} show={show({ initial: false })} />);
-    expect(await screen.findByRole('alertdialog', { name: 'Application submitted' })).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Stay on this page' }));
+    const sent = { state: 'marked' as const, job: { id: 9, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved' };
+    const { container } = render(<App handle={{ ...handle('form'), submitted: sent }} show={show()} />);
+    expect(await screen.findByRole('alertdialog', { name: 'Job applied' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Wera' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'OK' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(screen.getByText('Application sent. Marked as applied.')).toBeTruthy();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('undo after applying keeps Wera on the page, back to where the job was', async () => {
+    const { calls } = fakeBackground({ job, api: { setStatus: (id: number, status: string) => ({ ...job, id, application_status: status }) } });
+    const sent = { state: 'marked' as const, job: { id: job.id, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved' };
+    render(<App handle={{ ...handle('form'), submitted: sent }} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'OK' }));
+    expect(await screen.findByRole('dialog', { name: 'Wera' })).toBeInTheDocument();
+    expect(calls.find((c) => c.name === 'setStatus')?.args).toEqual([job.id, 'saved']);
+    expect(screen.queryByText(/Marked as applied/)).toBeNull();
   });
 
   it('a LinkedIn box only takes a LinkedIn address', async () => {
