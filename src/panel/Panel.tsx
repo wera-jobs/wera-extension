@@ -10,7 +10,7 @@ import { ChevronRight, Settings2 } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import type { Settings } from '../shared/settings';
 import { Apply } from './Apply';
-import { Badge, Fit, JobCard, Posting, Submitted } from './JobViews';
+import { Badge, Fit, JobCard, Posting, QuickMatch, Submitted } from './JobViews';
 import { Launcher } from './Launcher';
 import { LogoMark } from './Logo';
 import { SettingsView } from './SettingsView';
@@ -73,7 +73,7 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
     <>
       {page.submitted && <Submitted api={api} page={page} />}
       <JobCard api={api} page={page} />
-      <Fit api={api} page={page} />
+      {page.job ? <Fit api={api} page={page} /> : !page.loading && <QuickMatch api={api} page={page} />}
       {page.error && <Notice tone="bad">{page.error}</Notice>}
       {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
     </>

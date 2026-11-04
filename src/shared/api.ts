@@ -323,6 +323,11 @@ export class WeraApi {
     return this.call<JobKeywords>(`/api/jobs/${jobId}/keywords`);
   }
 
+  /** A job page's keywords and the main resume's share of them, for a job not in Wera (word matching, no AI). */
+  postingKeywords(description: string) {
+    return this.call<JobKeywords>('/api/ext/keywords', { method: 'POST', body: JSON.stringify({ description: description.slice(0, 60000) }) });
+  }
+
   /** The resume tailored to this job, or null if there is none yet. */
   async jobResume(jobId: number): Promise<ResumeDoc | null> {
     try {

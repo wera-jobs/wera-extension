@@ -515,6 +515,19 @@ describe('the Wera panel', () => {
     expect(calls.find((c) => c.name === 'tailorResume')?.args[0]).toBe(job.id);
   });
 
+  it('shows how the resume meets a job not in Wera yet, before it is saved', async () => {
+    const { calls } = fakeBackground({
+      job: null,
+      info: { text: 'We run Go services on Kubernetes. '.repeat(10) },
+      api: { postingKeywords: () => ({ keywords: ['go', 'kubernetes', 'rust'], coverage: { matched: ['go', 'kubernetes'], missing: ['rust'], percent: 67 } }) },
+    });
+    render(<App handle={handle('posting')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Your resume has 67% of this job's keywords/ }));
+    expect(screen.getByText('rust')).toBeInTheDocument();
+    expect(String(calls.find((c) => c.name === 'postingKeywords')?.args[0])).toContain('Kubernetes');
+    expect(calls.some((c) => c.name === 'addJob')).toBe(false);
+  });
+
   it('settings: turns things off, and signs out', async () => {
     const { store } = fakeBackground({ job });
     render(<App handle={handle('posting')} show={show()} />);

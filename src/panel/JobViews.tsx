@@ -63,6 +63,42 @@ function Chips({ have, lack }: { have: string[]; lack: string[] }) {
 
 const SPONSORS: Record<string, string> = { yes: 'This job offers visa sponsorship.', no: 'This job does not offer visa sponsorship.' };
 
+/**
+ * A job not in Wera yet: how the resume meets the keywords on its page,
+ * at once and for free (word matching), before anything is saved.
+ */
+export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }) {
+  // The page's job data when it describes the job in full, else what the page shows.
+  const data = page.info?.draft?.description ?? '', shown = page.info?.text ?? '';
+  const text = data.length >= shown.length ? data : shown;
+  const [keywords, setKeywords] = useState<JobKeywords | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (text.length < 200) return;
+    let live = true;
+    api.postingKeywords(text).then((k) => live && setKeywords(k), (e: unknown) => log.warn('fit', "matching the page's keywords failed", e));
+    return () => {
+      live = false;
+    };
+  }, [api, text]);
+  const coverage = keywords?.coverage;
+  if (!coverage || coverage.matched.length + coverage.missing.length < 3) return null;
+  return (
+    <div className="rounded-card border border-border bg-surface text-xs">
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="min-w-0 flex-1 font-medium">Your resume has <span className="font-mono">{coverage.percent}%</span> of this job's keywords</span>
+        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-border px-3 py-2">
+          <Chips have={coverage.matched} lack={coverage.missing} />
+          <p className="text-faint">Save the job for its full fit score.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Why the job scored what it did, and how the resume meets it. */
 export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
   const job = page.job;
