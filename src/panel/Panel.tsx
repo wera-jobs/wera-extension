@@ -12,6 +12,7 @@ import type { Settings } from '../shared/settings';
 import { Apply } from './Apply';
 import { Badge, Fit, JobCard, Posting, QuickMatch, Submitted } from './JobViews';
 import { PostingFacts } from './PostingFacts';
+import { Referrals } from './Referrals';
 import { Launcher } from './Launcher';
 import { LogoMark } from './Logo';
 import { SettingsView } from './SettingsView';
@@ -78,6 +79,12 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
       {page.job ? <Fit api={api} page={page} /> : !page.loading && <QuickMatch api={api} page={page} />}
       {page.error && <Notice tone="bad">{page.error}</Notice>}
       {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
+      {!page.loading && !page.submitted && (
+        <Referrals api={api} jobId={page.job?.id ?? null}
+          company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}
+          title={page.job?.title || page.info?.draft?.title || page.handle.title || ''}
+          description={page.info?.draft?.description || page.info?.text || ''} />
+      )}
     </>
   );
 }
