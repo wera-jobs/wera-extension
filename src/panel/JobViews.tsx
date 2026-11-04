@@ -3,7 +3,7 @@
 // an application.
 import { useEffect, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Bookmark, ChevronDown, ExternalLink, PartyPopper, Send, X } from 'lucide-react';
+import { Bookmark, ChevronDown, ExternalLink, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import { describeError } from '../shared/errors';
 import { markApplying } from '../shared/flow';
@@ -11,6 +11,7 @@ import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
 import { NextMatch, useNextMatch } from './AppliedAlert';
 import { Traps } from './Traps';
+import { TailoredLine, useTailoredScore } from './Tailored';
 import { BigButton, Button, Notice, ScoreRing, Skeleton } from './ui';
 import type { PanelPageState } from './usePanelPage';
 
@@ -61,6 +62,42 @@ function Chips({ have, lack }: { have: string[]; lack: string[] }) {
 }
 
 const SPONSORS: Record<string, string> = { yes: 'This job offers visa sponsorship.', no: 'This job does not offer visa sponsorship.' };
+
+/**
+ * A job not in Wera yet: how the resume meets the keywords on its page,
+ * at once and for free (word matching), before anything is saved.
+ */
+export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }) {
+  // The page's job data when it describes the job in full, else what the page shows.
+  const data = page.info?.draft?.description ?? '', shown = page.info?.text ?? '';
+  const text = data.length >= shown.length ? data : shown;
+  const [keywords, setKeywords] = useState<JobKeywords | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (text.length < 200) return;
+    let live = true;
+    api.postingKeywords(text).then((k) => live && setKeywords(k), (e: unknown) => log.warn('fit', "matching the page's keywords failed", e));
+    return () => {
+      live = false;
+    };
+  }, [api, text]);
+  const coverage = keywords?.coverage;
+  if (!coverage || coverage.matched.length + coverage.missing.length < 3) return null;
+  return (
+    <div className="rounded-card border border-border bg-surface text-xs">
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="min-w-0 flex-1 font-medium">Your resume has <span className="font-mono">{coverage.percent}%</span> of this job's keywords</span>
+        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-border px-3 py-2">
+          <Chips have={coverage.matched} lack={coverage.missing} />
+          <p className="text-faint">Save the job for its full fit score.</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Why the job scored what it did, and how the resume meets it. */
 export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
@@ -170,7 +207,42 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
           : 'Saves it to your Jobs and Tracker with a fit score.'}
       </p>
       {error && <Notice tone="bad">{error}</Notice>}
+      {page.job && <TailorResume api={api} jobId={page.job.id} />}
       <Traps traps={page.info?.traps ?? []} />
+    </div>
+  );
+}
+
+/** Tailor the resume to a saved job before applying, and see what it does to the fit. */
+function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
+  const [version, setVersion] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const score = useTailoredScore(api, jobId, version);
+  const tailor = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await api.tailorResume(jobId);
+      setVersion((n) => n + 1);
+    } catch (e) {
+      setError(describeError(e, "Couldn't tailor your resume"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex items-center gap-2.5 rounded-card border border-border bg-surface px-3 py-2.5">
+      <FileText className="size-4 shrink-0 text-muted" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium">{score ? 'Resume tailored for this job' : 'Tailor your resume'}</p>
+        {score ? <TailoredLine score={score} /> : <p className="text-[11px] text-muted">{error || 'A copy written toward this job, used when Wera fills the application.'}</p>}
+      </div>
+      {score ? (
+        <a href={api.dashboardUrl(`/jobs/${jobId}`)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
+      ) : (
+        <Button className="px-2 py-1" busy={busy} onClick={() => void tailor()}>{!busy && <Sparkles className="size-3.5" />} Tailor</Button>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WeraApi } from '../shared/api';
 import { AppliedAlert, appliedMessage, CLOSE_AFTER, CLOSE_WITH_NEXT } from './AppliedAlert';
@@ -23,7 +23,7 @@ const quietApi = (found: unknown = null) => ({ nextMatch: vi.fn(async () => foun
 describe('after applying, the next best match', () => {
   it('is offered, and opens in this tab', async () => {
     const sent = fakeRuntime();
-    render(<AppliedAlert api={quietApi(next)} reply={{ state: 'marked', job, previous: 'saved', close: true }} onStay={() => {}} />);
+    render(<AppliedAlert api={quietApi(next)} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={() => {}} />);
     expect(await screen.findByText(/Staff SRE at Globex/)).toBeInTheDocument();
     await act(async () => {
       screen.getByRole('button', { name: 'Open it' }).click();
@@ -35,7 +35,7 @@ describe('after applying, the next best match', () => {
   it('gets more time before the tab closes', async () => {
     vi.useFakeTimers();
     const sent = fakeRuntime();
-    render(<AppliedAlert api={quietApi(next)} reply={{ state: 'marked', job, previous: 'saved', close: true }} onStay={() => {}} />);
+    render(<AppliedAlert api={quietApi(next)} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={() => {}} />);
     await act(async () => { await vi.advanceTimersByTimeAsync((CLOSE_AFTER + 1) * 1000); });
     expect(sent.some((m) => m.type === 'wera:tab-close')).toBe(false);
     await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_WITH_NEXT * 1000); });
@@ -45,7 +45,7 @@ describe('after applying, the next best match', () => {
   it('is left out when there is none, or Wera cannot say', async () => {
     fakeRuntime();
     const failing = { nextMatch: vi.fn(async () => { throw new Error('down'); }) } as unknown as WeraApi;
-    render(<AppliedAlert api={failing} reply={{ state: 'marked', job, previous: 'saved', close: true }} onStay={() => {}} />);
+    render(<AppliedAlert api={failing} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={() => {}} />);
     await act(async () => { await Promise.resolve(); });
     expect(screen.queryByRole('button', { name: 'Open it' })).not.toBeInTheDocument();
   });
@@ -59,23 +59,67 @@ describe('the alert after applying', () => {
     expect(appliedMessage({ state: 'unknown', draft: null }).detail).toMatch(/not in Wera/);
   });
 
-  it('counts down, then closes the tab', async () => {
+  it('says "Job applied", counts down, then closes the tab when the user wants that', async () => {
     vi.useFakeTimers();
     const sent = fakeRuntime();
-    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onStay={() => {}} />);
-    expect(screen.getByRole('alertdialog', { name: 'Application submitted' })).toBeTruthy();
+    const onDone = vi.fn();
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={onDone} />);
+    expect(screen.getByRole('alertdialog', { name: 'Job applied' })).toBeTruthy();
     expect(screen.getByText(`Closing this tab in ${CLOSE_AFTER} s…`)).toBeTruthy();
-    await act(async () => vi.advanceTimersByTime(CLOSE_AFTER * 1000));
+    await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
     expect(sent).toEqual([{ type: 'wera:tab-close' }]);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the tab when the user stays (or presses Escape)', async () => {
+  it('otherwise counts down, then Wera leaves the page and the tab stays', async () => {
+    vi.useFakeTimers();
     const sent = fakeRuntime();
-    const onStay = vi.fn();
-    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onStay={onStay} />);
-    screen.getByRole('button', { name: 'Stay on this page' }).click();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    expect(onStay).toHaveBeenCalledTimes(2);
+    const onDone = vi.fn();
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
+    expect(screen.getByText(`Wera leaves this page in ${CLOSE_AFTER} s…`)).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
+    expect(onDone).toHaveBeenCalledTimes(1);
     expect(sent).toEqual([]);
+  });
+
+  it('waits while the user reads it', async () => {
+    vi.useFakeTimers();
+    fakeRuntime();
+    const onDone = vi.fn();
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
+    fireEvent.mouseEnter(screen.getByRole('alertdialog'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 3000); });
+    expect(onDone).not.toHaveBeenCalled();
+    expect(screen.getByText('Paused while you read.')).toBeTruthy();
+    fireEvent.mouseLeave(screen.getByRole('alertdialog'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the tab when the user says so (or presses Escape), and Wera still leaves', async () => {
+    const sent = fakeRuntime();
+    const onDone = vi.fn();
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={onDone} />);
+    screen.getByRole('button', { name: 'Keep this tab' }).click();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onDone).toHaveBeenCalledTimes(2);
+    expect(sent).toEqual([]);
+  });
+
+  it('undoes: the job moves back and Wera stays', async () => {
+    vi.useFakeTimers();
+    const sent = fakeRuntime();
+    const onDone = vi.fn();
+    const onStay = vi.fn();
+    const onUndo = vi.fn(async () => {});
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={onDone} onUndo={onUndo} onStay={onStay} />);
+    await act(async () => { screen.getByRole('button', { name: 'Undo' }).click(); });
+    expect(onUndo).toHaveBeenCalled();
+    expect(screen.getByText('Moved back. Wera stays on this page.')).toBeTruthy();
+    await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_WITH_NEXT * 1000); });
+    expect(onDone).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+    screen.getByRole('button', { name: 'OK' }).click();
+    expect(onStay).toHaveBeenCalled();
   });
 });

@@ -78,7 +78,7 @@ const RULES: [FieldPurpose, RegExp][] = [
   ['major', /^(?!.*\bminor\b).*(\bmajor\b|field of study|discipline|concentration|area of study)/],
   ['degree', /^(?!.*\b(pursuing|working toward)\b).*(\bdegree\b|level of education|highest education)/],
   // The school itself, not something at it ("the grading scale used by your current school").
-  ['school', /^(?!.*\b(minor|grading|start date|high school)\b).*(^(your |name of (your )?|current |most recent )?(school|university|college|institution)\b|(which|what|select a) (school|university|college|institution)|(school|university|college) (name|attended)|name of (your )?(school|university|college))/],
+  ['school', /^(?!.*\b(minor|grading|start date|high school|year|district|type|level)\b).*(^(your |name of (your )?|current |most recent )?(school|university|college|institution)\b|(which|what|select a) (school|university|college|institution)|(school|university|college) (name|attended)|name of (your )?(school|university|college))/],
   ['years_experience', /^(how many )?(total )?years of (professional |relevant |work |working |industry |full[- ]time |total )?experience( do you have)?( in total)?\??$/],
   ['current_title', /current (job )?(title|role|position)|job title|^title\b/],
   ['current_company', /current (\(?or (most recent|latest)\)? )?(company|employer)|(most recent|latest) (company|employer)|^company( name)?\b|^employer\b/],
@@ -165,6 +165,8 @@ function generic(f: Field): FieldPurpose | null {
   // A follow-up to another answer ("If yes, please mention your Acme email address") asks
   // something only the user knows, not the detail it names.
   if (/^\(?if (yes|no|so|applicable|you answered|you selected|other)\b/.test(label)) return f.kind === 'textarea' ? 'question' : null;
+  // A site's search box asks for words to look up, never a detail ("Search the FSA Website").
+  if (f.inputType === 'search' || f.el.getAttribute('role') === 'searchbox' || /^search\b.*\b(site|website|jobs|help|faq|articles)\b|^search$/.test(label)) return null;
   if (f.inputType === 'email') return 'email';
   if (f.inputType === 'tel') return 'phone';
   if (f.kind === 'checkbox' && CONSENT.test(label)) return 'consent';
