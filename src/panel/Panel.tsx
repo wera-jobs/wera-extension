@@ -11,6 +11,7 @@ import type { WeraApi } from '../shared/api';
 import type { Settings } from '../shared/settings';
 import { Apply } from './Apply';
 import { Badge, Fit, JobCard, Posting, Submitted } from './JobViews';
+import { Launcher } from './Launcher';
 import { LogoMark } from './Logo';
 import { SettingsView } from './SettingsView';
 import { SignIn } from './SignIn';
@@ -40,15 +41,8 @@ export function Panel(props: PanelProps) {
   const [menu, setMenu] = useState(false);
   const kind = page.info?.hasForm ? 'form' : page.handle.kind;
 
-  if (!open) {
-    // Collapsed: Wera's mark on a tab at the right edge, big enough to find and click.
-    return (
-      <button type="button" onClick={() => onOpen(true)} aria-label="Show the Wera panel" title="Wera (Alt+Shift+W)"
-        className="anim-peek panel-shadow fixed top-[40%] right-0 z-[2147483646] grid place-items-center rounded-l-2xl border border-r-0 border-border bg-surface py-3.5 pr-3 pl-3.5 transition-[padding] duration-150 hover:pr-4">
-        <LogoMark size={30} />
-      </button>
-    );
-  }
+  // Collapsed: Wera's mark on a tab at the right edge, which the user can move up and down.
+  if (!open) return <Launcher onOpen={() => onOpen(true)} />;
   return (
     <section role="dialog" aria-label="Wera"
       className="anim-slide panel-shadow fixed top-3 right-3 bottom-3 z-[2147483646] flex w-[372px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-card border border-border bg-bg">
