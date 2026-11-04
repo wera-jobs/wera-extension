@@ -37,6 +37,15 @@ describe('readJobPosting', () => {
     expect(readJobPosting(document, 'u')).toMatchObject({ company: 'Acme', work_mode: 'remote', location: 'Remote' });
   });
 
+  it('reads when the posting went up and when it expires', () => {
+    load(page({ '@type': 'JobPosting', title: 'SRE', hiringOrganization: 'Acme', description: 'Run things.', datePosted: '2026-09-01', validThrough: '2026-10-01T00:00' }));
+    const d = readJobPosting(document, 'u')!;
+    expect(d.posted?.slice(0, 10)).toBe('2026-09-01');
+    expect(d.expires?.slice(0, 10)).toBe('2026-10-01');
+    load(page({ '@type': 'JobPosting', title: 'SRE', hiringOrganization: 'Acme', description: 'Run things.', datePosted: 'soon' }));
+    expect(readJobPosting(document, 'u')).not.toHaveProperty('posted');
+  });
+
   it('ignores pages without a posting and malformed blocks', () => {
     document.head.innerHTML = '<script type="application/ld+json">{not json</script><script type="application/ld+json">{"@type":"Organization"}</script>';
     expect(readJobPosting(document, 'u')).toBeNull();
