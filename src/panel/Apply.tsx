@@ -14,6 +14,7 @@ import { BigButton, Button, Notice } from './ui';
 import { LETTER, RESUME, needsYou, useAutofill, type Row } from './useAutofill';
 import type { PanelPageState } from './usePanelPage';
 import { Traps } from './Traps';
+import { TailoredLine, useTailoredScore } from './Tailored';
 
 /** An application: Autofill, then what still needs the user, then Continue on multi-page forms. */
 export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & { api: WeraApi }) {
@@ -180,7 +181,9 @@ function NeedRow({ r, onUse }: { r: Row; onUse: (value: string) => void }) {
 function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnType<typeof useAutofill> }) {
   const [writing, setWriting] = useState(false);
   const [tailoring, setTailoring] = useState(false);
+  const [tailored, setTailored] = useState(0);
   const job = page.job;
+  const score = useTailoredScore(api, job?.id, tailored);
   const resumeText = !a.resume ? 'none yet' : a.resume.kind === 'tailored' ? `tailored for ${job?.company ?? 'this job'}` : a.resume.kind === 'base' ? 'your main resume' : 'your uploaded file';
   return (
     <div className="divide-y divide-border rounded-card border border-border bg-surface">
@@ -189,13 +192,14 @@ function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnT
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">Resume</p>
           <p className="truncate text-[11px] text-muted">{a.plan ? resumeText : 'attached when Wera fills the form'}</p>
+          <TailoredLine score={score} />
         </div>
         {a.resume?.kind === 'tailored' ? (
           <a href={api.dashboardUrl(job ? `/jobs/${job.id}` : '/profile/resume')} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
         ) : (
           <Button className="px-2 py-1" busy={tailoring} title="Write a copy of your resume for this job" onClick={() => {
             setTailoring(true);
-            void a.tailor().finally(() => setTailoring(false));
+            void a.tailor().then((ok) => ok && setTailored((n) => n + 1)).finally(() => setTailoring(false));
           }}>
             {!tailoring && <Sparkles className="size-3.5" />} Tailor
           </Button>
