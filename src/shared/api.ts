@@ -111,6 +111,8 @@ export interface ResumeDoc {
   fit: { one_page: boolean; summary: string } | null;
   notes: string[];
   coverage?: Coverage;
+  /** For a copy tailored to a job: the job's fit score, and what it is with this resume. */
+  fit_score?: { before: number; after: number };
 }
 
 export interface ResumeTemplate {
