@@ -43,6 +43,15 @@ export function propertyFallback(source: string): string {
   return decls.length ? `\n.wera-root,.wera-root *,.wera-root ::before,.wera-root ::after{${decls.join(';')}}` : '';
 }
 
+/**
+ * Tailwind sizes in rem, and a rem inside a shadow root is the page's root
+ * font size: a site with a large one would blow the panel up. Sizes are
+ * fixed at 16px to the rem instead, as on the dashboard.
+ */
+export function remToPx(source: string): string {
+  return source.replace(/(?<![\w\\.-])(-?\d*\.?\d+)rem(?![\w\\-])/g, (_, n: string) => `${+(Number(n) * 16).toFixed(3)}px`);
+}
+
 /** The page's width the panel takes, card and margin. */
 const PANEL_ROOM = 396;
 /** A window narrower than this has no room to give: the form would be squeezed, so the panel floats over it. */
@@ -149,7 +158,7 @@ function mount(handle: PageHandle, first: { tabId: number; open?: boolean; fill?
   const host = document.createElement('wera-panel');
   const shadow = host.attachShadow({ mode: __WERA_E2E__ ? 'open' : 'closed' });
   const style = document.createElement('style');
-  style.textContent = css + propertyFallback(css);
+  style.textContent = remToPx(css) + propertyFallback(css);
   const box = document.createElement('div');
   box.className = 'wera-root';
   shadow.append(style, box);
