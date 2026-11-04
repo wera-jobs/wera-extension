@@ -166,6 +166,28 @@ describe('telling job pages from other pages', () => {
     expect(kindAt('https://jobs.lever.co/acme/2f1c3b0e-4b8f-4c55-9a7e-5c0d1e2f3a4b', '<h1>Senior Engineer</h1>')).toBe('posting');
   });
 
+  it('knows a job\'s address whose title is no main heading (Jobvite), but not a closed one', () => {
+    const url = 'https://jobs.jobvite.com/acme/job/okvTAfw2';
+    const job = `<h2 class="jv-header">Member of Technical Staff</h2><a class="jv-button-apply" href="/acme/job/okvTAfw2/apply">Apply</a>
+      <p><b>The Opportunity</b></p><p><b>About the Team</b></p><p><b>Your Role</b></p><p><b>What You Will Bring</b></p><ul><li>5 years of experience</li></ul><p>Equal employment opportunity</p>`;
+    expect(kindAt(url, job)).toBe('posting');
+    expect(kindAt(url, '<h2>Careers</h2><p>The page you are looking for doesn\'t exist.</p><a href="/acme/jobs">Search for Jobs</a>')).toBeNull();
+  });
+
+  it('takes a list of jobs marked up as jobs (RemoteOK) for no job, and finds the one a page is about', () => {
+    const ld = (title: string, url: string) => `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'JobPosting', title, url, hiringOrganization: { name: 'Acme' }, description: 'Do things.' })}</script>`;
+    const list = ld('Sales Operations Analyst', 'https://remoteok.com/remote-jobs/1') + ld('AI Engineer', 'https://remoteok.com/remote-jobs/2') + '<h1>Remote Developer Jobs</h1>';
+    expect(kindAt('https://remoteok.com/remote-dev-jobs', list)).toBeNull();
+    expect(jobSummary(new JSDOM(`<!doctype html><body>${list.replace('Remote Developer Jobs', 'AI Engineer')}`, { url: 'https://remoteok.com/remote-jobs/x' }).window.document).title).toBe('AI Engineer');
+    expect(jobSummary(new JSDOM(`<!doctype html><body>${list}`, { url: 'https://remoteok.com/remote-jobs/1' }).window.document).title).toBe('Sales Operations Analyst');
+  });
+
+  it('stays off a student aid or college page with "apply" in its address', () => {
+    const fafsa = `<h1>Get Money To Help Pay for School</h1><form><label for="q">Search the FSA Website</label><input id="q" type="text"></form>
+      <label for="y">School Year</label><select id="y"><option>2026–27</option></select><label for="st">State of Residence</label><select id="st"><option>Texas</option></select>`;
+    expect(kindAt('https://studentaid.gov/h/apply-for-aid/fafsa', fafsa)).toBeNull();
+  });
+
   it('takes no job board named in another page\'s address for that board', () => {
     expect(isJobUrl('https://www.google.com/url?q=https://boards.greenhouse.io/acme/jobs/123')).toBe(false);
     expect(isJobUrl('https://www.bing.com/search?q=jobs.lever.co/acme/2f1c3b0e-4b8f-4c55-9a7e-5c0d1e2f3a4b')).toBe(false);
@@ -202,7 +224,7 @@ describe('telling job pages from other pages', () => {
       'https://www.linkedin.com/messaging/thread/1/', 'https://chatgpt.com/c/1', 'https://www.youtube.com/watch?v=1',
     ]) expect(isNotJobSite(url), url).toBe(true);
     for (const url of [
-      'https://discord.com/careers', 'https://www.linkedin.com/jobs/view/4012345678/', 'https://job-boards.greenhouse.io/discord/jobs/1',
+      'https://discord.com/careers', 'https://www.linkedin.com/jobs/view/4012345678/', 'https://www.linkedin.com/jobs/view/software-engineer-ii-at-acme-4476983365', 'https://job-boards.greenhouse.io/discord/jobs/1',
       'https://careers.google.com/jobs/results/1', 'https://acme.com/careers/sre',
     ]) expect(isNotJobSite(url), url).toBe(false);
   });
@@ -210,7 +232,7 @@ describe('telling job pages from other pages', () => {
   it('knows the addresses of job boards', () => {
     for (const url of [
       'https://boards.greenhouse.io/acme/jobs/123', 'https://jobs.lever.co/acme/2f1c3b0e-4b8f-4c55-9a7e-5c0d1e2f3a4b',
-      'https://acme.wd5.myworkdayjobs.com/en-US/Careers/job/Austin-TX/SRE_R123', 'https://www.linkedin.com/jobs/view/4012345678/',
+      'https://acme.wd5.myworkdayjobs.com/en-US/Careers/job/Austin-TX/SRE_R123', 'https://www.linkedin.com/jobs/view/4012345678/', 'https://www.linkedin.com/jobs/view/software-engineer-ii-at-acme-4476983365',
       'https://www.indeed.com/viewjob?jk=abc', 'https://apply.workable.com/acme/j/1A2B3C4D5E/', 'https://smartapply.indeed.com/beta/indeedapply/form/resume',
       'https://acme.icims.com/jobs/1234/sre/job', 'https://jobs.dayforcehcm.com/en-US/acme/CANDIDATEPORTAL/jobs/1234', 'https://acme.bamboohr.com/careers/42',
       'https://recruiting.paylocity.com/Recruiting/Jobs/Details/123', 'https://careers.acme.com/hcmUI/CandidateExperience/en/sites/CX/job/1234/',

@@ -77,7 +77,7 @@ const TYPES: Record<string, string> = {
  * free, so it is tried before the AI.
  */
 export function readJobPosting(doc: Document, url: string): JobDraft | null {
-  const job = jsonLdObjects(doc).find(isJobPosting);
+  const job = thePosting(doc);
   if (!job) return null;
   const org = asArray(job.hiringOrganization as Json | Json[] | string)[0];
   const company = typeof org === 'string' ? org : str(org?.name);
@@ -103,9 +103,28 @@ export function readJobPosting(doc: Document, url: string): JobDraft | null {
   };
 }
 
+const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * The page's own job. A list of jobs (a job board's search, RemoteOK)
+ * marks up every job on it: then only the one the page is about counts,
+ * the one at the page's address or under its heading, and a list is none.
+ */
+function thePosting(doc: Document): Json | null {
+  const jobs = jsonLdObjects(doc).filter(isJobPosting);
+  const titles = new Set(jobs.map((j) => squash(str(j.title))));
+  if (titles.size <= 1) return jobs[0] ?? null;
+  const here = doc.location.href.split(/[?#]/)[0]!.replace(/\/$/, '');
+  const heading = squash(doc.querySelector('h1')?.textContent ?? '');
+  return jobs.find((j) => {
+    const at = str(j.url).split(/[?#]/)[0]!.replace(/\/$/, '');
+    return at === here;
+  }) ?? jobs.find((j) => heading !== '' && squash(str(j.title)) === heading) ?? null;
+}
+
 /** What the page's job data says to AI tools (taken out of the description Wera reads). */
 export function postingTraps(doc: Document): Trap[] {
-  const job = jsonLdObjects(doc).find(isJobPosting);
+  const job = thePosting(doc);
   if (!job) return [];
   const hidden: string[] = [];
   const html = str(job.description);

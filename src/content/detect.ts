@@ -69,7 +69,8 @@ const JOB_ADDRESSES: RegExp[] = [
   /[?&](gh_jid|ashby_jid)=[\w-]+/,
   /[?&]leverappid=/i,
   // Job boards.
-  /(^|\.)linkedin\.com\/jobs\/view\/\d+/,
+  // Signed in: /jobs/view/4476983365; signed out: /jobs/view/software-engineer-at-acme-4476983365.
+  /(^|\.)linkedin\.com\/jobs\/view\/([a-z0-9%-]+-)?\d+/,
   /(^|\.)linkedin\.com\/jobs\/.*[?&]currentjobid=\d+/i,
   /(^|\.)indeed\.[a-z.]+\/(viewjob|m\/viewjob|m\/basecamp\/viewjob|rc\/clk)/,
   /(^|\.)indeed\.[a-z.]+\/.*[?&]vjk=/,
@@ -233,11 +234,16 @@ export function findApply(doc: Document): HTMLElement | null {
   return says(APPLY) ?? says(/^\s*application\s*$/i) ?? null;
 }
 
+/** How many of a posting's usual sections the page's text has. */
+function sectionCount(doc: Document): number {
+  const text = (doc.body?.innerText || doc.body?.textContent || '').slice(0, 40000);
+  return SECTIONS.filter((re) => re.test(text)).length;
+}
+
 /** Whether a page with no job data reads like one job's posting: a careers address, a title, sections and a way to apply. */
 function readsLikePosting(doc: Document): boolean {
   if (!careerAddress(doc.location.href) || !headline(doc) || !hasApplyButton(doc)) return false;
-  const text = (doc.body?.innerText || doc.body?.textContent || '').slice(0, 40000);
-  return SECTIONS.filter((re) => re.test(text)).length >= 3;
+  return sectionCount(doc) >= 3;
 }
 
 // What only a job application asks.
@@ -275,7 +281,9 @@ export function ownApplicationForm(doc: Document): boolean {
   if (known < 3) return false;
   // The first step of a long application may ask no more than who you are.
   if (applicantSite || careerAddress(url)) return who || only.size + too.size >= 2;
-  return applyAddress(url) && (who ? only.size + too.size >= 1 : only.size + too.size >= 2);
+  // Elsewhere an address that says "apply" is as likely a college, a grant or a card: without who
+  // you are, it takes a question only an application asks.
+  return applyAddress(url) && (who ? only.size + too.size >= 1 : only.size >= 1 && only.size + too.size >= 2);
 }
 
 /** Whether the page holds an application form (here or in an embedded applicant system's frame). */
@@ -320,7 +328,9 @@ export function pageKind(doc: Document): PageKind {
   if (shown !== doc) return pageKind(shown);
   if (hasApplicationForm(doc)) return 'form';
   if (readJobPosting(doc, url)) return 'posting';
-  if (isJobUrl(url) && headline(doc) && !GONE.test(`${headline(doc)} ${doc.title}`)) return 'posting';
+  // A job's address: its title as the heading, or (a site that heads it otherwise, Jobvite) a way to
+  // apply and a posting's sections. A closed job's page has neither, or says it is gone.
+  if (isJobUrl(url) && !GONE.test(`${headline(doc)} ${doc.title}`) && (headline(doc) || (hasApplyButton(doc) && sectionCount(doc) >= 2))) return 'posting';
   return readsLikePosting(doc) ? 'posting' : null;
 }
 
