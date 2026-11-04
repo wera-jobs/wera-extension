@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.13.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.12.1...wera-extension-v0.13.0) (2026-11-04)
+
+
+### Features
+
+* **panel:** move the Wera tab up or down the page ([ff103cc](https://github.com/wera-jobs/wera-extension/commit/ff103ccfd03215c5e1e9f19b377ab4fbb7ded55a))
+* **panel:** say Job applied, then leave the page ([df8dd21](https://github.com/wera-jobs/wera-extension/commit/df8dd2173a11c0136b563500d3744b6a4f5f3241))
+* **panel:** show a job's keyword match before it is saved ([197879b](https://github.com/wera-jobs/wera-extension/commit/197879baa2da42a81b234f98d1cd5f25f92d15d5))
+* **panel:** show the fit score a tailored resume earns ([067733e](https://github.com/wera-jobs/wera-extension/commit/067733e451bb56d9a58423592d9056d61c04cef1))
+
+
+### Bug Fixes
+
+* **detect:** tell job lists, student aid and site search from jobs ([cc550d8](https://github.com/wera-jobs/wera-extension/commit/cc550d895349d388e57e181090ad09f27f1bbeeb))
+
+## [0.12.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.12.0...wera-extension-v0.12.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **panel:** keep the panel its own size on any site ([8dc5600](https://github.com/wera-jobs/wera-extension/commit/8dc56006bb974e0f38efd6879f9d61ebbec3bc6e))
+
 ## [0.12.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.11.0...wera-extension-v0.12.0) (2026-11-03)
 
 
