@@ -38,6 +38,10 @@ export interface WeraJob {
   source: string;
   /** When the extension last filled an application for it (absent on older servers). */
   autofilled_at?: string | null;
+  /** When the posting went up (its job board's date), when Wera found it, and when it came down. */
+  posted_at?: string | null;
+  first_seen_at?: string;
+  closed_at?: string | null;
 }
 
 export interface CoverLetter {

@@ -13,6 +13,9 @@ export interface JobDraft {
   salary: string;
   industry: string;
   description: string;
+  /** When the posting went up and when it stops taking applications, as the page's job data says (ISO dates). */
+  posted?: string;
+  expires?: string;
   /** Where the fields came from. */
   source: 'page-data' | 'ai' | 'manual';
 }
