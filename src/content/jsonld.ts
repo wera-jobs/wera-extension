@@ -67,6 +67,12 @@ function salary(job: Json): string {
   return `${cur === 'USD' ? '$' : cur + ' '}${range}${unit ? ` per ${unit}` : ''}`;
 }
 
+/** A JobPosting date as { key: ISO date }, or nothing when it is missing or unreadable. */
+function date(key: 'posted' | 'expires', v: unknown): Partial<Record<'posted' | 'expires', string>> {
+  const t = new Date(str(v)).getTime();
+  return Number.isNaN(t) || !str(v) ? {} : { [key]: new Date(t).toISOString() };
+}
+
 const TYPES: Record<string, string> = {
   FULL_TIME: 'full_time', PART_TIME: 'part_time', CONTRACTOR: 'contract', TEMPORARY: 'contract', INTERN: 'internship',
 };
@@ -99,6 +105,8 @@ export function readJobPosting(doc: Document, url: string): JobDraft | null {
     salary: salary(job),
     industry: '',
     description: scrub(htmlToText(str(job.description))).clean,
+    ...date('posted', job.datePosted),
+    ...date('expires', job.validThrough),
     source: 'page-data',
   };
 }
