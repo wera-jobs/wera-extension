@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.13.0...wera-extension-v0.14.0) (2026-11-04)
+
+
+### Features
+
+* **panel:** find someone to refer you ([4d79e33](https://github.com/wera-jobs/wera-extension/commit/4d79e33bff02b0c1625a20dac5b84b003effe316))
+* **panel:** show a job's pay and age, and say when it may be too late ([00dba50](https://github.com/wera-jobs/wera-extension/commit/00dba506624511d40d1c18bf0ee90f06aeacacb6))
+
+
+### Documentation
+
+* describe the pay and age line and the referral helper ([eb435c0](https://github.com/wera-jobs/wera-extension/commit/eb435c0e06288586030bd827c49281469cfb6075))
+
 ## [0.13.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.12.1...wera-extension-v0.13.0) (2026-11-04)
 
 
