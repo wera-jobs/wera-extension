@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.12.0...wera-extension-v0.12.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **panel:** keep the panel its own size on any site ([8dc5600](https://github.com/wera-jobs/wera-extension/commit/8dc56006bb974e0f38efd6879f9d61ebbec3bc6e))
+
 ## [0.12.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.11.0...wera-extension-v0.12.0) (2026-11-03)
 
 
