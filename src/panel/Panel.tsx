@@ -75,11 +75,11 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
     <>
       {page.submitted && <Submitted api={api} page={page} />}
       <JobCard api={api} page={page} />
-      {!page.loading && <PostingFacts job={page.job} draft={page.info?.draft ?? page.handle.draft} text={page.info?.text ?? ''} />}
-      {page.job ? <Fit api={api} page={page} /> : !page.loading && <QuickMatch api={api} page={page} />}
+      {(page.info || !page.loading) && <PostingFacts job={page.job} draft={page.info?.draft ?? page.handle.draft} text={page.info?.text ?? ''} />}
+      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} />}
       {page.error && <Notice tone="bad">{page.error}</Notice>}
       {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
-      {!page.loading && !page.submitted && (
+      {(page.info || !page.loading) && !page.submitted && (
         <Referrals api={api} jobId={page.job?.id ?? null}
           company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}
           title={page.job?.title || page.info?.draft?.title || page.handle.title || ''}

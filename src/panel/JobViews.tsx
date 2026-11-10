@@ -147,7 +147,8 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
   const [busy, setBusy] = useState<'' | 'save' | 'apply'>('');
   const [going, setGoing] = useState(false);
   const [error, setError] = useState('');
-  if (page.loading) return <Skeleton className="h-11" />;
+  // Only the first read shows a placeholder: a re-read (the page moved on) keeps the buttons where they are.
+  if (page.loading && !page.info) return <Skeleton className="h-11" />;
   const save = async () => {
     // The page's job data when it has some, else the AI reads the posting.
     let draft = page.info?.draft ?? page.handle.draft;
