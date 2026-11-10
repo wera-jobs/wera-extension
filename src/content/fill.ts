@@ -144,6 +144,10 @@ export function comboboxChoice(el: HTMLInputElement): string {
     if (n.querySelectorAll('input, select, textarea').length > 1) break; // reached a neighbour's field
     const shown = n.querySelector('[class*="singleValue"], [class*="single-value"], [class*="SingleValue"]');
     if (shown?.textContent?.trim()) return shown.textContent.trim();
+    // A multi-select shows each choice as a chip (Greenhouse's demographic questions).
+    const chips = [...n.querySelectorAll('[class*="multi-value__label"], [class*="multiValueLabel"], [class*="MultiValueLabel"]')]
+      .map((c) => c.textContent?.trim() ?? '').filter(Boolean);
+    if (chips.length) return chips.join(', ');
   }
   return '';
 }
