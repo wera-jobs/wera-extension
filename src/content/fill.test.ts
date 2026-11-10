@@ -7,6 +7,7 @@ import { collectFields } from './fields';
 import { autofill as fillForm } from '../test/autofill';
 import { matchOption, searchText } from './match';
 import { formatFor, parseDate, valueFor } from './values';
+import { comboboxChoice } from './fill';
 
 const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
 
@@ -222,6 +223,15 @@ describe('fillForm on harder forms', () => {
     expect(out.find((r) => r.label === 'Gender')!.status).toBe('already');
     expect(out.find((r) => r.label === 'School')).toMatchObject({ status: 'review', note: 'pick the matching option' });
     expect((document.getElementById('sch') as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('comboboxChoice', () => {
+  it('reads the chips of a multi-select (Greenhouse demographic questions), whose input stays empty', () => {
+    document.body.innerHTML = `<div><label for="r">Race or Ethnicity</label><div class="select__control"><div class="select__value-container--is-multi">
+      <div class="select__multi-value"><div class="select__multi-value__label">Asian</div><div class="select__multi-value__remove"><svg></svg></div></div>
+      <input id="r" role="combobox" aria-autocomplete="list" value=""></div></div></div>`;
+    expect(comboboxChoice(document.getElementById('r') as HTMLInputElement)).toBe('Asian');
   });
 });
 
