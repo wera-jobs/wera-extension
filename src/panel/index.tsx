@@ -14,6 +14,7 @@ import css from './styles.css?inline';
 import { AppliedAlert } from './AppliedAlert';
 import { Panel } from './Panel';
 import { usePanelPage } from './usePanelPage';
+import { makeRoom } from './pageRoom';
 import { useSettings } from './useSettings';
 
 declare global {
@@ -24,6 +25,25 @@ declare global {
 
 // Sites where the user collapsed the panel (the key's old name is kept, so their choice carries over).
 const COLLAPSED = 'wera.dockCollapsed';
+/** Whether the panel was open in each tab, and when: the next page of the tab (posting, then its application) starts the same way. */
+export const TAB_OPEN = 'wera.tabOpen';
+/** How long a tab's choice carries over to its next pages. */
+const TAB_OPEN_FOR = 30 * 60_000;
+
+/** The panel's last state in this tab: open, collapsed, or nothing recent. */
+export async function tabOpen(tabId: number, now = Date.now()): Promise<boolean | null> {
+  const got = await chrome.storage.session.get(TAB_OPEN).catch((): Record<string, unknown> => ({}));
+  const e = (got[TAB_OPEN] as Record<string, { open: boolean; at: number }> | undefined)?.[tabId];
+  return e && now - e.at < TAB_OPEN_FOR ? e.open : null;
+}
+
+async function rememberTabOpen(tabId: number, open: boolean): Promise<void> {
+  const got = await chrome.storage.session.get(TAB_OPEN);
+  const now = Date.now();
+  const map = Object.fromEntries(Object.entries((got[TAB_OPEN] as Record<string, { open: boolean; at: number }> | undefined) ?? {}).filter(([, e]) => now - e.at < TAB_OPEN_FOR));
+  map[tabId] = { open, at: now };
+  await chrome.storage.session.set({ [TAB_OPEN]: map });
+}
 
 /** Messages the background sends the panel. */
 type PanelMessage =
@@ -58,17 +78,11 @@ const PANEL_ROOM = 396;
 /** A window narrower than this has no room to give: the form would be squeezed, so the panel floats over it. */
 const ROOM_NEEDED = 1000;
 
-/** While the panel is open on an application, the page makes room, so the panel never covers the form. */
+/** While the panel is open on a wide window, the page makes room, so the panel never covers the site (its Apply button, the form). */
 function usePageRoom(active: boolean) {
   useEffect(() => {
-    const root = document.documentElement;
     if (!active || innerWidth < ROOM_NEEDED) return;
-    const before = root.style.getPropertyValue('margin-right');
-    root.style.setProperty('margin-right', `${PANEL_ROOM}px`, 'important');
-    return () => {
-      if (before) root.style.setProperty('margin-right', before);
-      else root.style.removeProperty('margin-right');
-    };
+    return makeRoom(document, PANEL_ROOM);
   }, [active]);
 }
 
@@ -136,22 +150,24 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
     setFormSeen(true);
     if (!show.collapsedHere) setOpen(true);
   }
+  const tabId = show.tabId;
   const onOpen = useCallback((v: boolean) => {
     setOpen(v);
+    void rememberTabOpen(tabId, v).catch(() => {});
     void chrome.storage.local.get(COLLAPSED).then((g) => {
       const map = { ...(g[COLLAPSED] as Record<string, number> | undefined) };
       if (v) delete map[location.host];
       else map[location.host] = 1;
       return chrome.storage.local.set({ [COLLAPSED]: map });
     }).catch(() => {});
-  }, []);
+  }, [tabId]);
   // A single-page site moved to something that is not a job page: step aside, unless the user opened Wera here.
   const jobPage = !!page.handle.kind || !!page.info?.hasForm || !!page.submitted || show.formFrames > 0;
   const shown = server !== undefined && !gone && (jobPage || page.loading || show.opens > 0 || show.toggles > 0 || show.fills > 0);
-  usePageRoom(shown && open && isForm);
-  if (!shown) return null;
   // The site confirmed the application: say so, then leave the page (or close the tab).
   const confirmed = page.submitted && page.submitted.state !== 'off' && page.submitted !== seenReply ? page.submitted : null;
+  usePageRoom(shown && open && !confirmed);
+  if (!shown) return null;
   const marked = confirmed?.state === 'marked' ? confirmed : null;
   return (
     <>
@@ -207,10 +223,12 @@ function mount(handle: PageHandle, first: { tabId: number; open?: boolean; fill?
   let show: Show = { tabId: first.tabId, initial: false, collapsedHere: false, opens: 0, toggles: 0, fills: 0, formFrames: first.formFrame ? 1 : 0 };
   const render = () => root.render(<StrictMode><App handle={handle} show={show} /></StrictMode>);
 
-  // Open at first on an application (unless collapsed on this site before), or when asked.
-  void chrome.storage.local.get(COLLAPSED).then((g) => {
-    const collapsed = !!(g[COLLAPSED] as Record<string, number> | undefined)?.[location.host];
-    show = { ...show, collapsedHere: collapsed, initial: !!first.open || !!first.fill || ((handle.kind === 'form' || !!first.formFrame) && !collapsed) || !!handle.submitted, fills: first.fill ? 1 : 0 };
+  // Open at first as it was on this tab's last page (the posting before its application), else
+  // on an application (unless collapsed on this site before), or when asked.
+  void Promise.all([chrome.storage.local.get(COLLAPSED), tabOpen(first.tabId)]).then(([g, lastInTab]) => {
+    const collapsed = lastInTab === false || (lastInTab == null && !!(g[COLLAPSED] as Record<string, number> | undefined)?.[location.host]);
+    const atFirst = lastInTab === true || ((handle.kind === 'form' || !!first.formFrame) && !collapsed);
+    show = { ...show, collapsedHere: collapsed, initial: !!first.open || !!first.fill || atFirst || !!handle.submitted, fills: first.fill ? 1 : 0 };
     render();
   }, () => render());
 
