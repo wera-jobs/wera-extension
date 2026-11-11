@@ -30,7 +30,8 @@ describe('makeRoom', () => {
     box(chat, 1360, 1420);
     box(flow, 0, 1440);
     const undo = makeRoom(document, 396);
-    expect(bar.style.getPropertyValue('max-width')).toBe('calc(100vw - 396px)');
+    // Browsers (and jsdom 31) may write the calc in canonical order: either spelling is the same width.
+    expect(bar.style.getPropertyValue('max-width')).toMatch(/^calc\((100vw - 396px|-396px \+ 100vw)\)$/);
     expect(chat.style.getPropertyValue('right')).toBe('416px');
     expect(flow.getAttribute('style')).toBeNull();
     undo();
