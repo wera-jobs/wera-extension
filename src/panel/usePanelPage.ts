@@ -20,6 +20,8 @@ export interface PanelPage {
   newStep: number;
   /** The site confirmed an application, and what Wera did about it. */
   submitted: SubmitReply | null;
+  /** The application system and step as the last fill read them (fresher than the page read on a multi-page form). */
+  form: { site?: string; step?: PageInfo['step'] } | null;
 }
 
 /** A frame's page script noticed something (forwarded by the background), or Wera changed the tab's job. */
@@ -36,7 +38,7 @@ const SCORE_WAIT = 3000;
  * the next step of an application).
  */
 export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames = 0) {
-  const [state, setState] = useState<PanelPage>({ handle, info: null, job: null, loading: true, error: '', newStep: 0, submitted: handle.submitted });
+  const [state, setState] = useState<PanelPage>({ handle, info: null, job: null, loading: true, error: '', newStep: 0, submitted: handle.submitted, form: null });
   const run = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -113,9 +115,12 @@ export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames =
       }
     })();
   }, []);
+  const noteForm = useCallback((site?: string, step?: PageInfo['step']) => {
+    setState((s) => (s.form?.site === site && s.form?.step?.index === step?.index && s.form?.step?.name === step?.name ? s : { ...s, form: { site, step } }));
+  }, []);
   const clearNewStep = useCallback(() => setState((s) => ({ ...s, newStep: 0 })), []);
   const clearSubmitted = useCallback(() => setState((s) => ({ ...s, submitted: null })), []);
-  return { ...state, refresh, setJob, clearNewStep, clearSubmitted };
+  return { ...state, refresh, setJob, noteForm, clearNewStep, clearSubmitted };
 }
 
 export type PanelPageState = ReturnType<typeof usePanelPage>;

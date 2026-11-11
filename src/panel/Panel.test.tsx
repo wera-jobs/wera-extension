@@ -1,4 +1,4 @@
-import { act, cleanup, configure, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PageHandle } from '../page';
@@ -213,7 +213,7 @@ describe('the Wera panel', () => {
     expect(screen.getByText(/Wera drafted this answer/)).toBeInTheDocument();
     expect(screen.getByText('agree yourself after reading it')).toBeInTheDocument();
     expect(screen.getByText(/press/)).toHaveTextContent('Submit application');
-    expect(screen.getByText('Greenhouse')).toBeInTheDocument();
+    expect(screen.getByText('Application · Greenhouse')).toBeInTheDocument();
     // One click uses the guess.
     await userEvent.click(screen.getByRole('button', { name: 'Use' }));
     await waitFor(() => expect(applied.at(-1)).toEqual([{ id: 'w3', value: 'None' }]));
@@ -326,6 +326,23 @@ describe('the Wera panel', () => {
     await finished();
   });
 
+  it('lets the user check a job the AI read before saving it', async () => {
+    const { calls } = fakeBackground({
+      info: { hasForm: false, draft: null, text: 'About the role. '.repeat(20) },
+      api: { extract: () => ({ ...draft, source: 'ai', is_job_posting: true, title: 'Staff SRE', company: 'Globx' }) },
+    });
+    render(<App handle={{ ...handle('posting'), draft: null }} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Save to Wera/ }));
+    const form = await screen.findByRole('form', { name: 'Check the job before saving' });
+    const company = within(form).getByLabelText('Company');
+    expect(company).toHaveValue('Globx');
+    await userEvent.clear(company);
+    await userEvent.type(company, 'Globex');
+    expect(calls.some((c) => c.name === 'addJob')).toBe(false);
+    await userEvent.click(within(form).getByRole('button', { name: /Save to Wera/ }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'addJob')?.args[0]).toMatchObject({ title: 'Staff SRE', company: 'Globex', source: 'manual' }));
+  });
+
   it('keeps filling when the site\'s own Next shows another step', async () => {
     const one: PagePlan = { fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' })], next: { id: 'n1', label: 'Next', final: false }, errors: 0 };
     const two: PagePlan = { fields: [field('w2', 'City', { purpose: 'city', value: 'Austin', source: 'details', group: 'details' })], next: { id: 'n2', label: 'Submit', final: true }, errors: 0 };
@@ -433,7 +450,7 @@ describe('the Wera panel', () => {
     fakeBackground({ job, info: { hasForm: true } });
     render(<App handle={handle('form')} show={show()} />);
     await screen.findByRole('dialog', { name: 'Wera' });
-    await waitFor(() => expect(document.documentElement.style.marginRight).toBe('396px'));
+    await waitFor(() => expect(document.documentElement.style.marginRight).toBe('384px'));
     await userEvent.click(screen.getByRole('button', { name: 'Collapse the Wera panel' }));
     await waitFor(() => expect(document.documentElement.style.marginRight).toBe(''));
   });
@@ -450,7 +467,7 @@ describe('the Wera panel', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Autofill$/ }));
     await userEvent.click(await screen.findByRole('button', { name: /Continue to the next page/ }));
     await waitFor(() => expect(calls.some((c) => c.name === 'next')).toBe(true));
-    expect(screen.getByText('Workday · Step 1 of 5 · My Information')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 5 · My Information')).toBeInTheDocument();
   });
 
   it('says what went wrong, and still fills what it can', async () => {
