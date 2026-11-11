@@ -32,6 +32,8 @@ function candidates(doc: Document): HTMLElement[] {
   return [...out];
 }
 
+const ROOT_CHANGES: MutationObserverInit = { attributes: true, attributeFilter: ['style', 'class'], childList: true };
+
 const keep = (el: HTMLElement, prop: string): [string, string] => [el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)];
 
 /**
@@ -41,13 +43,21 @@ const keep = (el: HTMLElement, prop: string): [string, string] => [el.style.getP
  */
 export function makeRoom(doc: Document, px: number): () => void {
   const view = doc.defaultView;
-  const root = doc.documentElement;
   if (!view) return () => {};
+  // Greenhouse replaces <html> itself once loaded: whatever root the document has now gets the margin.
+  let root = doc.documentElement;
   const margin = keep(root, 'margin-right');
   const moved = new Map<HTMLElement, Saved>();
   const want = `${px}px`;
 
   const placeRoot = () => {
+    const now = doc.documentElement;
+    if (!now) return;
+    if (now !== root) {
+      root = now;
+      watchRoot.disconnect();
+      watchRoot.observe(root, ROOT_CHANGES);
+    }
     if (root.style.getPropertyValue('margin-right') !== want || root.style.getPropertyPriority('margin-right') !== 'important') {
       root.style.setProperty('margin-right', want, 'important');
     }
@@ -72,27 +82,48 @@ export function makeRoom(doc: Document, px: number): () => void {
     }
   };
 
-  placeRoot();
-  placeFixed();
-  // The site took the margin off, or added a fixed bar: put things right (bars at most every 1.5 s, a busy page costs little).
+  // The site took the margin off, or put in a new <body>.
+  const watchRoot = new MutationObserver(() => {
+    placeRoot();
+    followBody();
+  });
+  watchRoot.observe(root, ROOT_CHANGES);
+  // A new <html>: the margin and the bars again.
+  const watchDoc = new MutationObserver(() => {
+    placeRoot();
+    followBody();
+    schedule();
+  });
+  watchDoc.observe(doc, { childList: true });
+  // A fixed bar added later (a cookie banner): at most every 1.5 s, so a busy page costs little.
   let timer = 0;
-  const watchRoot = new MutationObserver(placeRoot);
-  watchRoot.observe(root, { attributes: true, attributeFilter: ['style', 'class'] });
-  const watchBody = new MutationObserver(() => {
+  const schedule = () => {
     if (timer) return;
     timer = view.setTimeout(() => {
       timer = 0;
       placeFixed();
     }, 1500);
-  });
-  if (doc.body) watchBody.observe(doc.body, { childList: true, subtree: true });
+  };
+  let watchedBody: HTMLElement | null = null;
+  const watchBody = new MutationObserver(schedule);
+  const followBody = () => {
+    if (doc.body && doc.body !== watchedBody) {
+      watchedBody = doc.body;
+      watchBody.disconnect();
+      watchBody.observe(doc.body, { childList: true, subtree: true });
+    }
+  };
+  placeRoot();
+  placeFixed();
+  followBody();
 
   return () => {
     watchRoot.disconnect();
+    watchDoc.disconnect();
     watchBody.disconnect();
     view.clearTimeout(timer);
     const put = (el: HTMLElement, prop: string, [v, p]: [string, string]) => (v ? el.style.setProperty(prop, v, p) : el.style.removeProperty(prop));
-    put(root, 'margin-right', margin);
+    put(doc.documentElement, 'margin-right', margin);
     for (const [el, saved] of moved) {
       put(el, 'right', saved.right);
       put(el, 'max-width', saved.maxWidth);
