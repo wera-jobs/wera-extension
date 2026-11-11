@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.15.0...wera-extension-v0.15.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **deps:** bump lucide-react ([e2b0a92](https://github.com/wera-jobs/wera-extension/commit/e2b0a926487b36e7fe7e81b64391a03ab06274b9))
+* **deps:** dependency updates from Dependabot ([534d87e](https://github.com/wera-jobs/wera-extension/commit/534d87e9871296fa76af9f5c69c51a8ccd4924f7))
+
 ## [0.15.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.14.1...wera-extension-v0.15.0) (2026-11-11)
 
 
