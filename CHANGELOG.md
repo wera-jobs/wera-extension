@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.14.0...wera-extension-v0.14.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **fill:** read a multi-select's chips as its answer ([fc1123f](https://github.com/wera-jobs/wera-extension/commit/fc1123fa42a79b3f538a84c056e3bb84bb2fc086))
+* **fill:** wait for the user and give their field back ([a3b5ee3](https://github.com/wera-jobs/wera-extension/commit/a3b5ee31ce797b8bce0ce6fc97ce34a6e38674c3))
+* **learn:** remember only answers that mean something on the next form ([6cbf1fb](https://github.com/wera-jobs/wera-extension/commit/6cbf1fbc0f8b5c43722b8314fda614d95290739e))
+* **panel:** keep Apply with Wera on screen while the page is re-read ([c57276c](https://github.com/wera-jobs/wera-extension/commit/c57276c8e9eb49dba396abcdf96949a084c66c92))
+* **panel:** never cover the site, and stay open from posting to application ([25286ff](https://github.com/wera-jobs/wera-extension/commit/25286ffdf3e0d0fdf3e701924a8f1d6741eeff03))
+* **watch:** no "Job applied" from a form nobody opened ([8ea1f96](https://github.com/wera-jobs/wera-extension/commit/8ea1f96abce76acde95f0cbbb4107b370a615efd))
+
 ## [0.14.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.13.0...wera-extension-v0.14.0) (2026-11-04)
 
 
