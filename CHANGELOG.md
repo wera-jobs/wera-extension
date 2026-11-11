@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.15.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.14.1...wera-extension-v0.15.0) (2026-11-11)
+
+
+### Features
+
+* **panel:** a simpler sign-in ([0d1d4aa](https://github.com/wera-jobs/wera-extension/commit/0d1d4aa39ba655483588a5b4d7908ac9f1ae566a))
+* **panel:** dock beside the page and open with the job ([53a99ae](https://github.com/wera-jobs/wera-extension/commit/53a99ae9c27edab2da757e3283ef3e765b662ae5))
+* **panel:** hide the Wera tab until the next visit, on a site, or everywhere ([3fc5431](https://github.com/wera-jobs/wera-extension/commit/3fc5431a3b144bd7d0d21115e4f9defc784ae757))
+* **panel:** settings as grouped switches, with the account on top ([c5559da](https://github.com/wera-jobs/wera-extension/commit/c5559da838365633a2696d36466dbecb4db0627d))
+
+
+### Bug Fixes
+
+* **panel:** keep room for the panel when the site replaces &lt;html&gt; ([31f65bb](https://github.com/wera-jobs/wera-extension/commit/31f65bbb8ff1f1527ac9c5798c22aa01421680fc))
+
+
+### Refactoring
+
+* **panel:** drop the old job card and facts line ([b971272](https://github.com/wera-jobs/wera-extension/commit/b97127239cdca8a2aa654cf1cf32fbe7d6599ceb))
+
 ## [0.14.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.14.0...wera-extension-v0.14.1) (2026-11-11)
 
 
