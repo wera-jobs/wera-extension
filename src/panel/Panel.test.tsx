@@ -173,7 +173,7 @@ describe('the Wera panel', () => {
     const { store } = fakeBackground({ job });
     const { rerender } = render(<App handle={handle('posting')} show={show()} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-    await userEvent.click(await screen.findByRole('checkbox', { name: new RegExp(`Show Wera on ${location.hostname}`) }));
+    await userEvent.click(await screen.findByRole('switch', { name: new RegExp(`On ${location.hostname}`) }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(store['wera.hiddenSites']).toHaveProperty(location.hostname));
     rerender(<App handle={handle('posting')} show={show({ toggles: 1 })} />);
@@ -549,7 +549,7 @@ describe('the Wera panel', () => {
     const { store } = fakeBackground({ job });
     render(<App handle={handle('posting')} show={show()} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-    await userEvent.click(screen.getByLabelText(/Draft open questions and cover letters while filling/));
+    await userEvent.click(screen.getByRole('switch', { name: /Draft open questions and cover letters/ }));
     await waitFor(() => expect(store['wera.settings']).toMatchObject({ aiQuestions: false }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByLabelText('Password')).toBeInTheDocument();
