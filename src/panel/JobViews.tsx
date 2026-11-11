@@ -3,7 +3,7 @@
 // an application.
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Bookmark, ChevronDown, ExternalLink, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
+import { Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
@@ -13,43 +13,11 @@ import { frames, rpc } from '../shared/rpc';
 import { NextMatch, useNextMatch } from './AppliedAlert';
 import { Traps } from './Traps';
 import { TailoredLine, useTailoredScore } from './Tailored';
-import { BigButton, Button, Field, INPUT, Notice, ScoreRing, Skeleton } from './ui';
+import { BigButton, Button, Field, INPUT, Notice, Skeleton } from './ui';
 import type { PanelPageState } from './usePanelPage';
-
-const STATUS: Record<string, [string, string]> = {
-  saved: ['Saved', 'border-accent/30 bg-accent/10 text-accent'], applied: ['Applied', 'border-accent-2/25 bg-accent-2/10 text-accent-2'],
-  interviewing: ['Interviewing', 'border-warn/25 bg-warn/10 text-warn'], offer: ['Offer', 'border-good/25 bg-good/10 text-good'],
-  rejected: ['Rejected', 'border-bad/25 bg-bad/10 text-bad'], not_interested: ['Not interested', 'border-border bg-surface-2 text-muted'],
-};
 
 export function Badge({ className, children }: { className: string; children: ReactNode }) {
   return <span className={clsx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap', className)}>{children}</span>;
-}
-
-/** The job: fit ring, title, company, where it is on the tracker. */
-export function JobCard({ api, page }: { api: WeraApi; page: PanelPageState }) {
-  const job = page.job;
-  const title = job?.title || page.info?.draft?.title || page.handle.title || 'This job';
-  const company = job?.company || page.info?.draft?.company || page.handle.company;
-  const [label, cls] = job?.application_status ? STATUS[job.application_status] ?? [job.application_status, STATUS.not_interested![1]] : ['', ''];
-  return (
-    <div className="anim-rise flex items-start gap-3 rounded-card border border-border bg-surface p-3">
-      {page.loading && !job ? <Skeleton className="size-12 rounded-full" /> : <ScoreRing score={job ? (job.fit_score ?? job.estimated_score) : null} estimate={!!job && job.fit_score == null && job.estimated_score != null} />}
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm leading-snug font-semibold">{title}</p>
-        {company && <p className="truncate text-xs text-muted">{company}</p>}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {label && <Badge className={cls}>{label}</Badge>}
-          {job && !label && <Badge className="border-good/25 bg-good/10 text-good">In your Wera lists</Badge>}
-          {job && (
-            <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline">
-              Open in Wera <ExternalLink className="size-3" />
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /** A job's words as chips: what the user has, then what they lack. */

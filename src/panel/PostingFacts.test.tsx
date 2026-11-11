@@ -1,8 +1,7 @@
-import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
-import { postingFacts, PostingFacts } from './PostingFacts';
+import { postingFacts } from './PostingFacts';
 
 const now = Date.parse('2026-11-04T12:00:00Z');
 const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
@@ -38,18 +37,5 @@ describe('postingFacts', () => {
   it('warns about a posting up for months', () => {
     expect(postingFacts(null, draft({ posted: ago(120) }), '', now).warning).toMatch(/^Posted 4 months ago\. Postings up this long/);
     expect(postingFacts(null, draft({ posted: ago(30) }), '', now).warning).toBe('');
-  });
-});
-
-describe('PostingFacts', () => {
-  it('shows pay and age', () => {
-    render(<PostingFacts job={null} draft={draft({ salary: '$120,000 - $150,000', posted: new Date(Date.now() - 2 * 86_400_000).toISOString() })} text="" />);
-    expect(screen.getByLabelText('About this job')).toHaveTextContent('$120K – $150K a year');
-    expect(screen.getByLabelText('About this job')).toHaveTextContent('Posted 2 days ago');
-  });
-
-  it('shows nothing when the page says nothing', () => {
-    const { container } = render(<PostingFacts job={null} draft={null} text="Join us." />);
-    expect(container).toBeEmptyDOMElement();
   });
 });
