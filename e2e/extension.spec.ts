@@ -134,6 +134,7 @@ test('sign in on a posting, save it, then autofill its application', async () =>
   await shot(job, 'posting-tab');
   await open(job);
   const panel = panelOf(job);
+  await panel.getByRole('button', { name: 'Use another Wera server' }).click();
   await panel.getByLabel('Wera address').fill(API);
   await panel.getByLabel('Email').fill(EMAIL);
   await panel.getByLabel('Password').fill(PASSWORD);
