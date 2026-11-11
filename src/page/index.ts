@@ -104,6 +104,7 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
   let canApplyHere = false;
 
   // The page's text as laid out costs the page a layout: only when its raw text says it at all.
+  // A form in a hidden frame (a tab of the careers page not opened yet) says nothing.
   const saysSubmitted = () => looksSubmitted(doc.body?.textContent ?? '') && looksSubmitted(bodyText(doc));
   const checkSubmitted = () => {
     const key = doc.location.href;
