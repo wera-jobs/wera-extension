@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { formSignature, isNewStep, looksSubmitted, submittedAddress, watchPage } from './watch';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { bodyText, formSignature, isNewStep, looksSubmitted, submittedAddress, watchPage } from './watch';
 
 describe('looksSubmitted', () => {
   it.each([
@@ -64,5 +64,21 @@ describe('isNewStep', () => {
     expect(isNewStep(['Name', 'Email', 'Phone'], ['Name', 'Email', 'Phone', 'Race'])).toBe(false);
     expect(isNewStep(['Name', 'Email'], ['City', 'State', 'Why us?'])).toBe(true);
     expect(isNewStep(['Name', 'Email'], ['Email', 'City', 'State', 'Zip'])).toBe(true);
+  });
+});
+
+describe('bodyText', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("leaves out a script's text: Greenhouse's page data holds its own thank-you message", () => {
+    document.body.innerHTML = '<h1>Apply for SRE</h1><script>window.data = {"confirmation_message":"Thank you for applying."}</script>';
+    expect(looksSubmitted(bodyText(document))).toBe(false);
+    expect(bodyText(document)).toContain('Apply for SRE');
+  });
+
+  it('reads nothing in a frame that is not shown (an application in a closed tab of the careers page)', () => {
+    document.body.innerHTML = '<p>Thank you for applying.</p>';
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(0);
+    expect(bodyText(document)).toBe('');
   });
 });
