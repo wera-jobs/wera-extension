@@ -1,11 +1,9 @@
 // What the job states at a glance (its pay, when it went up), and a word
 // when it may be too late to apply: Wera saw it come down, its job data
-// says it expired, or it has been up for months.
-import { CalendarDays, CircleDollarSign } from 'lucide-react';
+// says it expired, or it has been up for months. JobHeader shows them.
 import { ageWords, daysSince, OLD_POSTING_DAYS, payFromText, shortPay } from '../content/facts';
 import type { JobDraft } from '../shared/types';
 import type { WeraJob } from '../shared/api';
-import { Notice } from './ui';
 
 export interface Facts {
   pay: string;
@@ -32,28 +30,4 @@ export function postingFacts(job: WeraJob | null, draft: JobDraft | null | undef
     warning = `Posted ${ageWords(age)}. Postings up this long are often filled already, so a reply is less likely.`;
   }
   return { pay, age, warning };
-}
-
-export function PostingFacts({ job, draft, text }: { job: WeraJob | null; draft: JobDraft | null | undefined; text: string }) {
-  const { pay, age, warning } = postingFacts(job, draft, text);
-  if (!pay && age == null && !warning) return null;
-  return (
-    <div className="space-y-2">
-      {(pay || age != null) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 text-xs text-muted" aria-label="About this job">
-          {pay && (
-            <span className="inline-flex items-center gap-1" title="The pay the posting states">
-              <CircleDollarSign className="size-3.5 text-faint" /> {pay}
-            </span>
-          )}
-          {age != null && (
-            <span className="inline-flex items-center gap-1">
-              <CalendarDays className="size-3.5 text-faint" /> Posted {ageWords(age)}
-            </span>
-          )}
-        </div>
-      )}
-      {warning && <Notice tone="warn">{warning}</Notice>}
-    </div>
-  );
 }

@@ -1,10 +1,11 @@
 // The job the panel is on: its card (fit, title, company, tracker
 // status), Save for a posting, and what Wera did when the site confirmed
 // an application.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Bookmark, ChevronDown, ExternalLink, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
+import { Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
+import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { markApplying } from '../shared/flow';
 import { log } from '../shared/log';
@@ -12,43 +13,11 @@ import { frames, rpc } from '../shared/rpc';
 import { NextMatch, useNextMatch } from './AppliedAlert';
 import { Traps } from './Traps';
 import { TailoredLine, useTailoredScore } from './Tailored';
-import { BigButton, Button, Notice, ScoreRing, Skeleton } from './ui';
+import { BigButton, Button, Field, INPUT, Notice, Skeleton } from './ui';
 import type { PanelPageState } from './usePanelPage';
-
-const STATUS: Record<string, [string, string]> = {
-  saved: ['Saved', 'border-accent/30 bg-accent/10 text-accent'], applied: ['Applied', 'border-accent-2/25 bg-accent-2/10 text-accent-2'],
-  interviewing: ['Interviewing', 'border-warn/25 bg-warn/10 text-warn'], offer: ['Offer', 'border-good/25 bg-good/10 text-good'],
-  rejected: ['Rejected', 'border-bad/25 bg-bad/10 text-bad'], not_interested: ['Not interested', 'border-border bg-surface-2 text-muted'],
-};
 
 export function Badge({ className, children }: { className: string; children: ReactNode }) {
   return <span className={clsx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap', className)}>{children}</span>;
-}
-
-/** The job: fit ring, title, company, where it is on the tracker. */
-export function JobCard({ api, page }: { api: WeraApi; page: PanelPageState }) {
-  const job = page.job;
-  const title = job?.title || page.info?.draft?.title || page.handle.title || 'This job';
-  const company = job?.company || page.info?.draft?.company || page.handle.company;
-  const [label, cls] = job?.application_status ? STATUS[job.application_status] ?? [job.application_status, STATUS.not_interested![1]] : ['', ''];
-  return (
-    <div className="anim-rise flex items-start gap-3 rounded-card border border-border bg-surface p-3">
-      {page.loading && !job ? <Skeleton className="size-12 rounded-full" /> : <ScoreRing score={job ? (job.fit_score ?? job.estimated_score) : null} estimate={!!job && job.fit_score == null && job.estimated_score != null} />}
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm leading-snug font-semibold">{title}</p>
-        {company && <p className="truncate text-xs text-muted">{company}</p>}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {label && <Badge className={cls}>{label}</Badge>}
-          {job && !label && <Badge className="border-good/25 bg-good/10 text-good">In your Wera lists</Badge>}
-          {job && (
-            <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline">
-              Open in Wera <ExternalLink className="size-3" />
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /** A job's words as chips: what the user has, then what they lack. */
@@ -147,23 +116,26 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
   const [busy, setBusy] = useState<'' | 'save' | 'apply'>('');
   const [going, setGoing] = useState(false);
   const [error, setError] = useState('');
+  const [review, setReview] = useState<JobDraft | null>(null);
   // Only the first read shows a placeholder: a re-read (the page moved on) keeps the buttons where they are.
   if (page.loading && !page.info) return <Skeleton className="h-11" />;
-  const save = async () => {
-    // The page's job data when it has some, else the AI reads the posting.
-    let draft = page.info?.draft ?? page.handle.draft;
-    if (!draft) {
-      const got = await api.extract(location.href, document.title, page.info?.text ?? '');
-      if (!got.is_job_posting) throw new Error("Wera doesn't see a job posting on this page");
-      draft = got;
-    }
-    page.setJob(await api.addJob(draft));
+  /** The job as the page states it, or as the AI read it from the page. */
+  const readDraft = async (): Promise<JobDraft> => {
+    const draft = page.info?.draft ?? page.handle.draft;
+    if (draft) return draft;
+    const got = await api.extract(location.href, document.title, page.info?.text ?? '');
+    if (!got.is_job_posting) throw new Error("Wera doesn't see a job posting on this page");
+    return got;
   };
+  const save = async () => page.setJob(await api.addJob(await readDraft()));
   const onSave = async () => {
     setBusy('save');
     setError('');
     try {
-      await save();
+      const draft = await readDraft();
+      // Read by the AI, or missing what names the job: the user checks it first.
+      if (draft.source !== 'page-data' || !draft.title.trim() || !draft.company.trim()) setReview(draft);
+      else page.setJob(await api.addJob(draft));
     } catch (e) {
       log.warn('posting', 'saving the job failed', e);
       setError(describeError(e, "Couldn't save this job"));
@@ -188,6 +160,12 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
     }
   };
   const apply = page.handle.canApply || !!page.info?.apply;
+  if (review) {
+    return <ReviewJob draft={review} onCancel={() => setReview(null)} onSave={async (d) => {
+      page.setJob(await api.addJob({ ...d, source: 'manual' }));
+      setReview(null);
+    }} />;
+  }
   return (
     <div className="space-y-2">
       {going ? <Notice tone="good">Opening the application: Wera fills it as soon as it shows.</Notice>
@@ -211,6 +189,45 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
       {page.job && <TailorResume api={api} jobId={page.job.id} />}
       <Traps traps={page.info?.traps ?? []} />
     </div>
+  );
+}
+
+/** A job Wera hasn't seen, read by the AI: the user checks what names it before it is saved. */
+function ReviewJob({ draft, onSave, onCancel }: { draft: JobDraft; onSave: (d: JobDraft) => Promise<void>; onCancel: () => void }) {
+  const [d, setD] = useState(draft);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k: 'title' | 'company' | 'location' | 'salary') => (e: ChangeEvent<HTMLInputElement>) => setD((x) => ({ ...x, [k]: e.target.value }));
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await onSave(d);
+    } catch (err) {
+      setError(describeError(err, "Couldn't save this job"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={(e) => void submit(e)} className="anim-rise space-y-2.5 rounded-card border border-border bg-surface p-3" aria-label="Check the job before saving">
+      <div>
+        <p className="text-xs font-semibold">Check the job before saving</p>
+        <p className="text-[11px] text-muted">Wera read this from the page. Fix anything it got wrong.</p>
+      </div>
+      <Field label="Job title"><input className={INPUT} value={d.title} onChange={set('title')} required /></Field>
+      <Field label="Company"><input className={INPUT} value={d.company} onChange={set('company')} required /></Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Location"><input className={INPUT} value={d.location} onChange={set('location')} /></Field>
+        <Field label="Pay"><input className={INPUT} value={d.salary} onChange={set('salary')} placeholder="optional" /></Field>
+      </div>
+      {error && <Notice tone="bad">{error}</Notice>}
+      <div className="flex gap-2">
+        <Button type="button" className="flex-1" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" variant="primary" className="flex-1" busy={busy}>{!busy && <Bookmark className="size-3.5" />} Save to Wera</Button>
+      </div>
+    </form>
   );
 }
 

@@ -38,3 +38,16 @@ describe('makeRoom', () => {
     expect(chat.style.getPropertyValue('right')).toBe('20px');
   });
 });
+
+describe('makeRoom when the site replaces <html>', () => {
+  it('gives the new root the margin too', async () => {
+    const undo = makeRoom(document, 396);
+    const fresh = document.createElement('html');
+    fresh.append(document.createElement('head'), document.createElement('body'));
+    document.replaceChild(fresh, document.documentElement);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.documentElement.style.getPropertyValue('margin-right')).toBe('396px');
+    undo();
+    expect(document.documentElement.style.getPropertyValue('margin-right')).toBe('');
+  });
+});
