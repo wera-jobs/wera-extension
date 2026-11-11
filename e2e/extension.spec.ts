@@ -298,7 +298,7 @@ test('the page makes room for the panel on an application', async () => {
   await job.setViewportSize({ width: 1280, height: 800 });
   await job.goto(`${site}/jobs/${run}/sre/apply`);
   await expect(panelOf(job).getByRole('dialog', { name: 'Wera' })).toBeVisible({ timeout: 10_000 });
-  await expect.poll(() => job.evaluate(() => document.documentElement.style.marginRight)).toBe('396px');
+  await expect.poll(() => job.evaluate(() => document.documentElement.style.marginRight)).toBe('384px');
   const form = await job.locator('#f').boundingBox();
   const panel = await panelOf(job).getByRole('dialog', { name: 'Wera' }).boundingBox();
   expect(form!.x + form!.width).toBeLessThanOrEqual(panel!.x);
