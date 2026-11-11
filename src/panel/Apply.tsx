@@ -32,6 +32,12 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
     }
   }, [fillRequest, handled, page.loading, a]);
 
+  // The job card shows the system and step the fill read.
+  const { noteForm } = page;
+  useEffect(() => {
+    if (a.plan) noteForm(a.plan.site, a.plan.step);
+  }, [a.plan, noteForm]);
+
   const needs = useMemo(() => needsYou(a.rows), [a.rows]);
   const guesses = needs.filter(isGuess).length;
   const filled = a.rows.filter((r) => r.status === 'filled' || r.status === 'already');
@@ -66,15 +72,8 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
           <span className="font-mono">{filled.length}/{total}</span>
         </div>
       )}
-      {(() => {
-        const site = a.plan?.site ?? page.info?.site;
-        const step = a.plan?.step ?? page.info?.step;
-        return site || step ? (
-          <p className="text-[11px] text-faint">{[site, step && `Step ${step.index} of ${step.total}`, step?.name].filter(Boolean).join(' · ')}</p>
-        ) : null;
-      })()}
       {a.phase === 'idle' && !a.plan && (
-        <p className="text-[11px] text-faint">Fills what Wera knows from your details, resume and earlier answers, drafts the open questions, and lists the rest. It never submits.</p>
+        <p className="text-center text-[11px] text-faint">Fills your details, attaches your resume and drafts the open questions. You review and submit.</p>
       )}
       {a.error && <Notice tone="bad">{a.error}</Notice>}
       {a.warnings.length > 0 && (
@@ -127,8 +126,8 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
         </div>
       )}
       <div className="flex items-center gap-3">
-        <a href={api.dashboardUrl('/profile#application')} target="_blank" rel="noreferrer" className="text-[11px] text-accent hover:underline">
-          Edit your details and saved answers
+        <a href={api.dashboardUrl('/profile#application')} target="_blank" rel="noreferrer" className="text-[11px] text-faint hover:text-text hover:underline">
+          Your details and saved answers
         </a>
         {a.plan && <CopyDiagnostics a={a} />}
       </div>

@@ -74,14 +74,25 @@ export function remToPx(source: string): string {
 }
 
 /** The page's width the panel takes, card and margin. */
-const PANEL_ROOM = 396;
+const PANEL_ROOM = 384;
 /** A window narrower than this has no room to give: the form would be squeezed, so the panel floats over it. */
 const ROOM_NEEDED = 1000;
+
+/** Whether the window is wide enough to give the panel a strip of its own (it docks there). */
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => innerWidth >= ROOM_NEEDED);
+  useEffect(() => {
+    const onResize = () => setWide(innerWidth >= ROOM_NEEDED);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return wide;
+}
 
 /** While the panel is open on a wide window, the page makes room, so the panel never covers the site (its Apply button, the form). */
 function usePageRoom(active: boolean) {
   useEffect(() => {
-    if (!active || innerWidth < ROOM_NEEDED) return;
+    if (!active) return;
     return makeRoom(document, PANEL_ROOM);
   }, [active]);
 }
@@ -166,13 +177,14 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
   const shown = server !== undefined && !gone && (jobPage || page.loading || show.opens > 0 || show.toggles > 0 || show.fills > 0);
   // The site confirmed the application: say so, then leave the page (or close the tab).
   const confirmed = page.submitted && page.submitted.state !== 'off' && page.submitted !== seenReply ? page.submitted : null;
-  usePageRoom(shown && open && !confirmed);
+  const wide = useWide();
+  usePageRoom(shown && open && !confirmed && wide);
   if (!shown) return null;
   const marked = confirmed?.state === 'marked' ? confirmed : null;
   return (
     <>
       {!confirmed && (
-        <Panel api={api} page={page} settings={settings} setSettings={setSettings} tabId={show.tabId} open={open} onOpen={onOpen}
+        <Panel api={api} page={page} settings={settings} setSettings={setSettings} tabId={show.tabId} open={open} onOpen={onOpen} docked={wide}
           fillRequest={show.fills} onSignedIn={reload} onSignedOut={reload} onHideSite={() => setGone(true)} />
       )}
       {confirmed && (
