@@ -45,15 +45,15 @@ describe('the launcher tab', () => {
     window.innerHeight = 1000;
     render(<Launcher onOpen={onOpen} />);
     const tab = screen.getByRole('button', { name: 'Show the Wera panel' });
-    expect(tab.style.top).toBe('400px');
+    expect(tab.parentElement!.style.top).toBe('400px');
     fireEvent.pointerDown(tab, { button: 0, clientY: 420 });
     fireEvent.pointerMove(tab, { clientY: 300 });
     fireEvent.pointerMove(tab, { clientY: 220 });
-    expect(tab.style.top).toBe('200px');
+    expect(tab.parentElement!.style.top).toBe('200px');
     fireEvent.pointerUp(tab, { clientY: 220 });
     fireEvent.click(tab, { detail: 1 });
     expect(onOpen).not.toHaveBeenCalled();
-    expect(tab.style.top).toBe('200px');
+    expect(tab.parentElement!.style.top).toBe('200px');
     expect(store[LAUNCHER_KEY]).toBe(0.2);
   });
 
@@ -63,7 +63,7 @@ describe('the launcher tab', () => {
     render(<Launcher onOpen={() => {}} />);
     const tab = screen.getByRole('button', { name: 'Show the Wera panel' });
     await act(async () => {});
-    expect(tab.style.top).toBe('700px');
+    expect(tab.parentElement!.style.top).toBe('700px');
   });
 
   it('moves with the arrow keys', async () => {
@@ -72,9 +72,23 @@ describe('the launcher tab', () => {
     render(<Launcher onOpen={() => {}} />);
     const tab = screen.getByRole('button', { name: 'Show the Wera panel' });
     fireEvent.keyDown(tab, { key: 'ArrowDown' });
-    expect(tab.style.top).toBe('430px');
+    expect(tab.parentElement!.style.top).toBe('430px');
     fireEvent.keyDown(tab, { key: 'ArrowUp', shiftKey: true });
-    expect(tab.style.top).toBe('330px');
+    expect(tab.parentElement!.style.top).toBe('330px');
     expect(store[LAUNCHER_KEY]).toBe(0.33);
+  });
+});
+
+describe('hiding the launcher', () => {
+  it('offers to hide it until the next visit, on this site, or everywhere', async () => {
+    fakeStorage();
+    const onHide = vi.fn();
+    render(<Launcher onOpen={() => {}} onHide={onHide} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Hide Wera' }));
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(items).toEqual(['Hide until next visit', 'Hide on this site', 'Hide on all sites']);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide on this site' }));
+    expect(onHide).toHaveBeenCalledWith('site');
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });
