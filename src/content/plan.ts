@@ -385,75 +385,122 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
   const doc = root instanceof Document ? root : (root as Node).ownerDocument;
   // Some sites need time between fields to keep up (Workday re-renders after each one).
   const pace = Math.max(opts.pace ?? 0, (doc && siteFor(doc)?.pace) || 0);
+  const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
-  for (const item of items) {
-    // A field the page re-rendered since it was read has lost Wera's mark: find it by its label and kind.
-    let f = fields.get(item.id) ?? null;
-    if ((!f || !f.el.isConnected) && item.label) {
-      const again = collectFields(root).filter((x) => x.label.slice(0, 200) === item.label && (!item.kind || x.kind === item.kind));
-      if (again.length === 1) f = again[0]!;
-    }
-    const purpose = f ? classify(f) : null;
-    const res: FillResult = { id: item.id, label: f?.label.slice(0, 160) ?? '', purpose, status: 'review', required: f?.required ?? false };
-    try {
-      if (!f || !f.el.isConnected) {
-        res.note = 'this field is no longer on the page';
-      } else if (f.trap) {
-        // Nothing fills these, whatever was asked.
-        res.note = trapMeaning(f.trap.kind);
-      } else if (purpose === 'consent') {
-        res.note = 'agree yourself after reading it';
-      } else if (item.value === RESUME) {
-        if (opts.resume && f.kind === 'file') {
-          attachFile(f.el as HTMLInputElement, base64ToFile(opts.resume.base64, opts.resume.name));
-          res.status = 'filled';
-          res.value = opts.resume.name;
-          // Some systems read the resume and fill the form from it: let that finish first.
-          const reads = doc ? siteFor(doc)?.readsResume : 0;
-          if (reads) await wait(reads);
-        } else {
-          res.note = 'no resume to attach';
-        }
-      } else if (item.value === LETTER) {
-        if (opts.coverLetter && (f.kind === 'textarea' || f.kind === 'text')) {
-          setNativeValue(f.el as HTMLTextAreaElement, opts.coverLetter);
-          res.status = 'filled';
-          res.value = 'cover letter';
-        } else if (opts.letterFile && f.kind === 'file') {
-          attachFile(f.el as HTMLInputElement, base64ToFile(opts.letterFile.base64, opts.letterFile.name));
-          res.status = 'filled';
-          res.value = opts.letterFile.name;
-        } else {
-          res.note = 'write your cover letter first';
-        }
-      } else if (item.value.trim()) {
-        // The site's own widgets (Workday's dropdowns and prompts) are filled its way.
-        const own = siteFiller(f.el.ownerDocument);
-        const got = own ? await own(f, purpose, item.value.trim()) : undefined;
-        if (got === undefined) await enterValue(f, purpose, item.value.trim(), res, true);
-        else if (got) {
-          res.status = 'filled';
-          res.value = got;
-        } else {
-          res.note = `pick "${item.value.trim()}" yourself: the page did not take it`;
-        }
-      } else {
-        res.status = 'skipped';
+  try {
+    for (const item of items) {
+      // The user is typing or clicking on the page: Wera waits for a pause, and leaves their field to them.
+      if (user) await user.quiet();
+      // A field the page re-rendered since it was read has lost Wera's mark: find it by its label and kind.
+      let f = fields.get(item.id) ?? null;
+      if ((!f || !f.el.isConnected) && item.label) {
+        const again = collectFields(root).filter((x) => x.label.slice(0, 200) === item.label && (!item.kind || x.kind === item.kind));
+        if (again.length === 1) f = again[0]!;
       }
-    } catch (e) {
-      log.error('fill', `"${res.label}" failed`, e);
-      res.status = 'review';
-      res.note = `Wera hit a problem filling this one (${e instanceof Error ? e.message : String(e)}): fill it yourself`;
+      const purpose = f ? classify(f) : null;
+      const res: FillResult = { id: item.id, label: f?.label.slice(0, 160) ?? '', purpose, status: 'review', required: f?.required ?? false };
+      try {
+        if (!f || !f.el.isConnected) {
+          res.note = 'this field is no longer on the page';
+        } else if (user?.inside(f.el)) {
+          res.note = 'you were filling this one';
+        } else if (f.trap) {
+          // Nothing fills these, whatever was asked.
+          res.note = trapMeaning(f.trap.kind);
+        } else if (purpose === 'consent') {
+          res.note = 'agree yourself after reading it';
+        } else if (item.value === RESUME) {
+          if (opts.resume && f.kind === 'file') {
+            attachFile(f.el as HTMLInputElement, base64ToFile(opts.resume.base64, opts.resume.name));
+            res.status = 'filled';
+            res.value = opts.resume.name;
+            // Some systems read the resume and fill the form from it: let that finish first.
+            const reads = doc ? siteFor(doc)?.readsResume : 0;
+            if (reads) await wait(reads);
+          } else {
+            res.note = 'no resume to attach';
+          }
+        } else if (item.value === LETTER) {
+          if (opts.coverLetter && (f.kind === 'textarea' || f.kind === 'text')) {
+            setNativeValue(f.el as HTMLTextAreaElement, opts.coverLetter);
+            res.status = 'filled';
+            res.value = 'cover letter';
+          } else if (opts.letterFile && f.kind === 'file') {
+            attachFile(f.el as HTMLInputElement, base64ToFile(opts.letterFile.base64, opts.letterFile.name));
+            res.status = 'filled';
+            res.value = opts.letterFile.name;
+          } else {
+            res.note = 'write your cover letter first';
+          }
+        } else if (item.value.trim()) {
+          // The site's own widgets (Workday's dropdowns and prompts) are filled its way.
+          const own = siteFiller(f.el.ownerDocument);
+          const got = own ? await own(f, purpose, item.value.trim()) : undefined;
+          if (got === undefined) await enterValue(f, purpose, item.value.trim(), res, true);
+          else if (got) {
+            res.status = 'filled';
+            res.value = got;
+          } else {
+            res.note = `pick "${item.value.trim()}" yourself: the page did not take it`;
+          }
+        } else {
+          res.status = 'skipped';
+        }
+      } catch (e) {
+        log.error('fill', `"${res.label}" failed`, e);
+        res.status = 'review';
+        res.note = `Wera hit a problem filling this one (${e instanceof Error ? e.message : String(e)}): fill it yourself`;
+      }
+      if (f && res.status === 'filled') mark(f.el, 'filled');
+      else if (f && res.status === 'review') mark(f.el, 'review');
+      out.push(res);
+      opts.onProgress?.(res);
+      // Filling moved the focus: back to the field the user was in.
+      user?.giveBack();
+      if (pace) await wait(pace);
     }
-    if (f && res.status === 'filled') mark(f.el, 'filled');
-    else if (f && res.status === 'review') mark(f.el, 'review');
-    out.push(res);
-    opts.onProgress?.(res);
-    if (pace) await wait(pace);
+  } finally {
+    user?.stop();
   }
   // Filling moves the focus from box to box: none is left in the last one, where Wera's button would show.
-  if (doc?.activeElement instanceof HTMLElement && out.length) doc.activeElement.blur();
+  // The field the user is in keeps it.
+  if (doc?.activeElement instanceof HTMLElement && out.length && !user?.inside(doc.activeElement)) doc.activeElement.blur();
   return out;
+}
+
+/** How long after the user's last key or click Wera waits before filling on. */
+const USER_PAUSE = 1200;
+/** Wera waits this long at most for the user to pause. */
+const USER_WAIT_MAX = 15_000;
+
+/**
+ * The user's own keys and clicks during a fill (trusted events: Wera's
+ * own are not): Wera waits for them to pause, skips the field they are
+ * in, and gives the focus back to it after each field it fills.
+ */
+export function watchUser(doc: Document) {
+  let at = 0;
+  let mine: Element | null = null;
+  const onAct = (e: Event) => {
+    if (!e.isTrusted) return;
+    at = Date.now();
+    const t = e.target;
+    if (t instanceof Element && t.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="combobox"], [role="textbox"]')) mine = t;
+  };
+  for (const type of ['keydown', 'pointerdown', 'input']) doc.addEventListener(type, onAct, true);
+  return {
+    async quiet() {
+      const until = Date.now() + USER_WAIT_MAX;
+      while (Date.now() - at < USER_PAUSE && Date.now() < until) await wait(200);
+    },
+    inside: (el: Element) => !!mine && mine.isConnected && (mine === el || el.contains(mine) || mine.contains(el)),
+    giveBack() {
+      if (mine instanceof HTMLElement && mine.isConnected && doc.activeElement !== mine) mine.focus({ preventScroll: true });
+    },
+    stop() {
+      for (const type of ['keydown', 'pointerdown', 'input']) doc.removeEventListener(type, onAct, true);
+    },
+  };
 }
 
 /** Every field's value as the user left it, to learn answers from (a one-time code or a check is never an answer to keep). */

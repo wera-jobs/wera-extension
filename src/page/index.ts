@@ -100,8 +100,11 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
   let asked = false;
   // Looks in a row that found no job page: each costs the page some time, so they come less and less often.
   let idle = 0;
+  let applyFor = '';
+  let canApplyHere = false;
 
   // The page's text as laid out costs the page a layout: only when its raw text says it at all.
+  // A form in a hidden frame (a tab of the careers page not opened yet) says nothing.
   const saysSubmitted = () => looksSubmitted(doc.body?.textContent ?? '') && looksSubmitted(bodyText(doc));
   const checkSubmitted = () => {
     const key = doc.location.href;
@@ -136,7 +139,13 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     // A form in a frame (an ATS embedded in a careers page) shows its own "thank you".
     if (sawForm || (top && !kind && looks++ < 8)) checkSubmitted();
     const shown = pageDocument(doc);
-    const canApply = kind === 'posting' && !!findApply(shown);
+    // Once a posting showed its Apply button it can be pressed (a sticky header may hide it while scrolling).
+    if (applyFor !== doc.location.href) {
+      applyFor = doc.location.href;
+      canApplyHere = false;
+    }
+    canApplyHere ||= kind === 'posting' && !!findApply(shown);
+    const canApply = kind === 'posting' && canApplyHere;
     const key = `${doc.location.href}|${kind}|${canApply}`;
     if (key === shownFor) return;
     shownFor = key;
