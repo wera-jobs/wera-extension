@@ -465,7 +465,7 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
         res.status = 'review';
         res.note = `Wera hit a problem filling this one (${e instanceof Error ? e.message : String(e)}): fill it yourself`;
       }
-      if (f && res.status === 'filled') mark(f.el, 'filled');
+      if (f && res.status === 'filled') mark(f.el, item.check ? 'review' : 'filled');
       else if (f && res.status === 'review') mark(f.el, 'review');
       out.push(res);
       opts.onProgress?.(res);

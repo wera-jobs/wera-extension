@@ -166,20 +166,35 @@ function CopyDiagnostics({ a }: { a: ReturnType<typeof useAutofill> }) {
 /** One field that needs the user: why, a click to it on the page, and Wera's guess to use when it has one. */
 function NeedRow({ r, onUse }: { r: Row; onUse: (value: string) => void }) {
   const guess = isGuess(r);
-  const why = r.drafted ? (r.purpose === 'cover_letter' ? 'Wera wrote this letter for this job: read it in the panel below' : 'Wera drafted this answer: read it and make it yours')
+  // A guess among a few listed choices: every choice is a button, Wera's first, so either answer is one click.
+  const choices = guess && r.options.length >= 2 && r.options.length <= 4 && r.options.includes(r.value) && r.options.every((o) => o.length <= 28)
+    ? [r.value, ...r.options.filter((o) => o !== r.value)] : null;
+  const why = r.chosen ? `Wera chose "${r.result || r.value}": check it`
+    : r.drafted ? (r.purpose === 'cover_letter' ? 'Wera wrote this letter for this job: read it in the panel below' : 'Wera drafted this answer: read it and make it yours')
     : r.status === 'review' ? r.result || r.note || 'check it'
     : guess ? `Wera's guess: ${r.value}`
     : r.group === 'consent' ? 'agree yourself after reading it'
     : r.note || 'required: fill it on the page';
   return (
-    <li className={clsx('rounded-lg border bg-surface px-2.5 py-2 text-xs', r.drafted ? 'border-accent-2/30' : 'border-warn/30')}>
+    <li className={clsx('rounded-lg border bg-surface px-2.5 py-2 text-xs', r.drafted || r.chosen ? 'border-accent-2/30' : 'border-warn/30')}>
       <div className="flex items-center gap-2">
         <button type="button" className="min-w-0 flex-1 truncate text-left font-medium text-text hover:underline" onClick={() => void frames('highlight', r.id)} title="Show it on the page">
           {rowLabel(r)}{r.required && <span className="text-bad"> *</span>}
         </button>
-        {guess && <Button className="px-2 py-1" onClick={() => onUse(r.value)}>Use</Button>}
+        {guess && !choices && <Button className="px-2 py-1" onClick={() => onUse(r.value)}>Use</Button>}
       </div>
-      <p className={clsx('mt-0.5 line-clamp-2 text-[11px]', r.drafted ? 'text-accent-2' : 'text-muted')}>{why}</p>
+      <p className={clsx('mt-0.5 line-clamp-2 text-[11px]', r.drafted || r.chosen ? 'text-accent-2' : 'text-muted')}>{why}</p>
+      {choices && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label={`Answer "${rowLabel(r)}"`}>
+          {choices.map((o, i) => (
+            <button key={o} type="button" onClick={() => onUse(o)} title={i === 0 ? "Wera's guess" : undefined}
+              className={clsx('rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors',
+                i === 0 ? 'border-accent/50 bg-accent/10 text-text hover:bg-accent/20' : 'border-border bg-surface-2 text-muted hover:border-accent/40 hover:text-text')}>
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
     </li>
   );
 }
