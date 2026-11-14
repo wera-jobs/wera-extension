@@ -139,7 +139,7 @@ describe('the Wera panel', () => {
     fakeBackground({ job });
     render(<App handle={handle('posting')} show={show({ initial: false })} />);
     const tab = await screen.findByRole('button', { name: 'Show the Wera panel' });
-    expect(tab.querySelector('svg')).toHaveAttribute('width', '30');
+    expect(tab.querySelector('svg')).toHaveAttribute('width', '32');
     expect(tab).toHaveTextContent('');
     await userEvent.click(tab);
     expect(await screen.findByRole('dialog', { name: 'Wera' })).toBeInTheDocument();
