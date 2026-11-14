@@ -21,13 +21,25 @@ import type { PanelEvent, PanelPageState } from './usePanelPage';
 export { needsYou, type Row } from './rows';
 export { LETTER, RESUME } from './rows';
 
-export type Phase = 'idle' | 'reading' | 'filling' | 'thinking' | 'filled' | 'continuing' | 'final';
+export type Phase = 'idle' | 'reading' | 'filling' | 'thinking' | 'stopping' | 'filled' | 'continuing' | 'final';
 
 // AI answers given in this page's life, by field, so reading the page again does not ask again.
 const suggested = new Map<string, Suggestion | null>();
 const suggestKey = (r: Row) => `${location.host}|${r.label}|${r.kind}|${r.options.join('/')}`;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** The user's Stop for one run of autofill: `on` once pressed, and a promise that waiting work races against. */
+interface Halt {
+  on: boolean;
+  stop: () => void;
+  stopped: Promise<null>;
+}
+function newHalt(): Halt {
+  let stop = () => {};
+  const h: Halt = { on: false, stop: () => stop(), stopped: new Promise<null>((r) => { stop = () => { h.on = true; r(null); }; }) };
+  return h;
+}
 
 export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settings, tabId: number | null, revealDelay = 700) {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -57,6 +69,12 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     latest.current = rows;
   });
   const counted = useRef(false);
+  // Stop: work that is waiting (on the AI, on the page settling) gives up at once, and nothing more is entered.
+  const halt = useRef<Halt>(newHalt());
+  const orStop = useCallback(<T,>(p: Promise<T>): Promise<T | null> => Promise.race([p, halt.current.stopped]), []);
+  // The panel went away (the page rebuilt itself, Wera was hidden): its fill ends with it,
+  // or it would go on filling whatever form the page shows next.
+  useEffect(() => () => halt.current.stop(), []);
   const host = location.host;
   const jobId = page.job?.id ?? null;
   const posting = useMemo(() => ({
@@ -170,7 +188,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   /** Fills rows in the page; each ticks off as its frame reports it. Returns the results. */
   const fill = useCallback(async (list: Row[]): Promise<FillResult[]> => {
     const items = list.filter((r) => r.checked && r.value !== '').map((r) => ({ id: r.id, value: r.value, label: r.label, kind: r.kind }));
-    if (!items.length) return [];
+    if (!items.length || halt.current.on) return [];
     const queued = new Set(items.map((i) => i.id));
     setRows((rs) => rs.map((r) => (queued.has(r.id) ? { ...r, status: 'filling', result: undefined } : r)));
     const wantsLetterFile = list.some((r) => r.checked && r.value === LETTER && r.kind === 'file');
@@ -180,11 +198,13 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       return null;
     }) : null;
     const { resume: file, letter: body } = files.current;
+    if (halt.current.on) return [];
     const results = await frames('apply', { items, resume: file ?? undefined, coverLetter: body || undefined, letterFile: letterFile ?? undefined, pace: 30 });
     const by = new Map(results.map((x) => [x.id, x]));
     setRows((rs) => rs.map((r) => {
       const x = by.get(r.id);
-      return x ? { ...r, status: x.status, result: x.note ?? x.value } : r;
+      // Stopped before its turn: back to how it stood, to fill on the next run.
+      return !x ? r : x.status === 'skipped' ? { ...r, status: undefined, result: undefined } : { ...r, status: x.status, result: x.note ?? x.value };
     }));
     const missed = results.filter((x) => x.status === 'review');
     if (missed.length) log.info('autofill', `${missed.length} field(s) to check`, missed.map((x) => `${x.label}: ${x.note ?? ''}`));
@@ -209,9 +229,10 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       const out: Row[] = [];
       for (const r of batch) {
         const s = suggested.get(suggestKey(r));
-        if (s && fitsPurpose(r.purpose, s.value) && readsLikeAnswer(r, s.value)) out.push({ ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' });
+        if (!s || !fitsPurpose(r.purpose, s.value) || !readsLikeAnswer(r, s.value)) continue;
+        out.push({ ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' });
       }
-      if (!out.length) return;
+      if (!out.length || halt.current.on) return;
       merge(out);
       await fill(out.filter((r) => r.checked));
     };
@@ -221,18 +242,18 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     let cause: unknown = null;
     await Promise.all(chunk(fresh, 8).map(async (batch) => {
       const fields: SuggestField[] = batch.map((r) => ({ id: r.id, label: r.asked ?? r.label, kind: r.kind, options: r.options.length ? r.options : undefined, required: r.required || undefined, max_length: r.maxLength }));
-      const got = await api.suggest(fields, jobId, posting).then((x) => x.answers).catch((e: unknown) => {
+      const got = await orStop(api.suggest(fields, jobId, posting).then((x) => x.answers).catch((e: unknown) => {
         failed += batch.length;
         cause = e;
         return null;
-      });
+      }));
       if (!got) return;
       const byId = new Map(got.map((s) => [s.id, s]));
       for (const r of batch) suggested.set(suggestKey(r), byId.get(r.id) ?? null);
       await answered(batch);
     }));
-    if (failed) warn(describeError(cause, `Wera's AI couldn't answer ${failed} field${failed === 1 ? '' : 's'}; they are listed below`), cause);
-  }, [api, fill, jobId, merge, posting, settings.aiSuggest, warn]);
+    if (failed && !halt.current.on) warn(describeError(cause, `Wera's AI couldn't answer ${failed} field${failed === 1 ? '' : 's'}; they are listed below`), cause);
+  }, [api, fill, jobId, merge, orStop, posting, settings.aiSuggest, warn]);
 
   /** Answers open questions: the user's earlier answer when the question matches, else a draft (three at a time). */
   const draftAndFill = useCallback(async (list: Row[], anyway = draftAnyway) => {
@@ -258,11 +279,13 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     let cause: unknown = null;
     await pool(toDraft, 3, async (r) => {
       const words = r.maxLength ? Math.max(25, Math.min(300, Math.floor(r.maxLength / 7))) : 150;
-      const a = await api.answer(r.asked ?? r.label, jobId, words, posting).catch((e: unknown) => {
+      if (halt.current.on) return;
+      const a = await orStop(api.answer(r.asked ?? r.label, jobId, words, posting).catch((e: unknown) => {
         failed++;
         cause = e;
         return null;
-      });
+      }));
+      if (halt.current.on) return;
       if (!a?.answer || !readsLikeAnswer(r, a.answer)) {
         if (a?.needs_input) merge([{ ...r, note: `add yourself: ${a.needs_input}` }]);
         return;
@@ -271,8 +294,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       merge([row]);
       await fill([row]);
     });
-    if (failed) warn(describeError(cause, `Wera couldn't draft ${failed} answer${failed === 1 ? '' : 's'}; write ${failed === 1 ? 'it' : 'them'} on the form, or use the Wera button in the box`), cause);
-  }, [api, draftAnyway, fill, jobId, merge, noAiHere, posting, settings.aiQuestions, warn]);
+    if (failed && !halt.current.on) warn(describeError(cause, `Wera couldn't draft ${failed} answer${failed === 1 ? '' : 's'}; write ${failed === 1 ? 'it' : 'them'} on the form, or use the Wera button in the box`), cause);
+  }, [api, draftAnyway, fill, jobId, merge, noAiHere, orStop, posting, settings.aiQuestions, warn]);
 
   /** The user read that the employer asks for no AI, and wants Wera's drafts all the same. */
   const draftDespitePolicy = useCallback(async () => {
@@ -316,12 +339,14 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     const want = list.filter(needsLetter);
     if (!want.length || files.current.letter || !settings.aiQuestions || (noAiHere && !draftAnyway)) return;
     const forJob = await ensureJob();
+    if (halt.current.on) return;
     if (forJob == null) {
       merge(want.map((r) => ({ ...r, note: 'save the job from its posting, then write its letter in the panel' })));
       return;
     }
     try {
-      const l = await api.writeCoverLetter(forJob);
+      const l = await orStop(api.writeCoverLetter(forJob));
+      if (!l) return;
       files.current = { ...files.current, letter: l.body };
       setLetter(l.body);
       log.info('autofill', 'wrote a cover letter for this job');
@@ -332,7 +357,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     const rows = want.map((r): Row => ({ ...r, value: LETTER, source: 'ai', note: 'Wera wrote this letter for this job: read it', checked: true, drafted: true }));
     merge(rows);
     await fill(rows);
-  }, [api, draftAnyway, ensureJob, fill, merge, noAiHere, settings.aiQuestions, warn]);
+  }, [api, draftAnyway, ensureJob, fill, merge, noAiHere, orStop, settings.aiQuestions, warn]);
 
   /** Remembers the page's answers for the next form (details are learned by the page itself, on Next or Submit). */
   const learn = useCallback(async (list: Row[]) => {
@@ -369,12 +394,12 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const rescan = useCallback(async (): Promise<PagePlan | null> => {
     const req = scanReq.current;
     if (!req) return null;
-    await wait(revealDelay);
+    if ((await orStop(wait(revealDelay).then(() => true))) == null) return null;
     return frames('scan', req).catch((e: unknown) => {
       log.warn('autofill', 'reading the page again failed', e);
       return null;
     });
-  }, [revealDelay]);
+  }, [orStop, revealDelay]);
 
   /** Fills the fields that appeared since ("Race" once "Hispanic or Latino" is No). Returns them. */
   const revealed = useCallback(async (now: PagePlan | null, known: Row[]): Promise<Row[]> => {
@@ -414,17 +439,34 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
 
   /** Autofill: read, attach the files, fill what Wera knows, then the AI's answers and drafts as they come. */
   const autofill = useCallback(async () => {
+    const mine = (halt.current = newHalt());
+    setNotice('');
     const got = await read();
     if (!got) return;
+    // Stopped: what went in stays, nothing waits half done, and Fill again takes it from there.
+    const stopped = () => {
+      if (!mine.on) return false;
+      log.info('autofill', 'stopped by the user');
+      setThinking(0);
+      setRows((rs) => rs.map((r) => (r.status === 'filling' ? { ...r, status: undefined } : r)));
+      setNotice('Stopped. What Wera filled stays on the page. Press Fill again to carry on.');
+      setPhase(!got.plan.next || got.plan.next.final ? 'final' : 'filled');
+      // Everything this run started has ended by now: the user's own clicks (Use, Tailor) fill again.
+      if (halt.current === mine) halt.current = newHalt();
+      return true;
+    };
+    if (stopped()) return;
     setPhase('filling');
     try {
       // The files first: many systems read an uploaded resume and fill the form themselves, over what is there.
       const files = got.rows.filter((r) => r.group === 'documents');
       await fill(files);
       await fill(got.rows.filter((r) => r.group !== 'documents'));
+      if (stopped()) return;
       // Answers can reveal more fields, and so can the AI's below.
       let now = await rescan();
       const all = [...got.rows, ...(await revealed(now, got.rows))];
+      if (stopped()) return;
       setPhase('thinking');
       setThinking(all.filter(needsSuggestion).length + all.filter(needsDraft).length + (all.some(needsLetter) && settings.aiQuestions ? 1 : 0));
       // Follow-ups wait for the answers they follow. Fields the page revealed
@@ -432,27 +474,39 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       const paged = new Set(got.rows.map((r) => r.id));
       const firsts = all.filter((r) => !(paged.has(r.id) && isFollowUp(r)));
       await Promise.all([suggestAndFill(firsts), draftAndFill(firsts), letterAndFill(all)]);
+      if (stopped()) return;
       await followUps(got.rows);
-      for (let round = 0; round < 2; round++) {
+      for (let round = 0; round < 2 && !mine.on; round++) {
         now = await rescan();
         const more = await revealed(now, latest.current);
         if (!more.length) break;
         await Promise.all([suggestAndFill(more), draftAndFill(more)]);
       }
+      if (stopped()) return;
       setThinking(0);
       await repair(now);
+      if (stopped()) return;
       const forJob = await ensureJob();
       const filled = latest.current.filter((x) => x.status === 'filled');
       await count(filled.length, filled.filter((x) => x.source === 'ai').length, forJob);
       page.clearNewStep();
       setPhase(!got.plan.next || got.plan.next.final ? 'final' : 'filled');
     } catch (e) {
+      if (stopped()) return;
       log.error('autofill', 'filling failed', e);
       setError(describeError(e, 'Wera stopped filling'));
       setRows((rs) => rs.map((r) => (r.status === 'filling' ? { ...r, status: undefined } : r)));
       setPhase('idle');
     }
   }, [read, fill, rescan, revealed, repair, suggestAndFill, draftAndFill, followUps, letterAndFill, settings.aiQuestions, ensureJob, count, page]);
+
+  /** Stop: ends the fill under way, in the panel and in every frame of the page. Nothing that went in is undone. */
+  const stop = useCallback(() => {
+    if (halt.current.on) return;
+    setPhase((p) => (p === 'reading' || p === 'filling' || p === 'thinking' ? 'stopping' : p));
+    halt.current.stop();
+    frames('stop').catch((e: unknown) => log.warn('autofill', 'telling the page to stop failed', e));
+  }, []);
 
   /** Fills one value the user approved (an AI guess, or a choice they made in the panel). */
   const fillOne = useCallback(async (r: Row, value: string) => {
@@ -584,6 +638,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     }
   }, [api, ensureJob, fill]);
 
-  const busy = phase === 'reading' || phase === 'filling' || phase === 'thinking' || phase === 'continuing';
-  return { phase, plan, rows, error, warnings, notice, resume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
+  const busy = phase === 'reading' || phase === 'filling' || phase === 'thinking' || phase === 'stopping' || phase === 'continuing';
+  /** A fill the user can stop. */
+  const stoppable = phase === 'reading' || phase === 'filling' || phase === 'thinking';
+  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
 }

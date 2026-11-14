@@ -16,6 +16,8 @@ export interface FrameOps {
   next: { args: [nextId: string]; result: { ok: boolean; label?: string; final?: boolean } };
   'press-apply': { args: []; result: { ok: boolean } };
   highlight: { args: [id: string]; result: void };
+  /** Ends the fill under way in every frame (the user pressed Stop). */
+  stop: { args: []; result: void };
   options: { args: [ids: string[]]; result: Record<string, string[]> };
   log: { args: []; result: { frameId: number; url: string; entries: LogEntry[] }[] };
 }

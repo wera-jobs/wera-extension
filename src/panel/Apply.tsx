@@ -3,7 +3,7 @@
 // resume and cover letter Wera uses, and what it filled.
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ClipboardCopy, FileText, PenLine, Sparkles, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ClipboardCopy, FileText, PenLine, Sparkles, Square, Zap } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import { PAST_APPLIED } from '../shared/jobs';
 import { frames } from '../shared/rpc';
@@ -44,7 +44,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
   const total = a.rows.length;
   const done = a.phase === 'filled' || a.phase === 'final';
   const label = a.phase === 'reading' ? 'Reading the form…' : a.phase === 'filling' ? `Filling… ${filled.length}/${total}`
-    : a.phase === 'thinking' ? `Answering ${a.thinking} question${a.thinking === 1 ? '' : 's'}…` : a.phase === 'continuing' ? 'Moving to the next page…'
+    : a.phase === 'thinking' ? `Answering ${a.thinking} question${a.thinking === 1 ? '' : 's'}…` : a.phase === 'stopping' ? 'Stopping…' : a.phase === 'continuing' ? 'Moving to the next page…'
     : done ? 'Fill again' : 'Autofill';
 
   return (
@@ -61,9 +61,17 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
       {page.job?.application_status && PAST_APPLIED.has(page.job.application_status) && !page.submitted && (
         <Notice tone="warn">Your tracker says you already applied to this job.</Notice>
       )}
-      <BigButton className="w-full" onClick={() => void a.autofill()} busy={a.busy} title="Alt+Shift+F">
-        {!a.busy && <Zap className="size-4" />} {label}
-      </BigButton>
+      <div className="flex gap-2">
+        <BigButton className="min-w-0 flex-1" onClick={() => void a.autofill()} busy={a.busy} title="Alt+Shift+F">
+          {!a.busy && <Zap className="size-4" />} <span className="truncate">{label}</span>
+        </BigButton>
+        {a.stoppable && (
+          <button type="button" onClick={a.stop} title="Stop filling. What is already filled stays."
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-text hover:border-bad/50 hover:text-bad">
+            <Square className="size-3 fill-current" /> Stop
+          </button>
+        )}
+      </div>
       {total > 0 && (
         <div className="flex items-center gap-2 text-[11px] text-muted">
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
