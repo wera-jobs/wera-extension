@@ -210,6 +210,8 @@ export interface FillItem {
   /** The field's label and kind when read: finds it again if the page re-rendered it (Ashby does after each answer). */
   label?: string;
   kind?: string;
+  /** Wera chose this value without being sure: the field is outlined for the user to check. */
+  check?: boolean;
 }
 
 /** A field's value as the user left it (to learn answers from). */

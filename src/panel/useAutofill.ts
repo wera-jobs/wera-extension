@@ -15,7 +15,7 @@ import { frames } from '../shared/rpc';
 import type { Settings } from '../shared/settings';
 import type { Applicant, FillResult, JobDraft, PagePlan, Profile, ScanRequest } from '../shared/types';
 import { answersToLearn } from '../shared/learn';
-import { chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, LETTER, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowsFor, type Row } from './rows';
+import { chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowsFor, type Row } from './rows';
 import type { PanelEvent, PanelPageState } from './usePanelPage';
 
 export { needsYou, type Row } from './rows';
@@ -187,7 +187,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
 
   /** Fills rows in the page; each ticks off as its frame reports it. Returns the results. */
   const fill = useCallback(async (list: Row[]): Promise<FillResult[]> => {
-    const items = list.filter((r) => r.checked && r.value !== '').map((r) => ({ id: r.id, value: r.value, label: r.label, kind: r.kind }));
+    const items = list.filter((r) => r.checked && r.value !== '').map((r) => ({ id: r.id, value: r.value, label: r.label, kind: r.kind, check: r.chosen || undefined }));
     if (!items.length || halt.current.on) return [];
     const queued = new Set(items.map((i) => i.id));
     setRows((rs) => rs.map((r) => (queued.has(r.id) ? { ...r, status: 'filling', result: undefined } : r)));
@@ -230,7 +230,9 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       for (const r of batch) {
         const s = suggested.get(suggestKey(r));
         if (!s || !fitsPurpose(r.purpose, s.value) || !readsLikeAnswer(r, s.value)) continue;
-        out.push({ ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' });
+        // Sure answers go in. So does an inferred pick from a list of choices, marked for the user to check; other guesses wait for a click.
+        const chosen = s.confidence !== 'high' && mayChoose(r, s.value);
+        out.push({ ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' || chosen, chosen: chosen || undefined });
       }
       if (!out.length || halt.current.on) return;
       merge(out);
@@ -510,7 +512,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
 
   /** Fills one value the user approved (an AI guess, or a choice they made in the panel). */
   const fillOne = useCallback(async (r: Row, value: string) => {
-    const row = { ...r, value, checked: true, source: r.source ?? 'you' } as Row;
+    // The user chose it: no longer Wera's to flag.
+    const row = { ...r, value, checked: true, chosen: undefined, source: r.source ?? 'you' } as Row;
     merge([row]);
     await fill([row]).catch((e: unknown) => setError(describeError(e, `Couldn't fill "${r.label}"`)));
   }, [fill, merge]);
