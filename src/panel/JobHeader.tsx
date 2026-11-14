@@ -77,7 +77,7 @@ function Chip({ icon, children, tone = 'plain', title }: { icon?: ReactNode; chi
 }
 
 /** The job at the top of the panel. */
-export function JobHeader({ api, page, kind }: { api: WeraApi; page: PanelPageState; kind: 'form' | 'posting' | null }) {
+export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: PanelPageState; kind: 'form' | 'posting' | null }) {
   const job = page.job;
   const draft = page.info?.draft ?? page.handle.draft;
   const title = job?.title || draft?.title || page.handle.title || 'This job';
@@ -119,7 +119,7 @@ export function JobHeader({ api, page, kind }: { api: WeraApi; page: PanelPageSt
           </Chip>
         )}
         {status && <span className={clsx('rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium', statusCls)}>{status}</span>}
-        {job && (
+        {job && api && (
           <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer"
             className="ml-auto inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline">
             Open in Wera <ExternalLink className="size-3" />

@@ -74,15 +74,38 @@ export function Panel(props: PanelProps) {
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 [scrollbar-width:thin]">
         {menu ? <SettingsView {...props} onClose={() => setMenu(false)} />
-          : !api ? <SignIn onSignedIn={props.onSignedIn} />
+          : !api ? <SignedOut {...props} kind={kind} />
           : <Main {...props} api={api} kind={kind} />}
       </div>
     </section>
   );
 }
 
+/**
+ * Not signed in yet: the job this page holds (its pay, how long it has
+ * been up) and then the way in, so the panel is of use before an account.
+ */
+function SignedOut(props: PanelProps & { kind: 'form' | 'posting' | null }) {
+  const { page, kind } = props;
+  const named = !!(page.info?.draft?.title || page.handle.draft?.title || page.handle.title);
+  return (
+    <>
+      {named && <JobHeader api={null} page={page} kind={kind} />}
+      <SignIn onSignedIn={props.onSignedIn} forJob={named} />
+    </>
+  );
+}
+
 function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | null }) {
   const { api, page, kind } = props;
+  // An application has no Save button: the job is saved for its fit score from the keyword card,
+  // as the page's own data names it, else as the AI reads it off the page (as a fill saves it).
+  const scoreJob = async () => {
+    const data = page.info?.draft ?? page.handle.draft;
+    const draft = data?.title.trim() && data.company.trim() ? data : await api.extract(location.href, document.title, page.info?.text ?? '');
+    if ('is_job_posting' in draft && !(draft.is_job_posting && draft.title && draft.company)) throw new Error("Wera couldn't tell which job this application is for. Save it from its posting.");
+    page.setJob(await api.addJob(draft));
+  };
   return (
     <>
       {page.submitted && <Submitted api={api} page={page} />}
