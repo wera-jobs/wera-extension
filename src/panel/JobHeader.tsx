@@ -8,6 +8,7 @@ import clsx from 'clsx';
 import { CalendarDays, CircleDollarSign, ExternalLink, FileText, MapPin, Send } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import { ageWords, OLD_POSTING_DAYS } from '../content/facts';
+import { hostOf, originOf, siteOf } from '../shared/url';
 import { postingFacts } from './PostingFacts';
 import { Notice, ScoreRing, Skeleton } from './ui';
 import type { PanelPageState } from './usePanelPage';
@@ -24,43 +25,78 @@ const STATUS: Record<string, [string, string]> = {
 // Images that name the company in a page's header, as job boards draw them.
 const LOGO_IMG = 'header img, [class*="logo" i] img, img[class*="logo" i], img[alt*="logo" i], img[src*="logo" i]';
 
+const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Whether a host is the company's own (stripe.com for Stripe), not a job board's or an applicant system's. */
+export function ownSite(host: string, company: string): boolean {
+  const name = plain(company);
+  const site = plain(siteOf(host).split('.')[0] ?? '');
+  // By the start of the name, not any part of it: Cleverly is not at home on lever.co.
+  return name.length >= 3 && site.length >= 3 && (site.startsWith(name) || (site.length >= 4 && name.startsWith(site)));
+}
+
+/** A site's own icons, the largest first, then the two addresses nearly every site answers. */
+function siteIcons(doc: Document): string[] {
+  const links = [...doc.querySelectorAll<HTMLLinkElement>('link[rel~="apple-touch-icon"], link[rel~="icon"]')]
+    .map((l) => ({ href: l.href, size: parseInt(l.getAttribute('sizes') ?? '', 10) || (/apple-touch/.test(l.rel) ? 180 : 16), svg: /svg/.test(l.type) || /\.svg(\?|$)/.test(l.href) }))
+    .filter((l) => /^https?:/.test(l.href))
+    .sort((x, y) => Number(y.svg) - Number(x.svg) || y.size - x.size);
+  return links.map((l) => l.href);
+}
+
 /**
- * The company's logo on this page: the one its job data names, else a
- * logo image near the top of the page. Never the site's icon: on a job
- * board that is the board's, not the company's.
+ * Where the company's logo may be, best first: the one its job data
+ * names, a logo image near the top of the page, then the company's own
+ * icon: this site's when the page is on the company's site, else the icon
+ * of the site its logo links to (a board's header links home). Never a
+ * job board's own icon. The card tries each in turn and falls back to a
+ * letter (see Logo).
  */
-export function companyLogo(doc: Document, company: string): string {
+export function companyLogos(doc: Document, company: string): string[] {
+  const out: string[] = [];
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
     const m = /"logo"\s*:\s*(?:\{[^}]*?"url"\s*:\s*)?"(https?:[^"]+)"/.exec(s.textContent ?? '');
-    if (m?.[1]) return m[1];
+    if (m?.[1]) out.push(m[1]);
   }
   const name = company.trim().toLowerCase();
+  let home = '';
   for (const img of doc.querySelectorAll<HTMLImageElement>(LOGO_IMG)) {
     const r = img.getBoundingClientRect();
     const top = r.top + (doc.defaultView?.scrollY ?? 0);
     const src = img.currentSrc || img.src;
     if (!/^https?:/.test(src) || top > 900) continue;
+    // The company's site, as its logo links to it from a board.
+    const to = img.closest('a')?.href ?? '';
+    if (!home && /^https?:/.test(to) && ownSite(hostOf(to), company)) home = originOf(to);
     // A real layout has sizes: skip icons and banners. (jsdom has none: trust the name in alt.)
     if (r.width > 0 && (r.width < 20 || r.height < 20 || r.width / Math.max(r.height, 1) > 5)) continue;
     if (r.width === 0 && !(name && img.alt.toLowerCase().includes(name))) continue;
-    return src;
+    out.push(src);
   }
-  return '';
+  const here = doc.location?.host ?? '';
+  if (here && ownSite(here, company)) out.push(...siteIcons(doc), `${doc.location.origin}/apple-touch-icon.png`, `${doc.location.origin}/favicon.ico`);
+  else if (home) out.push(`${home}/apple-touch-icon.png`, `${home}/favicon.ico`);
+  return [...new Set(out)];
 }
 
 // Tile colors for a logo-less company, picked by its name so it stays the same.
 const TILES = ['bg-accent/15 text-accent', 'bg-accent-2/15 text-accent-2', 'bg-good/15 text-good', 'bg-warn/15 text-warn'];
 
-function Logo({ src, company }: { src: string; company: string }) {
-  const [failed, setFailed] = useState(false);
+function Logo({ srcs, company }: { srcs: string[]; company: string }) {
+  // The candidate being shown; one that fails to load, or would not read in a square, gives way to the next.
+  const [at, setAt] = useState(0);
   const letter = (company.trim()[0] ?? 'W').toUpperCase();
   const tile = TILES[[...company].reduce((n, c) => n + c.charCodeAt(0), 0) % TILES.length];
-  if (src && !failed) {
+  const src = srcs[at];
+  if (src) {
     return (
       <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-1">
-        <img src={src} alt="" className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" onError={() => setFailed(true)}
-          // A wordmark much wider than tall turns to a smudge in a square: the letter reads better.
-          onLoad={(e) => e.currentTarget.naturalWidth > 2.2 * e.currentTarget.naturalHeight && setFailed(true)} />
+        <img key={src} src={src} alt="" className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" onError={() => setAt((n) => n + 1)}
+          onLoad={(e) => {
+            const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+            // A wordmark or a share image (wider than tall) turns to a smudge in a square, and a 16 px icon to a blur.
+            if (w > 1.7 * h || h > 1.7 * w || (w > 0 && w < 24)) setAt((n) => n + 1);
+          }} />
       </span>
     );
   }
@@ -77,13 +113,13 @@ function Chip({ icon, children, tone = 'plain', title }: { icon?: ReactNode; chi
 }
 
 /** The job at the top of the panel. */
-export function JobHeader({ api, page, kind }: { api: WeraApi; page: PanelPageState; kind: 'form' | 'posting' | null }) {
+export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: PanelPageState; kind: 'form' | 'posting' | null }) {
   const job = page.job;
   const draft = page.info?.draft ?? page.handle.draft;
   const title = job?.title || draft?.title || page.handle.title || 'This job';
   const company = job?.company || draft?.company || page.handle.company || '';
   const place = job?.location_raw || draft?.location || '';
-  const logo = useMemo(() => companyLogo(document, company), [company]);
+  const logos = useMemo(() => companyLogos(document, company), [company]);
   const facts = postingFacts(job, draft, page.info?.text ?? '');
   const [status, statusCls] = job?.application_status ? STATUS[job.application_status] ?? [job.application_status, STATUS.not_interested![1]] : ['', ''];
   const score = job ? (job.fit_score ?? job.estimated_score) : null;
@@ -95,7 +131,7 @@ export function JobHeader({ api, page, kind }: { api: WeraApi; page: PanelPageSt
   return (
     <div className="anim-rise space-y-2.5">
       <div className="flex items-start gap-3">
-        {page.loading && !job && !draft ? <Skeleton className="size-11 rounded-xl" /> : <Logo src={logo} company={company} />}
+        {page.loading && !job && !draft ? <Skeleton className="size-11 rounded-xl" /> : <Logo key={logos.join(' ')} srcs={logos} company={company} />}
         <div className="min-w-0 flex-1">
           <h2 className="line-clamp-2 text-[15px] leading-snug font-semibold tracking-tight text-text">{title}</h2>
           <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted">
@@ -119,7 +155,7 @@ export function JobHeader({ api, page, kind }: { api: WeraApi; page: PanelPageSt
           </Chip>
         )}
         {status && <span className={clsx('rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium', statusCls)}>{status}</span>}
-        {job && (
+        {job && api && (
           <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer"
             className="ml-auto inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline">
             Open in Wera <ExternalLink className="size-3" />

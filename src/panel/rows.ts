@@ -15,6 +15,8 @@ export interface Row extends FieldPlan {
   result?: string;
   /** Wera drafted this answer (an open question): the user should read it. */
   drafted?: boolean;
+  /** Wera entered a choice it inferred (see mayChoose): the user should check it. */
+  chosen?: boolean;
   /** What to ask the AI, when the label alone is not the whole question (see followUpOf). */
   asked?: string;
 }
@@ -94,6 +96,26 @@ export function followUpOf(rows: Row[], i: number): FollowUp | null {
   return { question, said, applies: yes || no ? (when === 'yes' ? yes : no) : null };
 }
 
+const CHOICE = new Set(['select', 'radio', 'listbox', 'combobox', 'buttons']);
+const YES_NO = /^\s*(yes|no|y|n|true|false)\b/i;
+const REFUSAL = /^\s*(none|not |never|n\/?a\b|i (do not|don't|am not|have not|haven't)|decline|prefer not|other\b)/i;
+
+/**
+ * An answer the AI inferred that Wera may enter all the same, marked for
+ * the user to check: one of three or more listed choices ("How did you
+ * hear about us?", "Years of experience: 3-5"). Never a yes or no: a wrong
+ * yes claims what is not so, and a wrong no can end the application, so
+ * those stay one click away. Never a refusal or "Other", and never on a
+ * required consent, a trap or a question the AI should not answer.
+ */
+export function mayChoose(r: Pick<Row, 'kind' | 'options' | 'trap' | 'group'>, value: string): boolean {
+  if (r.trap || r.group === 'consent' || r.group === 'self_id' || !CHOICE.has(r.kind)) return false;
+  if (r.options.length < 3 || !r.options.includes(value)) return false;
+  if (YES_NO.test(value) || REFUSAL.test(value)) return false;
+  // A yes/no question with a third way out ("Yes", "No", "Prefer not to say") is still a yes or no.
+  return r.options.filter((o) => YES_NO.test(o)).length < 2;
+}
+
 /** An AI answer Wera did not trust enough to enter by itself. */
 export const isGuess = (r: Row) => r.source === 'ai' && !!r.value && !r.checked && r.status !== 'filled';
 
@@ -104,7 +126,7 @@ export const isGuess = (r: Row) => r.source === 'ai' && !!r.value && !r.checked 
  */
 export function needsYou(rows: Row[]): Row[] {
   return rows.filter((r) => {
-    if (r.status === 'filled' && r.drafted) return true;
+    if (r.status === 'filled' && (r.drafted || r.chosen)) return true;
     if (r.status === 'filled' || r.status === 'already') return false;
     if (r.status === 'review') return true;
     if (isGuess(r)) return true;

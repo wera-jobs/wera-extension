@@ -365,6 +365,12 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   };
 }
 
+// The user pressed Stop: fills under way in this frame end after the field they are on.
+let halted = false;
+export function stopFilling() {
+  halted = true;
+}
+
 export interface ApplyOptions {
   resume?: { name: string; base64: string };
   coverLetter?: string;
@@ -387,8 +393,16 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
   const pace = Math.max(opts.pace ?? 0, (doc && siteFor(doc)?.pace) || 0);
   const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
+  halted = false;
   try {
     for (const item of items) {
+      // Stopped: what is left is reported as not filled, and nothing more is touched.
+      if (halted) {
+        const res: FillResult = { id: item.id, label: item.label ?? '', purpose: null, status: 'skipped', required: false };
+        out.push(res);
+        opts.onProgress?.(res);
+        continue;
+      }
       // The user is typing or clicking on the page: Wera waits for a pause, and leaves their field to them.
       if (user) await user.quiet();
       // A field the page re-rendered since it was read has lost Wera's mark: find it by its label and kind.
@@ -451,7 +465,7 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
         res.status = 'review';
         res.note = `Wera hit a problem filling this one (${e instanceof Error ? e.message : String(e)}): fill it yourself`;
       }
-      if (f && res.status === 'filled') mark(f.el, 'filled');
+      if (f && res.status === 'filled') mark(f.el, item.check ? 'review' : 'filled');
       else if (f && res.status === 'review') mark(f.el, 'review');
       out.push(res);
       opts.onProgress?.(res);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldPlan } from '../shared/types';
-import { followUpOf, isGuess, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
+import { followUpOf, isGuess, mayChoose, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
 
 const row = (over: Partial<Row>): Row => ({
   id: 'w1', label: 'Field', purpose: null, kind: 'text', options: [], required: false, current: '', value: '', source: null, group: 'other', checked: false, ...over,
@@ -108,5 +108,35 @@ describe('guesses', () => {
     expect(isGuess(guess({ status: 'filled' }))).toBe(false);
     expect(isGuess(guess({ value: '' }))).toBe(false);
     expect(isGuess(guess({ source: 'details' }))).toBe(false);
+  });
+});
+
+describe('which inferred answers Wera may enter for the user to check', () => {
+  const heard = row({ kind: 'select', options: ['LinkedIn', 'Job board', 'Referral', 'Other'] });
+
+  it('enters one of several listed choices', () => {
+    expect(mayChoose(heard, 'LinkedIn')).toBe(true);
+    expect(mayChoose(row({ kind: 'listbox', options: ['0-2 years', '3-5 years', '6+ years'] }), '3-5 years')).toBe(true);
+  });
+
+  it('never a yes or no: a wrong yes claims what is not so, and a wrong no can end the application', () => {
+    expect(mayChoose(row({ kind: 'radio', options: ['Yes', 'No'] }), 'No')).toBe(false);
+    expect(mayChoose(row({ kind: 'select', options: ['Yes', 'No', 'Prefer not to say'] }), 'Yes')).toBe(false);
+    // The third way out of a yes/no question is no better a guess.
+    expect(mayChoose(row({ kind: 'select', options: ['Yes', 'No', 'Maybe later'] }), 'Maybe later')).toBe(false);
+  });
+
+  it('never a refusal, "Other", or a value the list does not hold', () => {
+    expect(mayChoose(heard, 'Other')).toBe(false);
+    expect(mayChoose(row({ kind: 'select', options: ['None', 'Secret', 'Top Secret'] }), 'None')).toBe(false);
+    expect(mayChoose(row({ kind: 'select', options: ['A1', 'B2', 'I do not speak German'] }), 'I do not speak German')).toBe(false);
+    expect(mayChoose(heard, 'A friend')).toBe(false);
+  });
+
+  it('never typed text, a consent, self-identification or a trap', () => {
+    expect(mayChoose(row({ kind: 'text' }), 'LinkedIn')).toBe(false);
+    expect(mayChoose({ ...heard, group: 'consent' }, 'LinkedIn')).toBe(false);
+    expect(mayChoose({ ...heard, group: 'self_id' }, 'LinkedIn')).toBe(false);
+    expect(mayChoose({ ...heard, trap: 'decoy_field' }, 'LinkedIn')).toBe(false);
   });
 });

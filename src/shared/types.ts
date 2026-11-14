@@ -210,6 +210,8 @@ export interface FillItem {
   /** The field's label and kind when read: finds it again if the page re-rendered it (Ashby does after each answer). */
   label?: string;
   kind?: string;
+  /** Wera chose this value without being sure: the field is outlined for the user to check. */
+  check?: boolean;
 }
 
 /** A field's value as the user left it (to learn answers from). */
@@ -300,6 +302,8 @@ export type ContentRequest =
   /** Presses the page's Apply button: the user asked Wera to apply from the posting. */
   | { type: 'wera:press-apply' }
   | { type: 'wera:highlight'; id: string }
+  /** The user pressed Stop: the fill under way in this frame ends after the field it is on. */
+  | { type: 'wera:stop' }
   /** The choices custom dropdowns offer (opened and closed again), by field id. */
   | { type: 'wera:options'; ids: string[] }
   /** The frame's recent log (for Copy diagnostics). */

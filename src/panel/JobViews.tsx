@@ -3,11 +3,12 @@
 // an application.
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
+import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { markApplying } from '../shared/flow';
+import { prettyReason } from '../shared/jobs';
 import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
 import { NextMatch, useNextMatch } from './AppliedAlert';
@@ -34,14 +35,19 @@ const SPONSORS: Record<string, string> = { yes: 'This job offers visa sponsorshi
 
 /**
  * A job not in Wera yet: how the resume meets the keywords on its page,
- * at once and for free (word matching), before anything is saved.
+ * at once and for free (word matching), before anything is saved. The
+ * share is drawn as a bar, and a resume that shows none of the words is
+ * told so in words: a bare "0%" reads as something broken. On an
+ * application there is no Save button, so the way to the fit score is here.
  */
-export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }) {
+export function QuickMatch({ api, page, onScore }: { api: WeraApi; page: PanelPageState; onScore?: () => Promise<void> }) {
   // The page's job data when it describes the job in full, else what the page shows.
   const data = page.info?.draft?.description ?? '', shown = page.info?.text ?? '';
   const text = data.length >= shown.length ? data : shown;
   const [keywords, setKeywords] = useState<JobKeywords | null>(null);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
     if (text.length < 200) return;
     let live = true;
@@ -52,16 +58,44 @@ export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }
   }, [api, text]);
   const coverage = keywords?.coverage;
   if (!coverage || coverage.matched.length + coverage.missing.length < 3) return null;
+  const total = coverage.matched.length + coverage.missing.length;
+  const score = async () => {
+    if (!onScore) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onScore();
+    } catch (e) {
+      log.warn('fit', 'saving the job for its score failed', e);
+      setError(describeError(e, "Couldn't save this job"));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="rounded-card border border-border bg-surface text-xs">
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="min-w-0 flex-1 font-medium">Your resume has <span className="font-mono">{coverage.percent}%</span> of this job's keywords</span>
-        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      <button type="button" className="block w-full px-3 py-2.5 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 font-medium">
+            {coverage.matched.length ? <>Your resume has <span className="font-mono">{coverage.matched.length}</span> of this job's <span className="font-mono">{total}</span> keywords</>
+              : <>Your resume shows none of this job's <span className="font-mono">{total}</span> keywords yet</>}
+          </span>
+          <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+        </span>
+        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${coverage.percent}% of the keywords`}>
+          <span className={clsx('block h-full rounded-full', coverage.percent >= 60 ? 'bg-good' : coverage.percent >= 30 ? 'bg-accent-2' : 'bg-faint')} style={{ width: `${Math.max(coverage.percent, 2)}%` }} />
+        </span>
       </button>
       {open && (
         <div className="space-y-2 border-t border-border px-3 py-2">
           <Chips have={coverage.matched} lack={coverage.missing} />
-          <p className="text-faint">Save the job for its full fit score.</p>
+          <p className="text-faint">Words only: your fit score also weighs the role, level, place and what the job requires.{!onScore && ' Save the job to get it.'}</p>
+        </div>
+      )}
+      {onScore && (
+        <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+          <p className="min-w-0 flex-1 text-[11px] text-muted">{error || 'See how well this job fits you before you apply.'}</p>
+          <Button className="shrink-0 px-2 py-1" busy={busy} onClick={() => void score()}>{!busy && <Sparkles className="size-3.5" />} Get fit score</Button>
         </div>
       )}
     </div>
@@ -92,22 +126,40 @@ export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
   const have = coverage?.matched ?? job.skills_matched ?? [];
   const lack = coverage?.missing ?? job.skills_missing ?? [];
   const sponsor = job.sponsorship ? SPONSORS[job.sponsorship] : '';
-  if (!job.reason && !have.length && !lack.length && !sponsor) return null;
-  return (
-    <div className="rounded-card border border-border bg-surface text-xs">
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="min-w-0 flex-1 font-medium">{coverage?.matched.length ? `Your resume has ${coverage.percent}% of this job's keywords` : 'Why this fit'}</span>
-        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="space-y-2 border-t border-border px-3 py-2">
-          {job.reason && <p className="text-muted">{job.reason}</p>}
-          {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
-          {sponsor && <p className="text-muted">{sponsor}</p>}
-          {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
-        </div>
-      )}
+  // Ruled out by the user's own preferences or the posting's facts: no score will come, so say why (as the dashboard does).
+  const ruledOut = job.stage === 'excluded' && job.fit_score == null && (
+    <div className="flex items-start gap-2.5 rounded-card border border-border bg-surface px-3 py-2.5 text-xs" role="status">
+      <Ban className="mt-0.5 size-3.5 shrink-0 text-bad" />
+      <div className="min-w-0">
+        <p className="font-medium">Not a match for you, so it has no fit score</p>
+        <p className="mt-0.5 text-muted">{job.exclude_reason ? prettyReason(job.exclude_reason) : 'Your preferences rule this job out.'}</p>
+        {job.exclude_evidence && <p className="mt-0.5 line-clamp-3 text-faint">“{job.exclude_evidence}”</p>}
+      </div>
     </div>
+  );
+  if (!job.reason && !have.length && !lack.length && !sponsor) return ruledOut || null;
+  const total = have.length + lack.length;
+  return (
+    <>
+      {ruledOut}
+      <div className="rounded-card border border-border bg-surface text-xs">
+        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <span className="min-w-0 flex-1 font-medium">
+            {coverage?.matched.length ? <>Your resume has <span className="font-mono">{coverage.matched.length}</span> of this job's <span className="font-mono">{total}</span> keywords</>
+              : ruledOut ? "This job's keywords" : 'Why this fit'}
+          </span>
+          <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+        </button>
+        {open && (
+          <div className="space-y-2 border-t border-border px-3 py-2">
+            {job.reason && <p className="text-muted">{job.reason}</p>}
+            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
+            {sponsor && <p className="text-muted">{sponsor}</p>}
+            {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

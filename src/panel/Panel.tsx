@@ -6,7 +6,7 @@
 // dashboard. The views live in Apply.tsx, JobViews.tsx and SettingsView.tsx.
 import { useState } from 'react';
 import clsx from 'clsx';
-import { ChevronRight, Settings2 } from 'lucide-react';
+import { ChevronsRight, Settings2 } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import type { Settings } from '../shared/settings';
 import { Apply } from './Apply';
@@ -15,7 +15,7 @@ import { JobHeader } from './JobHeader';
 import { Referrals } from './Referrals';
 import { Launcher, type HideChoice } from './Launcher';
 import { setSiteHidden, siteKey } from '../shared/settings';
-import { LogoMark } from './Logo';
+import { Logo } from './Logo';
 import { SettingsView } from './SettingsView';
 import { SignIn } from './SignIn';
 import { Notice } from './ui';
@@ -62,34 +62,56 @@ export function Panel(props: PanelProps) {
         props.docked ? 'inset-y-0 right-0 w-[384px] border-l border-border shadow-[-8px_0_24px_-12px_rgb(0_0_0/0.25)]'
           : 'panel-shadow top-3 right-3 bottom-3 w-[372px] max-w-[calc(100vw-24px)] rounded-card border border-border')}>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3.5">
-        <LogoMark size={20} />
-        <span className="font-mono text-[15px] font-semibold tracking-tight">wera</span>
+        <Logo />
         <button type="button" className={clsx('ml-auto grid size-8 place-items-center rounded-lg hover:bg-surface-2', menu ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
           onClick={() => setMenu((m) => !m)} aria-label="Settings" aria-pressed={menu} title="Settings">
           <Settings2 className="size-4" />
         </button>
-        <button type="button" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-text" onClick={() => onOpen(false)} aria-label="Collapse the Wera panel" title="Collapse (Alt+Shift+W)">
-          <ChevronRight className="size-4" />
+        <button type="button" className="grid size-8 place-items-center rounded-lg border border-border text-text hover:border-accent/40 hover:bg-surface-2" onClick={() => onOpen(false)} aria-label="Collapse the Wera panel" title="Collapse to the edge (Alt+Shift+W)">
+          <ChevronsRight className="size-[18px]" />
         </button>
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 [scrollbar-width:thin]">
         {menu ? <SettingsView {...props} onClose={() => setMenu(false)} />
-          : !api ? <SignIn onSignedIn={props.onSignedIn} />
+          : !api ? <SignedOut {...props} kind={kind} />
           : <Main {...props} api={api} kind={kind} />}
       </div>
     </section>
   );
 }
 
+/**
+ * Not signed in yet: the job this page holds (its pay, how long it has
+ * been up) and then the way in, so the panel is of use before an account.
+ */
+function SignedOut(props: PanelProps & { kind: 'form' | 'posting' | null }) {
+  const { page, kind } = props;
+  const named = !!(page.info?.draft?.title || page.handle.draft?.title || page.handle.title);
+  return (
+    <>
+      {named && <JobHeader api={null} page={page} kind={kind} />}
+      <SignIn onSignedIn={props.onSignedIn} forJob={named} />
+    </>
+  );
+}
+
 function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | null }) {
   const { api, page, kind } = props;
+  // An application has no Save button: the job is saved for its fit score from the keyword card,
+  // as the page's own data names it, else as the AI reads it off the page (as a fill saves it).
+  const scoreJob = async () => {
+    const data = page.info?.draft ?? page.handle.draft;
+    const draft = data?.title.trim() && data.company.trim() ? data : await api.extract(location.href, document.title, page.info?.text ?? '');
+    if ('is_job_posting' in draft && !(draft.is_job_posting && draft.title && draft.company)) throw new Error("Wera couldn't tell which job this application is for. Save it from its posting.");
+    page.setJob(await api.addJob(draft));
+  };
   return (
     <>
       {page.submitted && <Submitted api={api} page={page} />}
       <JobHeader api={api} page={page} kind={kind} />
       {page.error && <Notice tone="bad">{page.error}</Notice>}
       {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
-      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} />}
+      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} onScore={kind === 'form' ? scoreJob : undefined} />}
       {(page.info || !page.loading) && !page.submitted && (
         <Referrals api={api} jobId={page.job?.id ?? null}
           company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}

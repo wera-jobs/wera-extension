@@ -7,7 +7,7 @@ import { LogoMark } from './Logo';
 export const DEFAULT_SERVER = 'https://www.wera-jobs.com';
 
 /** Connects this browser to the user's Wera (the background signs in and keeps the key). */
-export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
+export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?: boolean }) {
   const [server, setServer] = useState(DEFAULT_SERVER);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,12 +32,20 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
 
   const site = /^https?:\/\//.test(server) ? server.replace(/\/+$/, '') : DEFAULT_SERVER;
   return (
-    <div className="space-y-4 px-1 py-2">
-      <div className="space-y-1.5 text-center">
-        <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-accent/10"><LogoMark size={26} /></span>
-        <h2 className="text-[15px] font-semibold tracking-tight">Sign in to Wera</h2>
-        <p className="text-xs text-muted">See your fit on every job, autofill applications and keep your tracker current. You review and submit.</p>
-      </div>
+    <div className={forJob ? 'space-y-3.5 rounded-card border border-border bg-surface p-3.5' : 'space-y-4 px-1 py-2'}>
+      {forJob ? (
+        // Under the job this page holds: say what signing in adds to it.
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold tracking-tight">Sign in to see your fit and autofill</h2>
+          <p className="text-xs text-muted">Wera scores this job against your resume, fills the application and keeps your tracker current. You review and submit.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5 text-center">
+          <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-accent/10"><LogoMark size={26} /></span>
+          <h2 className="text-[15px] font-semibold tracking-tight">Sign in to Wera</h2>
+          <p className="text-xs text-muted">See your fit on every job, autofill applications and keep your tracker current. You review and submit.</p>
+        </div>
+      )}
       <form onSubmit={(e) => void submit(e)} className="space-y-3">
         {otherServer && (
           <Field label="Wera address">

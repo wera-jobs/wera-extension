@@ -92,3 +92,33 @@ describe('hiding the launcher', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 });
+
+describe('putting the tab away', () => {
+  it('keeps its menu open when the pointer leaves, and closes it on Escape or a press elsewhere', async () => {
+    fakeStorage();
+    const onHide = vi.fn();
+    render(<div><Launcher onOpen={() => {}} onHide={onHide} /><p>the page</p></div>);
+    const hide = screen.getByRole('button', { name: 'Hide Wera' });
+    await userEvent.click(hide);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    // On the way from the × to the menu the pointer crosses a gap: the menu must not go.
+    fireEvent.mouseLeave(hide.parentElement!);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.keyDown(hide, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    await userEvent.click(hide);
+    fireEvent.pointerDown(screen.getByText('the page'));
+    expect(screen.queryByRole('menu')).toBeNull();
+    await userEvent.click(hide);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide on this site' }));
+    expect(onHide).toHaveBeenCalledWith('site');
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('gives the × a target a finger can hit, on a tab in Wera\'s color', () => {
+    fakeStorage();
+    render(<Launcher onOpen={() => {}} onHide={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Hide Wera' }).className).toContain('size-6');
+    expect(screen.getByRole('button', { name: 'Show the Wera panel' }).className).toContain('bg-accent');
+  });
+});

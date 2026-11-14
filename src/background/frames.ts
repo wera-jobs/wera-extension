@@ -148,6 +148,11 @@ export async function highlight(tabId: number, id: string): Promise<void> {
   await sendTo(tabId, f.frameId, { type: 'wera:highlight', id: f.id }).catch(() => {});
 }
 
+/** Ends the fill under way in every frame of the tab. */
+export async function stop(tabId: number): Promise<void> {
+  await sendAll(tabId, await reach(tabId), { type: 'wera:stop' });
+}
+
 /** The choices custom dropdowns offer, by field id (each frame opens its own and closes them again). */
 export async function options(tabId: number, ids: string[]): Promise<Record<string, string[]>> {
   const byFrame = new Map<number, string[]>();
@@ -179,6 +184,7 @@ export const run: { [K in keyof FrameOps]: (tabId: number, ...args: FrameOps[K][
   next: pressNext,
   'press-apply': pressApply,
   highlight,
+  stop,
   options,
   log: logs,
 };

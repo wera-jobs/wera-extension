@@ -66,4 +66,6 @@
   background: linear-gradient(90deg, transparent, rgb(127 127 127 / 0.08), transparent); animation: shimmer 1.4s infinite; }
 .panel-shadow { box-shadow: 0 18px 48px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.02); }
 .wera-root[data-theme="light"] .panel-shadow { box-shadow: 0 2px 4px rgb(29 31 36 / 0.05), 0 16px 36px -10px rgb(29 31 36 / 0.22); }
+.launcher-shadow { box-shadow: 0 6px 20px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06); }
+.wera-root[data-theme="light"] .launcher-shadow { box-shadow: 0 6px 18px -6px rgb(29 31 36 / 0.45), 0 1px 3px rgb(29 31 36 / 0.18); }
 @media (prefers-reduced-motion: reduce) { .wera-root *, .wera-root *::after { animation-duration: 0.01ms !important; } }
