@@ -3,7 +3,7 @@ import type { Applicant, FieldPlan, FillResult } from '../shared/types';
 import { classify } from './classify';
 import { collectFields } from './fields';
 import { findNext, invalidCount, pressNext } from './next';
-import { applyItems, currentValue, highlight, LETTER, planForm, RESUME, snapshot } from './plan';
+import { applyItems, currentValue, highlight, LETTER, planForm, RESUME, snapshot, stopFilling } from './plan';
 
 const ada: Applicant = {
   first_name: 'Ada', middle_name: 'King', last_name: 'Lovelace', preferred_name: '', email: 'ada@example.com', phone: '(512) 555-0142',
@@ -132,6 +132,36 @@ describe('a start date', () => {
 describe('applyItems', () => {
   beforeEach(() => {
     document.body.innerHTML = FORM;
+  });
+
+  it('stops when asked: the field it is on lands, the rest are reported as not filled and left alone', async () => {
+    const plan = planForm(document, ada, {});
+    const id = (start: string) => byLabel(plan.fields, start).id;
+    const seen: string[] = [];
+    const out = await applyItems(document, [{ id: id('First name'), value: 'Ada' }, { id: id('Middle name'), value: 'King' }, { id: id('Last name'), value: 'Lovelace' }], {
+      // The user presses Stop while the first field goes in.
+      onProgress: (r) => {
+        seen.push(r.status);
+        stopFilling();
+      },
+    });
+    expect(out.map((r) => r.status)).toEqual(['filled', 'skipped', 'skipped']);
+    expect(seen).toEqual(['filled', 'skipped', 'skipped']);
+    expect((document.getElementById('fn') as HTMLInputElement).value).toBe('Ada');
+    expect((document.getElementById('mn') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('ln') as HTMLInputElement).value).toBe('Byron');
+    // The next fill starts afresh.
+    const again = await applyItems(document, [{ id: id('Middle name'), value: 'King' }]);
+    expect(again[0]!.status).toBe('filled');
+  });
+
+  it('outlines a value Wera chose without being sure as one to check', async () => {
+    const plan = planForm(document, ada, {});
+    const id = (start: string) => byLabel(plan.fields, start).id;
+    await applyItems(document, [{ id: id('Preferred work'), value: 'Hybrid', check: true }, { id: id('First name'), value: 'Ada' }]);
+    expect(document.getElementById('wp')!.hasAttribute('data-wera-review')).toBe(true);
+    expect(document.getElementById('wp')!.hasAttribute('data-wera-filled')).toBe(false);
+    expect(document.getElementById('fn')!.hasAttribute('data-wera-filled')).toBe(true);
   });
 
   it('fills exactly the approved values, overwriting, reporting each as it lands', async () => {

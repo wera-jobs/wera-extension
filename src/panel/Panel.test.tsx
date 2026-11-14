@@ -214,8 +214,10 @@ describe('the Wera panel', () => {
     expect(screen.getByText('agree yourself after reading it')).toBeInTheDocument();
     expect(screen.getByText(/press/)).toHaveTextContent('Submit application');
     expect(screen.getByText('Application · Greenhouse')).toBeInTheDocument();
-    // One click uses the guess.
-    await userEvent.click(screen.getByRole('button', { name: 'Use' }));
+    // One click uses the guess: each of the few choices is a button, Wera's first.
+    const choices = within(screen.getByRole('group', { name: /Clearance level/ })).getAllByRole('button');
+    expect(choices.map((b) => b.textContent)).toEqual(['None', 'Secret']);
+    await userEvent.click(choices[0]!);
     await waitFor(() => expect(applied.at(-1)).toEqual([{ id: 'w3', value: 'None' }]));
     // The application is counted in Wera.
     expect(calls.some((c) => c.name === 'startRun')).toBe(true);
@@ -409,11 +411,19 @@ describe('the Wera panel', () => {
       },
     });
     render(<App handle={handle('posting')} show={show()} />);
-    await userEvent.click(await screen.findByRole('button', { name: /has 67% of this job's keywords/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /has 2 of this job's 3 keywords/ }));
     expect(screen.getByText('Strong SRE match, light on Terraform.')).toBeInTheDocument();
     expect(screen.getByText('Terraform')).toBeInTheDocument();
     expect(screen.getByText(/offers visa sponsorship/)).toBeInTheDocument();
     expect(await screen.findByText(/filed 12 H-1B petitions/)).toBeInTheDocument();
+  });
+
+  it("says why a job has no fit score when the user's own rules rule it out", async () => {
+    fakeBackground({ job: { ...job, stage: 'excluded', fit_score: null, verdict: null, exclude_reason: 'llm:years>3', exclude_evidence: '8+ years of enterprise sales' } });
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByText('Not a match for you, so it has no fit score')).toBeInTheDocument();
+    expect(screen.getByText('Needs more than 3 years')).toBeInTheDocument();
+    expect(screen.getByText('“8+ years of enterprise sales”')).toBeInTheDocument();
   });
 
   it('warns when the tracker says the job was applied to', async () => {
@@ -539,10 +549,134 @@ describe('the Wera panel', () => {
       api: { postingKeywords: () => ({ keywords: ['go', 'kubernetes', 'rust'], coverage: { matched: ['go', 'kubernetes'], missing: ['rust'], percent: 67 } }) },
     });
     render(<App handle={handle('posting')} show={show()} />);
-    await userEvent.click(await screen.findByRole('button', { name: /Your resume has 67% of this job's keywords/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Your resume has 2 of this job's 3 keywords/ }));
+    expect(screen.getByRole('img', { name: '67% of the keywords' })).toBeInTheDocument();
     expect(screen.getByText('rust')).toBeInTheDocument();
+    // A posting has Save for the fit score: no second button for it here.
+    expect(screen.queryByRole('button', { name: /Get fit score/ })).toBeNull();
     expect(String(calls.find((c) => c.name === 'postingKeywords')?.args[0])).toContain('Kubernetes');
     expect(calls.some((c) => c.name === 'addJob')).toBe(false);
+  });
+
+  it('says a resume shows none of the keywords in words, not as a bare 0%', async () => {
+    fakeBackground({
+      job: null,
+      info: { text: 'We sell design software to large companies. '.repeat(10) },
+      api: { postingKeywords: () => ({ keywords: ['salesforce', 'negotiation', 'forecasting'], coverage: { matched: [], missing: ['salesforce', 'negotiation', 'forecasting'], percent: 0 } }) },
+    });
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByRole('button', { name: /Your resume shows none of this job's 3 keywords yet/ })).toBeInTheDocument();
+    expect(screen.queryByText(/0%/)).toBeNull();
+  });
+
+  it('gets the fit score from an application, where there is no Save button', async () => {
+    const { calls } = fakeBackground({
+      job: null,
+      info: { hasForm: true, text: 'We run Go services on Kubernetes. '.repeat(10) },
+      api: { postingKeywords: () => ({ keywords: ['go', 'kubernetes', 'rust'], coverage: { matched: ['go', 'kubernetes'], missing: ['rust'], percent: 67 } }) },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Get fit score/ }));
+    // Saved: the job's card shows its score and the way to it in Wera.
+    expect(await screen.findByLabelText('fit 81')).toBeInTheDocument();
+    expect(calls.find((c) => c.name === 'addJob')?.args[0]).toMatchObject({ company: 'Acme', title: 'SRE' });
+    expect(screen.queryByRole('button', { name: /Get fit score/ })).toBeNull();
+  });
+
+  it('shows the job before sign-in: what it is and what it pays, then the way in', async () => {
+    fakeBackground({ signedIn: false, info: { draft: { ...draft, salary: '$120,000 - $150,000 a year' } } });
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByRole('heading', { name: 'SRE' })).toBeInTheDocument();
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+    expect(await screen.findByTitle('The pay the posting states')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sign in to see your fit and autofill' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    // Nothing of an account's shows.
+    expect(screen.queryByText('Open in Wera')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Autofill|Save to Wera/ })).toBeNull();
+  });
+
+  it('enters a pick the AI inferred from a list, marked to check, and keeps a yes or no for the user', async () => {
+    const plan: PagePlan = {
+      fields: [
+        field('w1', 'How did you hear about us?', { kind: 'select', options: ['LinkedIn', 'Job board', 'Referral', 'Other'] }),
+        field('w2', 'Do you have experience with Kotlin?', { kind: 'radio', options: ['Yes', 'No'] }),
+        field('w3', 'Are you open to relocating?', { kind: 'select', options: ['Yes', 'No', 'Prefer not to say'] }),
+      ],
+      next: { id: 'n1', label: 'Submit', final: true }, errors: 0,
+    };
+    const applied: FillItem[] = [];
+    const { scan, apply } = formPage(plan, ({ items }) => applied.push(...items));
+    fakeBackground({
+      job, info: { hasForm: true }, frames: { scan, apply },
+      api: { suggest: () => ({ answers: [
+        { id: 'w1', value: 'LinkedIn', confidence: 'low', why: 'the profile lists LinkedIn' },
+        { id: 'w2', value: 'No', confidence: 'low', why: 'not on the resume' },
+        { id: 'w3', value: 'Yes', confidence: 'low', why: 'a guess' },
+      ] }) },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    // The list pick went in, flagged for the page to outline it; neither yes/no did.
+    expect(applied).toEqual([expect.objectContaining({ id: 'w1', value: 'LinkedIn', check: true })]);
+    expect(await screen.findByText('Wera chose "LinkedIn": check it')).toBeInTheDocument();
+    expect(screen.getByText(/Needs you \(3\)/)).toBeInTheDocument();
+    // The yes/no guesses are one click either way.
+    await userEvent.click(within(screen.getByRole('group', { name: /Kotlin/ })).getByRole('button', { name: 'Yes' }));
+    await waitFor(() => expect(applied.at(-1)).toMatchObject({ id: 'w2', value: 'Yes' }));
+    expect(applied.at(-1)!.check).toBeUndefined();
+  });
+
+  it('stops a fill when asked: nothing more goes in, what went in stays, and Fill again carries on', async () => {
+    const plan: PagePlan = {
+      fields: [
+        field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' }),
+        field('w2', 'Years of Rust'),
+      ],
+      next: { id: 'n1', label: 'Submit', final: true }, errors: 0,
+    };
+    const applied: FillItem[] = [];
+    const { scan, apply } = formPage(plan, ({ items }) => applied.push(...items));
+    // The AI takes its time: the user stops while it thinks.
+    let answer: (v: unknown) => void = () => {};
+    const { calls } = fakeBackground({
+      job, info: { hasForm: true }, frames: { scan, apply, stop: () => null },
+      api: { suggest: () => new Promise((r) => { answer = r; }) },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await screen.findByRole('button', { name: /Answering 1 question/ });
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(await screen.findByText(/^Stopped\./)).toBeInTheDocument();
+    await finished();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(calls.some((c) => c.kind === 'frames' && c.name === 'stop')).toBe(true);
+    // The answer that lands after Stop is not entered.
+    await act(async () => answer({ answers: [{ id: 'w2', value: '4', confidence: 'high', why: 'resume' }] }));
+    expect(applied.map((i) => i.id)).toEqual(['w1']);
+    // Fill again carries on with what is left.
+    await userEvent.click(screen.getByRole('button', { name: /Fill again/ }));
+    await waitFor(() => expect(calls.filter((c) => c.name === 'suggest')).toHaveLength(2));
+    await act(async () => answer({ answers: [{ id: 'w2', value: '4', confidence: 'high', why: 'resume' }] }));
+    await waitFor(() => expect(applied.map((i) => i.id)).toEqual(['w1', 'w2']));
+    await finished();
+    expect(screen.queryByText(/^Stopped\./)).toBeNull();
+  });
+
+  it('ends its fill when the panel goes away, so it never fills the next form the page shows', async () => {
+    const plan: PagePlan = { fields: [field('w1', 'Years of Elixir')], next: null, errors: 0 };
+    const applied: FillItem[] = [];
+    const { scan, apply } = formPage(plan, ({ items }) => applied.push(...items));
+    let answer: (v: unknown) => void = () => {};
+    fakeBackground({ job, info: { hasForm: true }, frames: { scan, apply, stop: () => null }, api: { suggest: () => new Promise((r) => { answer = r; }) } });
+    const { unmount } = render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await screen.findByRole('button', { name: /Answering 1 question/ });
+    unmount();
+    await act(async () => answer({ answers: [{ id: 'w1', value: '3', confidence: 'high', why: 'resume' }] }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(applied).toEqual([]);
   });
 
   it('settings: turns things off, and signs out', async () => {
