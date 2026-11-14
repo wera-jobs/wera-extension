@@ -111,7 +111,7 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
       <JobHeader api={api} page={page} kind={kind} />
       {page.error && <Notice tone="bad">{page.error}</Notice>}
       {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
-      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} />}
+      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} onScore={kind === 'form' ? scoreJob : undefined} />}
       {(page.info || !page.loading) && !page.submitted && (
         <Referrals api={api} jobId={page.job?.id ?? null}
           company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}

@@ -34,14 +34,19 @@ const SPONSORS: Record<string, string> = { yes: 'This job offers visa sponsorshi
 
 /**
  * A job not in Wera yet: how the resume meets the keywords on its page,
- * at once and for free (word matching), before anything is saved.
+ * at once and for free (word matching), before anything is saved. The
+ * share is drawn as a bar, and a resume that shows none of the words is
+ * told so in words: a bare "0%" reads as something broken. On an
+ * application there is no Save button, so the way to the fit score is here.
  */
-export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }) {
+export function QuickMatch({ api, page, onScore }: { api: WeraApi; page: PanelPageState; onScore?: () => Promise<void> }) {
   // The page's job data when it describes the job in full, else what the page shows.
   const data = page.info?.draft?.description ?? '', shown = page.info?.text ?? '';
   const text = data.length >= shown.length ? data : shown;
   const [keywords, setKeywords] = useState<JobKeywords | null>(null);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
     if (text.length < 200) return;
     let live = true;
@@ -52,16 +57,44 @@ export function QuickMatch({ api, page }: { api: WeraApi; page: PanelPageState }
   }, [api, text]);
   const coverage = keywords?.coverage;
   if (!coverage || coverage.matched.length + coverage.missing.length < 3) return null;
+  const total = coverage.matched.length + coverage.missing.length;
+  const score = async () => {
+    if (!onScore) return;
+    setBusy(true);
+    setError('');
+    try {
+      await onScore();
+    } catch (e) {
+      log.warn('fit', 'saving the job for its score failed', e);
+      setError(describeError(e, "Couldn't save this job"));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="rounded-card border border-border bg-surface text-xs">
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="min-w-0 flex-1 font-medium">Your resume has <span className="font-mono">{coverage.percent}%</span> of this job's keywords</span>
-        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      <button type="button" className="block w-full px-3 py-2.5 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 font-medium">
+            {coverage.matched.length ? <>Your resume has <span className="font-mono">{coverage.matched.length}</span> of this job's <span className="font-mono">{total}</span> keywords</>
+              : <>Your resume shows none of this job's <span className="font-mono">{total}</span> keywords yet</>}
+          </span>
+          <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+        </span>
+        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-surface-2" role="img" aria-label={`${coverage.percent}% of the keywords`}>
+          <span className={clsx('block h-full rounded-full', coverage.percent >= 60 ? 'bg-good' : coverage.percent >= 30 ? 'bg-accent-2' : 'bg-faint')} style={{ width: `${Math.max(coverage.percent, 2)}%` }} />
+        </span>
       </button>
       {open && (
         <div className="space-y-2 border-t border-border px-3 py-2">
           <Chips have={coverage.matched} lack={coverage.missing} />
-          <p className="text-faint">Save the job for its full fit score.</p>
+          <p className="text-faint">Words only: your fit score also weighs the role, level, place and what the job requires.{!onScore && ' Save the job to get it.'}</p>
+        </div>
+      )}
+      {onScore && (
+        <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+          <p className="min-w-0 flex-1 text-[11px] text-muted">{error || 'See how well this job fits you before you apply.'}</p>
+          <Button className="shrink-0 px-2 py-1" busy={busy} onClick={() => void score()}>{!busy && <Sparkles className="size-3.5" />} Get fit score</Button>
         </div>
       )}
     </div>
