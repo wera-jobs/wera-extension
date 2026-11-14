@@ -62,3 +62,37 @@ export interface JobConfirmed {
 
 /** Statuses past applying: a confirmation page never moves a job back to Applied. */
 export const PAST_APPLIED = new Set(['applied', 'interviewing', 'offer', 'rejected']);
+
+// Why a job is ruled out, in the dashboard's words (wera-frontend src/lib/format.ts prettyReason).
+const REASONS: Record<string, string> = {
+  'title:no_category': 'Not one of your roles',
+  'title:senior': 'Senior title',
+  'title:sr': 'Senior title',
+  'title:staff': 'Staff title',
+  'title:principal': 'Principal title',
+  'title:lead': 'Lead title',
+  'title:manager': 'Manager title',
+  'title:director': 'Director title',
+  'title:head_of': 'Head of … title',
+  'title:vp': 'VP title',
+  'title:intern': 'Internship',
+  'title:internship': 'Internship',
+  'title:iii': 'Level III title',
+  'location:non_us': 'Non-US location',
+  'sponsorship:explicit_no': 'Sponsorship explicitly refused',
+  'llm:sponsorship_no': 'No sponsorship (AI read)',
+  'llm:senior': 'Senior role (AI read)',
+  'llm:non_us': 'Outside the US (AI read)',
+};
+
+/** A rule's name as a person would say it. */
+export function prettyReason(reason: string): string {
+  if (reason.startsWith('llm:years>')) return `Needs more than ${reason.slice('llm:years>'.length)} years`;
+  if (REASONS[reason]) return REASONS[reason];
+  // Any other seniority word the title filter matched, e.g. title:engineering_manager.
+  if (reason.startsWith('title:')) {
+    const words = reason.slice(6).replace(/_/g, ' ');
+    return `${words.charAt(0).toUpperCase()}${words.slice(1)} title`;
+  }
+  return reason;
+}
