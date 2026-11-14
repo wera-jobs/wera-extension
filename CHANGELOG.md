@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.16.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.15.2...wera-extension-v0.16.0) (2026-11-14)
+
+
+### Features
+
+* **autofill:** enter inferred list choices marked to check, and answer guesses in one click ([6d4d301](https://github.com/wera-jobs/wera-extension/commit/6d4d3019d33afc3683c7b5b36a027307c9c80f17))
+* **autofill:** stop a fill in progress ([c3f6820](https://github.com/wera-jobs/wera-extension/commit/c3f68201f11394f955c51a0a76af294008670923))
+* **panel:** draw the header logo at the dashboard's size and make collapse clearer ([6d777f9](https://github.com/wera-jobs/wera-extension/commit/6d777f95a2a0f495a0f4cd903443649a588eded5))
+* **panel:** draw the launcher as a tab in Wera's color with a clear close button ([5174d40](https://github.com/wera-jobs/wera-extension/commit/5174d40eaac2cb64edb8d664b703d6323cd25d8d))
+* **panel:** find the company's logo on its own site ([7e233dc](https://github.com/wera-jobs/wera-extension/commit/7e233dc003cc2f86025d14c902b7db7757ffcb9c))
+* **panel:** say why a job has no fit score when the user's rules rule it out ([f92226b](https://github.com/wera-jobs/wera-extension/commit/f92226b9e3d0cab507f2b78c226857ebfb040dd3))
+* **panel:** show keyword match as a bar and get the fit score from an application ([347746b](https://github.com/wera-jobs/wera-extension/commit/347746b7ae55c03af2529f9cb9582f4c5dbbe32a))
+* **panel:** show the job and its pay before sign-in ([9797e6d](https://github.com/wera-jobs/wera-extension/commit/9797e6de44f897166ef71eb228bfff612e8a6537))
+
+
+### Documentation
+
+* **readme:** describe the launcher tab, stop, list choices and the fit score button ([58db415](https://github.com/wera-jobs/wera-extension/commit/58db41580d168befaf756c1762c852dd91de4d2a))
+
 ## [0.15.2](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.15.1...wera-extension-v0.15.2) (2026-11-11)
 
 
