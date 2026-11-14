@@ -3,11 +3,12 @@
 // an application.
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
+import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { markApplying } from '../shared/flow';
+import { prettyReason } from '../shared/jobs';
 import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
 import { NextMatch, useNextMatch } from './AppliedAlert';
@@ -125,22 +126,40 @@ export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
   const have = coverage?.matched ?? job.skills_matched ?? [];
   const lack = coverage?.missing ?? job.skills_missing ?? [];
   const sponsor = job.sponsorship ? SPONSORS[job.sponsorship] : '';
-  if (!job.reason && !have.length && !lack.length && !sponsor) return null;
-  return (
-    <div className="rounded-card border border-border bg-surface text-xs">
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="min-w-0 flex-1 font-medium">{coverage?.matched.length ? `Your resume has ${coverage.percent}% of this job's keywords` : 'Why this fit'}</span>
-        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="space-y-2 border-t border-border px-3 py-2">
-          {job.reason && <p className="text-muted">{job.reason}</p>}
-          {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
-          {sponsor && <p className="text-muted">{sponsor}</p>}
-          {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
-        </div>
-      )}
+  // Ruled out by the user's own preferences or the posting's facts: no score will come, so say why (as the dashboard does).
+  const ruledOut = job.stage === 'excluded' && job.fit_score == null && (
+    <div className="flex items-start gap-2.5 rounded-card border border-border bg-surface px-3 py-2.5 text-xs" role="status">
+      <Ban className="mt-0.5 size-3.5 shrink-0 text-bad" />
+      <div className="min-w-0">
+        <p className="font-medium">Not a match for you, so it has no fit score</p>
+        <p className="mt-0.5 text-muted">{job.exclude_reason ? prettyReason(job.exclude_reason) : 'Your preferences rule this job out.'}</p>
+        {job.exclude_evidence && <p className="mt-0.5 line-clamp-3 text-faint">“{job.exclude_evidence}”</p>}
+      </div>
     </div>
+  );
+  if (!job.reason && !have.length && !lack.length && !sponsor) return ruledOut || null;
+  const total = have.length + lack.length;
+  return (
+    <>
+      {ruledOut}
+      <div className="rounded-card border border-border bg-surface text-xs">
+        <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <span className="min-w-0 flex-1 font-medium">
+            {coverage?.matched.length ? <>Your resume has <span className="font-mono">{coverage.matched.length}</span> of this job's <span className="font-mono">{total}</span> keywords</>
+              : ruledOut ? "This job's keywords" : 'Why this fit'}
+          </span>
+          <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+        </button>
+        {open && (
+          <div className="space-y-2 border-t border-border px-3 py-2">
+            {job.reason && <p className="text-muted">{job.reason}</p>}
+            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
+            {sponsor && <p className="text-muted">{sponsor}</p>}
+            {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

@@ -36,6 +36,9 @@ export interface WeraJob {
   skills_missing: string[] | null;
   application_status: string | null;
   source: string;
+  /** Why the user's rules or the posting's facts rule the job out (stage "excluded"), and the posting's words for it. */
+  exclude_reason?: string | null;
+  exclude_evidence?: string | null;
   /** When the extension last filled an application for it (absent on older servers). */
   autofilled_at?: string | null;
   /** When the posting went up (its job board's date), when Wera found it, and when it came down. */
