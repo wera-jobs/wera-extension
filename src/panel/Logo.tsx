@@ -27,14 +27,12 @@ export function LogoMark({ size = 22, solid }: { size?: number; solid?: boolean 
   );
 }
 
-/** Mark plus the "wera" wordmark. */
-export function Logo({ small }: { small?: boolean }) {
+/** Mark plus the "wera" wordmark, at the dashboard's size (its Logo, size md). */
+export function Logo() {
   return (
     <span className="inline-flex items-center gap-2">
-      <LogoMark size={small ? 20 : 26} />
-      <span className={`font-mono font-semibold tracking-tight text-text ${small ? 'text-[15px]' : 'text-xl'}`}>
-        wera
-      </span>
+      <LogoMark size={22} />
+      <span className="font-mono text-lg font-semibold tracking-tight text-text">wera</span>
     </span>
   );
 }
