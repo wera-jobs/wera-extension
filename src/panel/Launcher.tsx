@@ -1,4 +1,4 @@
-// The collapsed panel: Wera's mark on a tab in Wera's color at the right
+// The collapsed panel: Wera's mark on its dark tile, as a tab at the right
 // edge, so it shows on any page. Click it to open the panel; drag it up or
 // down (or move it with the arrow keys) to keep it clear of the site's own
 // buttons. Where it sits is kept for every site, as a share of the
@@ -125,13 +125,15 @@ export function Launcher({ onOpen, onHide }: { onOpen: () => void; onHide?: (how
         onClick={(e) => { if (e.detail === 0) onOpen(); }}
         onKeyDown={onKeyDown}
         style={{ height: TAB }}
-        className={`anim-peek launcher-shadow flex touch-none items-stretch overflow-hidden rounded-l-2xl bg-accent select-none ${
-          dragTop != null ? 'cursor-grabbing' : 'cursor-pointer transition-[filter] duration-150 hover:brightness-110'}`}>
-        <span className="grid w-[50px] place-items-center pl-0.5"><LogoMark size={32} solid /></span>
+        // The brand's own lockup (the mark on its dark tile, as on the toolbar icon and the
+        // avatars), in both themes: it reads on white pages and on dark ones.
+        className={`anim-peek launcher-shadow flex touch-none items-stretch overflow-hidden rounded-l-2xl bg-[#0A0B0F] ring-1 ring-white/10 select-none ${
+          dragTop != null ? 'cursor-grabbing' : 'cursor-pointer transition-colors duration-150 hover:bg-[#1A1D25]'}`}>
+        <span className="grid w-[50px] place-items-center pl-0.5"><LogoMark size={32} /></span>
         {/* A grip on its own strip, as a handle is drawn: the tab can move. */}
-        <span aria-hidden className={`grid w-3.5 place-items-center bg-black/15 ${dragTop != null ? 'cursor-grabbing' : 'cursor-grab'}`}>
+        <span aria-hidden className={`grid w-3.5 place-items-center bg-white/[0.06] ${dragTop != null ? 'cursor-grabbing' : 'cursor-grab'}`}>
           <span className="grid grid-cols-2 gap-[3px]">
-            {[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className="size-[3px] rounded-full bg-bg opacity-80" />)}
+            {[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className="size-[3px] rounded-full bg-white/55" />)}
           </span>
         </span>
       </button>
