@@ -451,3 +451,14 @@ describe('on a page', () => {
     expect(window.__weraPage?.kind).toBe('posting');
   });
 });
+
+describe('a job title without its company', () => {
+  it('drops the company named before or after a dash, and leaves other titles alone', async () => {
+    const { bareTitle } = await import('../content/detect');
+    expect(bareTitle('Palantir Technologies - Administrative Business Partner', 'Palantir')).toBe('Administrative Business Partner');
+    expect(bareTitle('Site Reliability Engineer | Acme Careers', 'Acme')).toBe('Site Reliability Engineer');
+    expect(bareTitle('Data Engineer at Globex', 'Globex')).toBe('Data Engineer');
+    expect(bareTitle('Engineer - Platform', 'Acme')).toBe('Engineer - Platform');
+    expect(bareTitle('Senior Engineer - Payments - Remote', 'Acme')).toBe('Senior Engineer - Payments - Remote');
+  });
+});

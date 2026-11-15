@@ -5,11 +5,11 @@
 
 // The dashboard's design tokens (wera-frontend src/index.css), dark and light.
 export const TOKENS = `
-.root { --bg: #0A0B0F; --surface: #12141A; --surface-2: #1A1D25; --border: #262A35; --text: #E8EAF0; --muted: #8A90A2; --faint: #5B6173;
+.root { --bg: #0A0B0F; --surface: #12141A; --surface-2: #1A1D25; --border: #262A35; --text: #E8EAF0; --muted: #8A90A2; --faint: #80869A;
   --accent: #FF7A59; --accent-2: #7C9CFF; --good: #3DDC97; --warn: #F5C451; --bad: #FF5C7A;
   --shadow: 0 18px 48px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.02); color-scheme: dark; }
-.root[data-theme="light"] { --bg: #F7F6F2; --surface: #FFFFFF; --surface-2: #F1F0EB; --border: #E5E3DC; --text: #1D1F24; --muted: #5F6470; --faint: #8E929C;
-  --accent: #D9653F; --accent-2: #4A63C8; --good: #1E8A5F; --warn: #9C6B14; --bad: #C2445A;
+.root[data-theme="light"] { --bg: #F7F6F2; --surface: #FFFFFF; --surface-2: #F1F0EB; --border: #E5E3DC; --text: #1D1F24; --muted: #5F6470; --faint: #656A76;
+  --accent: #AA4220; --accent-2: #4559BC; --good: #15704C; --warn: #835A0E; --bad: #AD3349;
   --shadow: 0 2px 4px rgb(29 31 36 / 0.05), 0 16px 36px -10px rgb(29 31 36 / 0.22); color-scheme: light; }`;
 
 export const BASE = `
@@ -51,13 +51,14 @@ export function logoMark(doc: Document, size = 22): SVGElement {
   const id = `wera-mark-${++marks}`;
   const svg = doc.createElementNS(SVG, 'svg');
   for (const [k, v] of Object.entries({ width: String(size), height: String(size), viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
-  // Fixed markup: the dashboard's mark, with an id of our own for its gradient.
+  // Fixed markup: the brand's mark in the brand's own colors (as the panel and the toolbar icon
+  // draw it), with an id of our own for its gradient.
   svg.innerHTML = `<defs><linearGradient id="${id}" x1="3" y1="6" x2="21" y2="21" gradientUnits="userSpaceOnUse">`
-    + '<stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="color-mix(in oklab, var(--accent) 70%, #ff3d6e)"/></linearGradient></defs>'
-    + '<path d="M8.75 7V5.25A2.25 2.25 0 0 1 11 3h2a2.25 2.25 0 0 1 2.25 2.25V7" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>'
+    + '<stop offset="0" stop-color="#FF7A59"/><stop offset="1" stop-color="#F2546A"/></linearGradient></defs>'
+    + '<path d="M8.75 7V5.25A2.25 2.25 0 0 1 11 3h2a2.25 2.25 0 0 1 2.25 2.25V7" stroke="#FF7A59" stroke-width="2" stroke-linecap="round"/>'
     + `<rect x="2" y="6.5" width="20" height="14.5" rx="4" fill="url(#${id})"/>`
-    + '<path d="M2 12.75h20" stroke="var(--bg)" stroke-opacity="0.35" stroke-width="1.25"/>'
-    + '<rect x="10" y="11" width="4" height="3.5" rx="1.25" fill="var(--bg)"/>';
+    + '<path d="M2 12.75h20" stroke="#0A0B0F" stroke-opacity="0.3" stroke-width="1.25"/>'
+    + '<rect x="10" y="11" width="4" height="3.5" rx="1.25" fill="#0A0B0F"/>';
   return svg;
 }
 

@@ -11,7 +11,7 @@
   --color-border: #262A35;
   --color-text: #E8EAF0;
   --color-muted: #8A90A2;
-  --color-faint: #5B6173;
+  --color-faint: #80869A;
   --color-accent: #FF7A59;
   --color-accent-2: #7C9CFF;
   --color-good: #3DDC97;
@@ -31,12 +31,12 @@
   --color-border: #E5E3DC;
   --color-text: #1D1F24;
   --color-muted: #5F6470;
-  --color-faint: #8E929C;
-  --color-accent: #D9653F;
-  --color-accent-2: #4A63C8;
-  --color-good: #1E8A5F;
-  --color-warn: #9C6B14;
-  --color-bad: #C2445A;
+  --color-faint: #656A76;
+  --color-accent: #AA4220;
+  --color-accent-2: #4559BC;
+  --color-good: #15704C;
+  --color-warn: #835A0E;
+  --color-bad: #AD3349;
 }
 
 @layer base {
@@ -58,6 +58,8 @@
 .anim-rise { animation: rise-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes slide-in { from { transform: translateX(calc(100% + 16px)); } }
 .anim-slide { animation: slide-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes fade-in { from { opacity: 0; } }
+.anim-fade { animation: fade-in 140ms ease-out both; }
 @keyframes peek { from { transform: translateX(100%); } }
 .anim-peek { animation: peek 200ms ease both; }
 @keyframes shimmer { 100% { transform: translateX(100%); } }

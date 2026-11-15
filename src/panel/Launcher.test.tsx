@@ -115,10 +115,10 @@ describe('putting the tab away', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('gives the × a target a finger can hit, on a tab in Wera\'s color', () => {
+  it('gives the × a target a finger can hit, on the brand mark\'s dark tile', () => {
     fakeStorage();
     render(<Launcher onOpen={() => {}} onHide={() => {}} />);
     expect(screen.getByRole('button', { name: 'Hide Wera' }).className).toContain('size-6');
-    expect(screen.getByRole('button', { name: 'Show the Wera panel' }).className).toContain('bg-accent');
+    expect(screen.getByRole('button', { name: 'Show the Wera panel' }).className).toContain('bg-[#0A0B0F]');
   });
 });
