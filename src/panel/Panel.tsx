@@ -58,7 +58,9 @@ export function Panel(props: PanelProps) {
   }
   return (
     <section role="dialog" aria-label="Wera"
-      className={clsx('anim-slide fixed z-[2147483646] flex flex-col overflow-hidden bg-bg',
+      // Docked, the page makes room at once: the panel fades in where it will stay. Sliding in
+      // would leave an empty strip beside the page for as long as the slide takes.
+      className={clsx(props.docked ? 'anim-fade' : 'anim-slide', 'fixed z-[2147483646] flex flex-col overflow-hidden bg-bg',
         props.docked ? 'inset-y-0 right-0 w-[384px] border-l border-border shadow-[-8px_0_24px_-12px_rgb(0_0_0/0.25)]'
           : 'panel-shadow top-3 right-3 bottom-3 w-[372px] max-w-[calc(100vw-24px)] rounded-card border border-border')}>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3.5">
