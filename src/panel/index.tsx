@@ -16,6 +16,7 @@ import { Panel } from './Panel';
 import { usePanelPage } from './usePanelPage';
 import { makeRoom } from './pageRoom';
 import { useSettings } from './useSettings';
+import { whenSettled } from '../shared/settled';
 
 declare global {
   interface Window {
@@ -264,7 +265,8 @@ if (!window.__weraPanel && window.__weraPage) {
   const onFirst = (msg: PanelMessage) => {
     if (msg?.type !== 'wera:panel-show') return false;
     chrome.runtime.onMessage.removeListener(onFirst);
-    mount(handle, msg);
+    // A page its own script rebuilds in the browser gets Wera once it has started (see shared/settled.ts).
+    void whenSettled(document).then(() => mount(handle, msg));
     return false;
   };
   chrome.runtime.onMessage.addListener(onFirst);
