@@ -351,10 +351,21 @@ function companyFromUrl(url: string): string {
 }
 
 /** A title without what a form wraps it in: "Apply: SRE", "Job Application for SRE at Acme". */
-function bareTitle(title: string, company: string): string {
-  const t = title.replace(/^\s*(job\s+)?(application|apply)\s*(for|to|:|-|–)\s*/i, '').trim();
-  const at = company ? t.toLowerCase().lastIndexOf(` at ${company.toLowerCase()}`) : -1;
-  return at > 0 ? t.slice(0, at).trim() : t;
+export function bareTitle(title: string, company: string): string {
+  let t = title.replace(/^\s*(job\s+)?(application|apply)\s*(for|to|:|-|–)\s*/i, '').trim();
+  const name = company.trim().toLowerCase();
+  if (!name) return t;
+  const at = t.toLowerCase().lastIndexOf(` at ${name}`);
+  if (at > 0) return t.slice(0, at).trim();
+  // "Palantir Technologies - Administrative Business Partner", "Engineer | Acme Careers":
+  // the part that names the company goes, the other part is the job.
+  const parts = t.split(/\s+[-–—|:]\s+/);
+  if (parts.length === 2) {
+    const [a, b] = parts as [string, string];
+    if (a.toLowerCase().startsWith(name) && b.length >= 3) t = b;
+    else if (b.toLowerCase().startsWith(name) && a.length >= 3) t = a;
+  }
+  return t.trim();
 }
 
 /** A first look at the job: its title and company, for the Wera panel's first look (it reads the page fully later). */
