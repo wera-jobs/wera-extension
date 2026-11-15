@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.0...wera-extension-v0.16.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **panel:** add the panel only once a server-rendered page has started ([3d4a3cc](https://github.com/wera-jobs/wera-extension/commit/3d4a3cc0210052bbb5961211643c462917a43c67))
+* **panel:** draw the logo in the brand's colors, and match the dashboard's palette ([4bdc859](https://github.com/wera-jobs/wera-extension/commit/4bdc8592b523f3eae5661dfa1697ff23a5f1eb6b))
+* **panel:** drop the company name from a page's title ([1efaba0](https://github.com/wera-jobs/wera-extension/commit/1efaba040eae26a918934ffbe97c9d3bc9cccf5d))
+* **panel:** fade the docked panel in instead of sliding it ([6b78b42](https://github.com/wera-jobs/wera-extension/commit/6b78b425b10ef76b194162b4898d8278200ab787))
+
 ## [0.16.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.15.2...wera-extension-v0.16.0) (2026-11-14)
 
 
