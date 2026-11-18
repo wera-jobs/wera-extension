@@ -81,6 +81,17 @@ describe('the Wera button', () => {
     expect(shadow()!.querySelector('.pop')).toBeNull();
   });
 
+  it('still shows when the box was focused a moment before (as Autofill does)', async () => {
+    const why = document.querySelector<HTMLTextAreaElement>('#why')!;
+    const fn = document.querySelector<HTMLInputElement>('#fn')!;
+    why.focus();
+    fn.focus();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(button('Draft this answer with Wera')).toBeUndefined();
+    why.focus();
+    await vi.waitFor(() => expect(button('Draft this answer with Wera')).toBeTruthy(), { timeout: 3000 });
+  });
+
   it('never shows on a name box', async () => {
     document.querySelector<HTMLInputElement>('#fn')!.focus();
     await new Promise((r) => setTimeout(r, 50));
