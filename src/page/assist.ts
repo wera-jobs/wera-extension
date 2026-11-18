@@ -266,12 +266,19 @@ export function startAssist(doc: Document): () => void {
   };
 
   const looked = lookedLately();
-  const onFocus = (e: FocusEvent) => {
-    const target = e.target as HTMLElement | null;
+  let retry = 0;
+  const onFocus = (e: FocusEvent) => focused(e.target as HTMLElement | null);
+  const focused = (target: HTMLElement | null) => {
     if (!target || !(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement)) return;
     window.clearTimeout(hideTimer);
     if (field?.el === target) return showMark(field);
-    if (looked(target)) return;
+    if (looked(target)) {
+      // Seen a moment ago (Autofill just filled it, or the page keeps focusing it):
+      // look once more when the moment is over, if the person is still in it.
+      window.clearTimeout(retry);
+      retry = window.setTimeout(() => { if (doc.activeElement === target) focused(target); }, 1600);
+      return;
+    }
     void (async () => {
       if (!extensionAlive() || !(await loadSettings().catch(() => null))?.assist) return;
       // Only on application forms: a comment box elsewhere is not Wera's business.
@@ -317,6 +324,7 @@ export function startAssist(doc: Document): () => void {
     doc.removeEventListener('mousedown', onDown, true);
     window.removeEventListener('scroll', onMove, true);
     window.removeEventListener('resize', onMove);
+    window.clearTimeout(retry);
     stopTheme();
     ui?.stop();
     ui?.host.remove();
