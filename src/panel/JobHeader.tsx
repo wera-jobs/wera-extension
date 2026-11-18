@@ -22,8 +22,30 @@ const STATUS: Record<string, [string, string]> = {
   not_interested: ['Not interested', 'text-muted bg-surface-2'],
 };
 
-// Images that name the company in a page's header, as job boards draw them.
-const LOGO_IMG = 'header img, [class*="logo" i] img, img[class*="logo" i], img[alt*="logo" i], img[src*="logo" i]';
+// Images that call themselves a logo, as job boards draw a company's. Not any
+// image in a header: a signed-in site's header holds the person's own photo.
+const LOGO_IMG = '[class*="logo" i] img, img[class*="logo" i], img[alt*="logo" i], img[src*="logo" i]';
+
+// Words that mark a picture of a person (the signed-in member, a recruiter, a poster).
+const PERSON = /avatar|profile|photo|headshot|portrait|recruiter|member|person|people|user|account|(?:^|[\s_-])me(?:$|[\s_-])/i;
+
+/** Whether an image is a picture of someone rather than a company's logo: named so, or drawn round. */
+function looksLikePerson(img: HTMLImageElement, company: string): boolean {
+  if (PERSON.test([img.getAttribute('class'), img.id, img.alt].filter(Boolean).join(' '))) return true;
+  // An address says less (a company's logo may sit under /users/), so only the plain words count there.
+  if (/avatar|(?:profile|display)-?(?:photo|pic|image)|headshot|portrait/i.test(new URL(img.currentSrc || img.src, img.baseURI).pathname)) return true;
+  // People are drawn in circles; logos in squares.
+  const radius = img.ownerDocument.defaultView?.getComputedStyle(img).borderRadius ?? '';
+  const px = parseFloat(radius);
+  if (radius.includes('%') ? px >= 40 : px > 0 && img.width > 0 && px >= img.width / 2.5) return true;
+  // "Stripe logo" names the company: trust it even inside a profile card.
+  const name = plain(company);
+  if (name && plain(img.alt).includes(name)) return false;
+  for (let el = img.parentElement, depth = 0; el && depth < 3; el = el.parentElement, depth++) {
+    if (PERSON.test([el.getAttribute('class'), el.id, el.getAttribute('aria-label')].filter(Boolean).join(' '))) return true;
+  }
+  return false;
+}
 
 const plain = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -71,6 +93,7 @@ export function companyLogos(doc: Document, company: string): string[] {
     // A real layout has sizes: skip icons and banners. (jsdom has none: trust the name in alt.)
     if (r.width > 0 && (r.width < 20 || r.height < 20 || r.width / Math.max(r.height, 1) > 5)) continue;
     if (r.width === 0 && !(name && img.alt.toLowerCase().includes(name))) continue;
+    if (looksLikePerson(img, company)) continue;
     out.push(src);
   }
   const here = doc.location?.host ?? '';

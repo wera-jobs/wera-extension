@@ -45,4 +45,27 @@ describe("where a company's logo may be", () => {
     const doc = page('https://jobs.lever.co/acme/1', '<header><a href="https://www.lever.co/"><img alt="Acme logo" src="https://cdn.lever.co/a.png"></a></header>');
     expect(companyLogos(doc, 'Acme')).toEqual(['https://cdn.lever.co/a.png']);
   });
+
+  it("never takes the signed-in person's photo from a site's header for the logo", () => {
+    // As LinkedIn draws a job: the member's photo in the top bar, the company's logo by the title.
+    const doc = page('https://www.linkedin.com/jobs/view/1', `<header class="global-nav"><div class="global-nav__me">
+      <img class="global-nav__me-photo evi-image" alt="Sam Rivera" src="https://media.licdn.com/dms/image/x/profile-displayphoto-shrink_100_100/0/1"></div></header>
+      <div class="job-details-jobs-unified-top-card__company-logo"><img alt="Stripe logo" src="https://media.licdn.com/dms/image/y/company-logo_100_100/0/2"></div>`);
+    expect(companyLogos(doc, 'Stripe')).toEqual(['https://media.licdn.com/dms/image/y/company-logo_100_100/0/2']);
+  });
+
+  it('skips images named as a person even when they sit in a logo slot', () => {
+    const doc = page('https://boards.example.com/acme/1', `<div class="logo-row"><img class="avatar" alt="Acme recruiter" src="https://cdn.example.com/a.png"></div>
+      <div class="logo-row"><span class="user-menu"><img alt="" src="https://cdn.example.com/me.png"></span></div>
+      <div class="header-logo"><img alt="Acme" src="https://cdn.example.com/acme.png"></div>`);
+    expect(companyLogos(doc, 'Acme')).toEqual(['https://cdn.example.com/acme.png']);
+  });
+
+  it('skips round pictures and photo addresses', () => {
+    const doc = page('https://boards.example.com/acme/1', `<style>.round{border-radius:50%}</style>
+      <div class="logo"><img class="round" alt="Acme" src="https://cdn.example.com/x.png"></div>
+      <div class="logo"><img alt="Acme" src="https://cdn.example.com/avatars/42.png"></div>
+      <div class="logo"><img alt="Acme" src="https://cdn.example.com/brand.png"></div>`);
+    expect(companyLogos(doc, 'Acme')).toEqual(['https://cdn.example.com/brand.png']);
+  });
 });
