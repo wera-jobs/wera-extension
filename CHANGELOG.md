@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.2](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.1...wera-extension-v0.16.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **assist:** show the draft button on a box focused a moment before ([1b757ee](https://github.com/wera-jobs/wera-extension/commit/1b757eeb55614ac9077df3181c1d71c34399dd49))
+* **panel:** never show the signed-in person's photo as the company logo ([b7d0365](https://github.com/wera-jobs/wera-extension/commit/b7d03655d70f5eabd6c385d59fef5050ac93760f))
+
 ## [0.16.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.0...wera-extension-v0.16.1) (2026-11-15)
 
 
