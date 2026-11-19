@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.19.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.18.0...wera-extension-v0.19.0) (2026-11-19)
+
+
+### Features
+
+* **panel:** My details, every application detail one tap from the clipboard ([8c734d3](https://github.com/wera-jobs/wera-extension/commit/8c734d32fdf64dae8f3180ca37295f41571be140)), closes [#140](https://github.com/wera-jobs/wera-extension/issues/140)
+* **sign-in:** connect from the Wera dashboard, without typing a password here ([af64a62](https://github.com/wera-jobs/wera-extension/commit/af64a6215a0b8b00ca7614449314b75230db1a42)), closes [#137](https://github.com/wera-jobs/wera-extension/issues/137)
+
+
+### Bug Fixes
+
+* **sign-in:** keep the Wera address with both ways in, and update the end-to-end sign-in ([f87add4](https://github.com/wera-jobs/wera-extension/commit/f87add45c0473361dba64a1fea4273e73b0a9d64)), closes [#137](https://github.com/wera-jobs/wera-extension/issues/137)
+
 ## [0.18.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.17.1...wera-extension-v0.18.0) (2026-11-19)
 
 
