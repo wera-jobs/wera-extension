@@ -46,6 +46,12 @@ if (!window.__weraBridge) {
     const { type } = e.data;
     if (type === 'open-job' || type === 'changed') {
       void sendSafe({ ...e.data, type: `wera:dashboard-${type}` });
+    } else if (type === 'connect') {
+      // The connect page's key for this account: the background checks it with the server, then keeps it.
+      const { token } = e.data;
+      void sendSafe<{ ok: boolean }>({ type: 'wera:dashboard-connect', token }).then((r) => {
+        if (r?.ok) window.postMessage({ source: BRIDGE_FROM_EXTENSION, type: 'connected' }, location.origin);
+      });
     }
   });
 

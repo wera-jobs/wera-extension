@@ -10,6 +10,9 @@ export interface Session {
 
 const KEY = 'wera.session';
 
+/** Where almost everyone's Wera is; before sign-in, the dashboard there can connect the extension. */
+export const DEFAULT_SERVER = 'https://www.wera-jobs.com';
+
 export async function loadSession(): Promise<Session | null> {
   const got = await chrome.storage.local.get(KEY);
   return (got[KEY] as Session | undefined) ?? null;
