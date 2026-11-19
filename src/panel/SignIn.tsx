@@ -48,6 +48,11 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
           <p className="text-xs text-muted">See your fit on every job, autofill applications and keep your tracker current. You review and submit.</p>
         </div>
       )}
+      {otherServer && (
+        <Field label="Wera address">
+          <input className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} required autoFocus />
+        </Field>
+      )}
       {/* The easy way: the dashboard, where the person may already be signed in, connects this browser. */}
       <a href={`${site}/connect-extension`} target="_blank" rel="noreferrer"
         className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-bg hover:bg-accent/85">
@@ -60,11 +65,6 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
         </button>
       ) : (
       <form onSubmit={(e) => void submit(e)} className="space-y-3">
-        {otherServer && (
-          <Field label="Wera address">
-            <input className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} required autoFocus />
-          </Field>
-        )}
         <Field label="Email">
           <input className={INPUT} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </Field>
