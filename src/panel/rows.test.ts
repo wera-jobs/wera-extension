@@ -29,6 +29,11 @@ describe('which rows Wera fills, asks the AI about, or drafts', () => {
     expect(asSalaryOffer(row({ value: '90000', source: 'ai', checked: true, label: 'Desired salary' })).checked).toBe(false);
   });
 
+  it('never asks the AI about work rights in another country', () => {
+    expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', abroad: true, label: 'Will you need sponsorship to work in the UK?' }))).toBe(false);
+    expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', label: 'Will you need sponsorship?' }))).toBe(true);
+  });
+
   it('never asks the AI about self-identification or who referred the user', () => {
     expect(needsSuggestion(row({ group: 'details', purpose: 'years_experience' }))).toBe(true);
     expect(needsSuggestion(row({ group: 'details', purpose: 'referral' }))).toBe(false);
