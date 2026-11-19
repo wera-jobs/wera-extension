@@ -394,6 +394,28 @@ describe('the Wera panel', () => {
     expect(session['wera.applying']).toEqual({});
   });
 
+  it('says so when the application does not open, even after the site reloads the posting', async () => {
+    // The 19 Nov live test (bunq): the press "worked" and nothing opened, for minutes, with no word.
+    const { session } = fakeBackground({ job, info: { hasForm: false, apply: 'Apply' } });
+    session['wera.applying'] = { 5: Date.now() - 11_000 };
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByText(/The application didn't open\. Press the site's own Apply button/)).toBeInTheDocument();
+  });
+
+  it('keeps quiet while the application may still be opening, or once it opened elsewhere', async () => {
+    const { session } = fakeBackground({ job, info: { hasForm: false, apply: 'Apply' } });
+    session['wera.applying'] = { 5: Date.now() - 2_000 };
+    const { unmount } = render(<App handle={handle('posting')} show={show()} />);
+    await screen.findByRole('button', { name: /Apply with Wera/ });
+    expect(screen.queryByText(/didn't open/)).toBeNull();
+    unmount();
+    // A new tab took the press (passApplying): this tab has nothing waiting.
+    session['wera.applying'] = {};
+    render(<App handle={handle('posting')} show={show()} />);
+    await screen.findByRole('button', { name: /Apply with Wera/ });
+    expect(screen.queryByText(/didn't open/)).toBeNull();
+  });
+
   it('says plainly when it cannot press Apply', async () => {
     fakeBackground({ job, info: { hasForm: false, apply: 'Apply' }, frames: { 'press-apply': () => ({ ok: false }) } });
     render(<App handle={handle('posting')} show={show()} />);
