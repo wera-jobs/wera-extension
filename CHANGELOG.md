@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.17.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.17.0...wera-extension-v0.17.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **assist:** keep the AI's request out of the form, and show it beside the draft ([5b9c419](https://github.com/wera-jobs/wera-extension/commit/5b9c4192057820220ca737c861d0acd0cea9461d)), closes [#159](https://github.com/wera-jobs/wera-extension/issues/159)
+* **autofill:** know work-permit and immigration-case questions ([390a3ff](https://github.com/wera-jobs/wera-extension/commit/390a3ff34062ca266571fa836eef9f451c2ab384)), closes [#156](https://github.com/wera-jobs/wera-extension/issues/156)
+* **autofill:** leave how the person says their name to them ([ddbf5cd](https://github.com/wera-jobs/wera-extension/commit/ddbf5cd318fe2c03603b8d01b70aa87810c2b151)), closes [#163](https://github.com/wera-jobs/wera-extension/issues/163)
+* **autofill:** leave work rights in another country to the person ([8cca22c](https://github.com/wera-jobs/wera-extension/commit/8cca22c20cb9c453938fd988e23191e3c87761be)), closes [#156](https://github.com/wera-jobs/wera-extension/issues/156)
+* **autofill:** never narrow self-identification to a sub-group ([246824a](https://github.com/wera-jobs/wera-extension/commit/246824a6b3075c3bfaffa2991d49af623a71d26e)), closes [#158](https://github.com/wera-jobs/wera-extension/issues/158)
+* **autofill:** offer the salary expectation, never enter it by itself ([ad3d07c](https://github.com/wera-jobs/wera-extension/commit/ad3d07c579394a10f3cda1e1b1ff212f56fd9f52)), closes [#160](https://github.com/wera-jobs/wera-extension/issues/160)
+* **autofill:** take a school, subject or employer only by its own name ([ebf795c](https://github.com/wera-jobs/wera-extension/commit/ebf795c2b64ba9b7ef8a30934ba8a7c63064e91d)), closes [#157](https://github.com/wera-jobs/wera-extension/issues/157)
+* **panel:** list work-rights questions for another country even when optional ([89b1f2c](https://github.com/wera-jobs/wera-extension/commit/89b1f2cc6a74142bb9675dd05e477c4c88c4355c)), closes [#156](https://github.com/wera-jobs/wera-extension/issues/156)
+* **panel:** say when Apply with Wera opened no application ([e43a0f6](https://github.com/wera-jobs/wera-extension/commit/e43a0f693eb1a6be8965f2b5eebd242fa0ac88e8)), closes [#161](https://github.com/wera-jobs/wera-extension/issues/161)
+
+
+### Documentation
+
+* **readme:** describe the corner note, salary offers, exact names and Report a problem ([0f49112](https://github.com/wera-jobs/wera-extension/commit/0f4911288f73973ef30a16f563de16ac9bd5a2d1)), closes [#163](https://github.com/wera-jobs/wera-extension/issues/163)
+
 ## [0.17.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.2...wera-extension-v0.17.0) (2026-11-19)
 
 
