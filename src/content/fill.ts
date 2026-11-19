@@ -5,7 +5,7 @@
 // values.ts; which choice means it, from match.ts.
 import type { FieldPurpose, FillResult } from '../shared/types';
 import { isHidden, isPressed, isWorkdayPrompt, listboxValue, promptChoice, scopeOf, type Field, type Option } from './fields';
-import { isPlaceholderOption, matchOption, searchText } from './match';
+import { isPlaceholderOption, isProperName, matchOption, searchText } from './match';
 import { norm } from './places';
 import { alternatives, choicesOf, firstChoice, formatFor } from './values';
 
@@ -294,7 +294,9 @@ async function pickSuggestion(el: HTMLInputElement, value: string, purpose: Fiel
     // A slow site may have missed the first search: ask once more.
     if (!found.length && i === 20) typeSearch(el, search);
     if (!found.length) continue;
-    const hit = (matchOption(found, value, purpose) ?? found.find((o) => norm(o.label).startsWith(norm(value.split(',')[0]!)))) as (Option & { node: HTMLElement }) | null;
+    // A proper name takes only its own option ("Princeton" is not "Princeton Theological Seminary").
+    const loose = isProperName(purpose) ? undefined : found.find((o) => norm(o.label).startsWith(norm(value.split(',')[0]!)));
+    const hit = (matchOption(found, value, purpose) ?? loose) as (Option & { node: HTMLElement }) | null;
     // The list may still be filling in: keep looking until time runs out.
     if (!hit) continue;
     press(hit.node);
