@@ -104,8 +104,13 @@ function derived(purpose: FieldPurpose, f: Field, a: Applicant | Profile, compan
       return countryAnswer(f.label, a.citizenship ?? '');
     case 'authorized_to_work':
     case 'needs_sponsorship':
-    case 'authorized_no_sponsorship':
-      return abroad(f, a, jobLocation) ? '' : valueFor(purpose, a, { company });
+    case 'authorized_no_sponsorship': {
+      if (!abroad(f, a, jobLocation)) return valueFor(purpose, a, { company });
+      // Work in another country: a citizen of it may work there without sponsorship; otherwise only the person knows.
+      const there = countryIn(f.label) || countryIn(jobLocation);
+      if (!a.citizenship || !sameCountry(there, a.citizenship)) return '';
+      return purpose === 'needs_sponsorship' ? 'no' : 'yes';
+    }
     case 'previously_employed': {
       // Whether a past employer was this one's customer is not on a resume.
       if (/\b(customer|client|vendor|partner|competitor|supplier)s?\b/i.test(f.label)) return '';
@@ -264,7 +269,12 @@ export function planField(f: Field, a: Applicant | Profile, opts: PlanOptions = 
       plan.note = `no option matches "${shown(v)}"`;
     }
     // Wera couldn't work it out from the question: no note, so the AI may answer it.
-    if (!v && (DERIVED.has(purpose) || (WORK_RIGHTS.has(purpose) && abroad(f, a, opts.jobLocation)))) quiet = true;
+    if (!v && DERIVED.has(purpose)) quiet = true;
+    // Work rights for another country are the person's: neither their details nor the AI know them.
+    if (!v && WORK_RIGHTS.has(purpose) && abroad(f, a, opts.jobLocation)) {
+      plan.abroad = true;
+      plan.note = `for work in ${countryIn(f.label) || countryIn(opts.jobLocation ?? '')}: answer it yourself`;
+    }
   }
   if (!SELF_ID.has(purpose as FieldPurpose)) {
     const hit = bestAnswer(opts.answers ?? [], f.label, 0.75, opts.company ?? '');
