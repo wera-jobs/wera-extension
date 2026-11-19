@@ -255,11 +255,13 @@ describe('the Wera panel', () => {
       next: null, errors: 0,
     };
     const applied: string[] = [];
-    fakeBackground({ job, info: { hasForm: true }, frames: formPageFrames(plan, ({ items }) => applied.push(...items.map((i) => i.id))) });
+    const { calls } = fakeBackground({ job, info: { hasForm: true }, frames: formPageFrames(plan, ({ items }) => applied.push(...items.map((i) => i.id))) });
     render(<App handle={handle('form')} show={show()} />);
     await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
     await waitFor(() => expect(applied).toEqual(['r', 'n']));
     await finished();
+    // The tracker learns which resume went with the application.
+    await waitFor(() => expect(calls.find((c) => c.name === 'startRun')?.args[4]).toEqual({ resume: { kind: 'base', name: 'Ada.pdf' }, letter: false }));
   });
 
   it('fills again what the page emptied, and says so when it will not stay', async () => {
