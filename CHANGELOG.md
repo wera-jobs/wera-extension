@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.17.1...wera-extension-v0.18.0) (2026-11-19)
+
+
+### Features
+
+* **autofill:** tell Wera which resume and letter went with an application ([6156c5f](https://github.com/wera-jobs/wera-extension/commit/6156c5f0689fdc314bfcd0ffbe653f74f77b312f))
+
 ## [0.17.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.17.0...wera-extension-v0.17.1) (2026-11-19)
 
 
