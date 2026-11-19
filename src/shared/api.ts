@@ -453,6 +453,11 @@ export class WeraApi {
     return this.call<AutofillRun>(`/api/ext/autofill-runs/${runId}/pages`, { method: 'POST', body: JSON.stringify({ filled, suggested }) });
   }
 
+  /** "Report a problem": the person's note, the page and the diagnostics, for the Wera team. */
+  reportProblem(r: { note: string; page: string; version: string; details: string }) {
+    return this.call<{ id: number }>('/api/ext/reports', { method: 'POST', body: JSON.stringify(r) });
+  }
+
   /** Saves application details (all of them; merge before calling). */
   saveApplicant(a: Applicant) {
     return this.call<{ applicant: Applicant; saved: boolean }>('/api/applicant', { method: 'PUT', body: JSON.stringify(a) });
