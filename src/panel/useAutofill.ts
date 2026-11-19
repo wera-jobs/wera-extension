@@ -15,7 +15,8 @@ import { frames } from '../shared/rpc';
 import type { Settings } from '../shared/settings';
 import type { Applicant, FillResult, JobDraft, PagePlan, Profile, ScanRequest } from '../shared/types';
 import { answersToLearn } from '../shared/learn';
-import { chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowsFor, type Row } from './rows';
+import { payFromText } from '../content/facts';
+import { asSalaryOffer, chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, isSalary, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowsFor, type Row } from './rows';
 import type { PanelEvent, PanelPageState } from './usePanelPage';
 
 export { needsYou, type Row } from './rows';
@@ -138,7 +139,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
           p = await frames('scan', req);
         }
       }
-      const next = rowsFor(p, view.sources);
+      const next = rowsFor(p, view.sources, payFromText(posting.description));
       log.info('autofill', `read ${next.length} fields; Wera knows ${next.filter((r) => r.checked).length}`);
       setPlan(p);
       setRows(next);
@@ -149,7 +150,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       setPhase('idle');
       return null;
     }
-  }, [api, jobId, posting.company, posting.location, warn]);
+  }, [api, jobId, posting.company, posting.description, posting.location, warn]);
 
   /**
    * The page's posting as Wera can save it: its job data, else what the
@@ -232,7 +233,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
         if (!s || !fitsPurpose(r.purpose, s.value) || !readsLikeAnswer(r, s.value)) continue;
         // Sure answers go in. So does an inferred pick from a list of choices, marked for the user to check; other guesses wait for a click.
         const chosen = s.confidence !== 'high' && mayChoose(r, s.value);
-        out.push({ ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' || chosen, chosen: chosen || undefined });
+        const row: Row = { ...r, value: s.value, source: 'ai', confidence: s.confidence, note: s.why || (s.confidence === 'low' ? 'a guess: check it' : ''), checked: s.confidence === 'high' || chosen, chosen: chosen || undefined };
+        out.push(isSalary(row) ? asSalaryOffer(row, payFromText(posting.description)) : row);
       }
       if (!out.length || halt.current.on) return;
       merge(out);
@@ -409,14 +411,14 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     if (!now) return [];
     // New fields only: one the page merely re-rendered (a new mark, same label and kind) is not new.
     const seen = new Set(known.flatMap((x) => [x.id, `${x.label}|${x.kind}`]));
-    const fresh = rowsFor(now, sources.current).filter((x) => !seen.has(x.id) && !seen.has(`${x.label}|${x.kind}`));
+    const fresh = rowsFor(now, sources.current, payFromText(posting.description)).filter((x) => !seen.has(x.id) && !seen.has(`${x.label}|${x.kind}`));
     if (!fresh.length) return [];
     log.info('autofill', `${fresh.length} field(s) appeared after filling`);
     setPlan(now);
     setRows((rs) => [...rs, ...fresh]);
     await fill(fresh);
     return fresh;
-  }, [fill]);
+  }, [fill, posting.description]);
 
   /**
    * Checks what filled still shows: some pages empty a field when they
@@ -521,7 +523,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
 
   /** Enters every answer Wera only guessed, for a user who has read them. */
   const acceptGuesses = useCallback(async () => {
-    const list = latest.current.filter(isGuess).map((r): Row => ({ ...r, checked: true }));
+    // Salary is never part of "Use all": it is offered on its own.
+    const list = latest.current.filter((r) => isGuess(r) && !r.confirm).map((r): Row => ({ ...r, checked: true }));
     merge(list);
     await fill(list).catch((e: unknown) => setError(describeError(e, "Couldn't fill Wera's guesses")));
   }, [fill, merge]);
