@@ -143,11 +143,17 @@ function sameAddress(real: Option[], value: string): Option | null {
 
 // Lists of names (schools, majors, employers) word the same name differently: "The University of Texas at Dallas".
 const NAMED = new Set<FieldPurpose>(['school', 'edu_school', 'major', 'edu_major', 'current_company', 'exp_company', 'how_heard']);
+// Proper names: the option must name the same school, subject or employer, never a namesake with more
+// words ("State University" is not "Adams State University"). No match leaves it to the person.
+const PROPER = new Set<FieldPurpose>(['school', 'edu_school', 'major', 'edu_major', 'current_company', 'exp_company']);
 const FILLER = new Set(['the', 'of', 'at', 'in', 'and', 'for', 'a', 'an', 'university', 'college', 'school', 'institute', 'inc', 'llc', 'ltd', 'co', 'corp', 'corporation', 'company']);
 const nameWords = (s: string) => norm(s).replace(/\+/g, ' ').split(' ').filter((w) => w.length > 1 && !FILLER.has(w));
 
+/** Whether a field takes a proper name (school, subject, employer) that must match exactly. */
+export const isProperName = (purpose: FieldPurpose | null) => !!purpose && PROPER.has(purpose);
+
 /** The option naming the same thing: every telling word of value, and the fewest others (none when two tie). */
-function sameName(real: Option[], value: string): Option | null {
+function sameName(real: Option[], value: string, most = 2): Option | null {
   const want = nameWords(value);
   if (!want.length) return null;
   let best: Option | null = null;
@@ -157,7 +163,7 @@ function sameName(real: Option[], value: string): Option | null {
     const words = nameWords(o.label);
     if (!want.every((w) => words.includes(w))) continue;
     const extra = words.length - want.length;
-    if (extra > 2) continue;
+    if (extra > most) continue;
     if (extra < bestExtra) {
       best = o;
       bestExtra = extra;
@@ -249,6 +255,7 @@ export function matchOption(options: Option[], value: string, purpose: FieldPurp
   }
   const meant = meaningOption(real, value, purpose);
   if (meant) return meant;
+  if (purpose && PROPER.has(purpose)) return sameName(real, value, 0);
   return (
     real.find((o) => [...wanted].some((w) => w.length > 2 && norm(o.label).startsWith(w))) ??
     (purpose && NAMED.has(purpose) ? sameName(real, value) : null) ??
