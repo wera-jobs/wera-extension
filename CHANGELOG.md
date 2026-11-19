@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.2...wera-extension-v0.17.0) (2026-11-19)
+
+
+### Features
+
+* **panel:** report a problem to the Wera team ([45de209](https://github.com/wera-jobs/wera-extension/commit/45de209b17380bb0d3219310e39d7d035268e78d))
+
+
+### Bug Fixes
+
+* **panel:** say "Job applied" in a corner, and keep the tab unless asked ([757dae8](https://github.com/wera-jobs/wera-extension/commit/757dae82e68880b56e5a220c59d2194139a0c1d0))
+
 ## [0.16.2](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.16.1...wera-extension-v0.16.2) (2026-11-18)
 
 
