@@ -86,7 +86,13 @@ describe('autofill, answers and resume calls', () => {
     expect(body(fetcher, 1)).toEqual({ host: 'jobs.example', job_id: 4, filled: 10, suggested: 2 });
     await api.addRunPage(8, 3, 0);
     expect(fetcher.mock.calls[2]![0]).toBe('https://w/api/ext/autofill-runs/8/pages');
+    expect(body(fetcher, 2)).toEqual({ filled: 3, suggested: 0 });
     expect(changed).toHaveBeenCalledTimes(2);
+    // What went in the file fields, for the tracker's record of the application.
+    await api.startRun('jobs.example', 4, 10, 2, { resume: { kind: 'tailored', name: 'Ada Resume.pdf' }, letter: true });
+    expect(body(fetcher, 3)).toEqual({ host: 'jobs.example', job_id: 4, filled: 10, suggested: 2, resume: { kind: 'tailored', name: 'Ada Resume.pdf' }, letter: true });
+    await api.addRunPage(8, 1, 0, { letter: false });
+    expect(body(fetcher, 4)).toEqual({ filled: 1, suggested: 0 });
   });
 
   it('steers letters and tailoring, and edits resumes', async () => {
