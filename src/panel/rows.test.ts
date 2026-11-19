@@ -29,6 +29,13 @@ describe('which rows Wera fills, asks the AI about, or drafts', () => {
     expect(asSalaryOffer(row({ value: '90000', source: 'ai', checked: true, label: 'Desired salary' })).checked).toBe(false);
   });
 
+  it('never asks the AI how the person says their name', () => {
+    // The 19 Nov final live run: Duolingo's "How do you pronounce your name? (e.g., 'An-na' or 'Ah-na')" got "Alex".
+    const label = "How do you pronounce your name? (e.g., 'An-na' or 'Ah-na')";
+    expect(needsSuggestion(row({ label, group: 'other' }))).toBe(false);
+    expect(needsDraft(row({ label, group: 'questions', kind: 'textarea', purpose: 'question' }))).toBe(false);
+  });
+
   it('never asks the AI about work rights in another country', () => {
     expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', abroad: true, label: 'Will you need sponsorship to work in the UK?' }))).toBe(false);
     expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', label: 'Will you need sponsorship?' }))).toBe(true);

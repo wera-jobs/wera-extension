@@ -48,10 +48,12 @@ export function rowsFor(plan: PagePlan, sources: Record<string, string> = {}, po
 
 /** Questions the AI never answers: self-identification, and what only the user knows (who referred them). */
 const NOT_FOR_AI = new Set(['referral', ...SELF_ID]);
+/** Asked of the person alone, whatever the field: how they say their name. */
+const ONLY_THEIRS = /pronounc/i;
 
 /** Fields worth asking the AI about: empty, not answered by anything Wera knows, and not the user's to answer. */
 export function needsSuggestion(r: Row): boolean {
-  return !r.trap && !r.abroad && r.label.trim() !== '' && r.value === '' && r.current === '' && r.entry == null && !(r.purpose && NOT_FOR_AI.has(r.purpose))
+  return !r.trap && !r.abroad && !ONLY_THEIRS.test(r.label) && r.label.trim() !== '' && r.value === '' && r.current === '' && r.entry == null && !(r.purpose && NOT_FOR_AI.has(r.purpose))
     && (r.group === 'details' || r.group === 'other' || (r.group === 'questions' && r.kind !== 'textarea'))
     && r.kind !== 'file' && r.kind !== 'checkbox';
 }
@@ -61,7 +63,7 @@ const CATCH_ALL = /^(additional|other|further) (information|info|comments|detail
 
 /** Open questions Wera drafts an answer for: an empty text area asking something (not the cover letter). */
 export function needsDraft(r: Row): boolean {
-  return !r.trap && !r.ownWords && r.group === 'questions' && r.kind === 'textarea' && r.purpose === 'question' && r.value === '' && r.current === ''
+  return !r.trap && !r.ownWords && !ONLY_THEIRS.test(r.label) && r.group === 'questions' && r.kind === 'textarea' && r.purpose === 'question' && r.value === '' && r.current === ''
     && r.label.trim().length >= 8 && (r.required || !CATCH_ALL.test(r.label.trim()));
 }
 
