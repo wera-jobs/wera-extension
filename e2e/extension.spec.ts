@@ -160,6 +160,13 @@ test('sign in on a posting, save it, then autofill its application', async () =>
   await expect(panel.getByText('agree yourself after reading it')).toBeVisible();
   await shot(job, 'apply-filled');
 
+  // Something went wrong? The person says what, and it reaches the Wera team.
+  await panel.getByRole('button', { name: 'Report a problem' }).click();
+  await panel.getByLabel('What went wrong?').fill('e2e: the phone box was left empty.');
+  await shot(job, 'report');
+  await panel.getByRole('button', { name: 'Send report' }).click();
+  await expect(panel.getByText(/Sent\. Thank you/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Close' }).click();
 
   // The open question has Wera's button.
   await job.locator('#why').focus();
