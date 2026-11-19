@@ -160,6 +160,14 @@ test('sign in on a posting, save it, then autofill its application', async () =>
   await expect(panel.getByText('agree yourself after reading it')).toBeVisible();
   await shot(job, 'apply-filled');
 
+  // Something went wrong? The person says what, and it reaches the Wera team.
+  await panel.getByRole('button', { name: 'Report a problem' }).click();
+  await panel.getByLabel('What went wrong?').fill('e2e: the phone box was left empty.');
+  await shot(job, 'report');
+  await panel.getByRole('button', { name: 'Send report' }).click();
+  await expect(panel.getByText(/Sent\. Thank you/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Close' }).click();
+
   // The open question has Wera's button.
   await job.locator('#why').focus();
   await expect(job.locator('wera-assist').getByRole('button', { name: 'Draft this answer with Wera' })).toBeVisible();
@@ -184,16 +192,19 @@ test('fill a multi-step application, then mark it applied', async () => {
   await shot(job, 'steps');
 
   // The user writes their own answer (CI's API has no AI to draft one), then submits; Wera sees the
-  // thank-you, moves the job to Applied, says "Job applied", then closes the tab.
+  // thank-you, moves the job to Applied, and says "Job applied" in a corner. The tab stays: closing
+  // it is the user's choice in Settings.
   await job.locator('#why').fill('I want to keep a fleet of robots online, and Fixture runs the biggest one.');
-  const closed = job.waitForEvent('close', { timeout: 30_000 });
   await job.locator('#submit').click();
-  await expect(panel.getByRole('alertdialog', { name: 'Job applied' })).toBeVisible({ timeout: 15_000 });
+  const note = panel.getByRole('status', { name: 'Job applied' });
+  await expect(note).toBeVisible({ timeout: 15_000 });
   await expect(panel.getByText(/is now Applied in your Wera tracker/)).toBeVisible();
-  // The alert stands in for the panel: Wera is leaving.
+  // The note stands in for the panel: Wera is leaving.
   await expect(panel.getByRole('dialog', { name: 'Wera' })).toHaveCount(0);
   await shot(job, 'applied');
-  await closed;
+  await note.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(note).toHaveCount(0);
+  expect(job.isClosed()).toBe(false);
   // The answer on the form the user submitted is remembered for the next one.
   await expect.poll(async () => (await asUser<{ answers: { question: string }[] }>('/api/applicant/answers')).answers.map((a) => a.question))
     .toContain('Why do you want to join Fixture Robotics?');

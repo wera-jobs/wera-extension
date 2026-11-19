@@ -3,11 +3,12 @@
 // resume and cover letter Wera uses, and what it filled.
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ClipboardCopy, FileText, PenLine, Sparkles, Square, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, FileText, Flag, PenLine, Sparkles, Square, Zap } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import { PAST_APPLIED } from '../shared/jobs';
 import { frames } from '../shared/rpc';
-import { diagnostics } from './diagnostics';
+import { diagnostics, reportPage, REPORT_DETAILS_MAX } from './diagnostics';
+import { describeError } from '../shared/errors';
 import type { PanelProps } from './Panel';
 import { isGuess, rowLabel } from './rows';
 import { BigButton, Button, Notice } from './ui';
@@ -20,6 +21,7 @@ import { TailoredLine, useTailoredScore } from './Tailored';
 export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & { api: WeraApi }) {
   const a = useAutofill(api, page, settings, tabId);
   const [showFilled, setShowFilled] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   // The toolbar shortcut or right-click menu asked to fill.
   const [handled, setHandled] = useState(0);
@@ -137,29 +139,59 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
         <a href={api.dashboardUrl('/profile#application')} target="_blank" rel="noreferrer" className="text-[11px] text-faint hover:text-text hover:underline">
           Your details and saved answers
         </a>
-        {a.plan && <CopyDiagnostics a={a} />}
+        {a.plan && !reporting && (
+          <button type="button" onClick={() => setReporting(true)} className="ml-auto inline-flex items-center gap-1 text-[11px] text-faint hover:text-text">
+            <Flag className="size-3" /> Report a problem
+          </button>
+        )}
       </div>
+      {a.plan && reporting && <ReportProblem api={api} a={a} onClose={() => setReporting(false)} />}
     </div>
   );
 }
 
-/** Copies what Wera made of the page and what happened (see diagnostics.ts), for a bug report. */
-function CopyDiagnostics({ a }: { a: ReturnType<typeof useAutofill> }) {
-  const [state, setState] = useState<'' | 'copied' | 'failed'>('');
-  const copy = async () => {
+/**
+ * "Report a problem": what went wrong in the person's words, sent to the
+ * Wera team with what Wera read on this page and what happened (see
+ * diagnostics.ts; self-identification answers are left out).
+ */
+export function ReportProblem({ api, a, onClose }: { api: WeraApi; a: Parameters<typeof diagnostics>[0]; onClose: () => void }) {
+  const [note, setNote] = useState('');
+  const [state, setState] = useState<'' | 'sending' | 'sent'>('');
+  const [error, setError] = useState('');
+  const send = async () => {
+    setState('sending');
+    setError('');
     try {
-      await navigator.clipboard.writeText(await diagnostics(a));
-      setState('copied');
-    } catch {
-      setState('failed');
+      const details = (await diagnostics(a)).slice(0, REPORT_DETAILS_MAX);
+      await api.reportProblem({ note: note.trim(), page: reportPage(), version: chrome.runtime.getManifest?.().version ?? '', details });
+      setState('sent');
+    } catch (e) {
+      setState('');
+      setError(describeError(e, "Couldn't send the report"));
     }
-    window.setTimeout(() => setState(''), 2500);
   };
+  if (state === 'sent') {
+    return (
+      <div className="anim-rise flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted" role="status">
+        <CheckCircle2 className="size-3.5 shrink-0 text-good" />
+        <span className="flex-1">Sent. Thank you, we'll look into it.</span>
+        <button type="button" className="text-[11px] text-faint hover:text-text" onClick={onClose}>Close</button>
+      </div>
+    );
+  }
   return (
-    <button type="button" onClick={() => void copy()} className="ml-auto inline-flex items-center gap-1 text-[11px] text-faint hover:text-text"
-      title="Copies what Wera read on this page and what happened, for a bug report (self-identification answers are left out)">
-      <ClipboardCopy className="size-3" /> {state === 'copied' ? 'Copied' : state === 'failed' ? "Couldn't copy" : 'Copy diagnostics'}
-    </button>
+    <div className="anim-rise space-y-2 rounded-lg border border-border bg-surface p-3">
+      <textarea aria-label="What went wrong?" placeholder="What went wrong? For example: the phone box was left empty." value={note}
+        onChange={(e) => setNote(e.target.value)} rows={3} maxLength={4000} autoFocus
+        className="w-full resize-y rounded-lg border border-border bg-surface-2 p-2 text-xs text-text placeholder:text-faint focus:border-accent/60 focus:outline-none" />
+      <p className="text-[11px] text-faint">Sends your note and what Wera read on this page to the Wera team. Self-identification answers are left out.</p>
+      {error && <Notice tone="bad">{error}</Notice>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" className="px-2 py-1" onClick={onClose}>Cancel</Button>
+        <Button variant="primary" className="px-2.5 py-1" busy={state === 'sending'} disabled={!note.trim()} onClick={() => void send()}>Send report</Button>
+      </div>
+    </div>
   );
 }
 

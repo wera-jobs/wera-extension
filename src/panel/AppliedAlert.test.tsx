@@ -59,24 +59,28 @@ describe('the alert after applying', () => {
     expect(appliedMessage({ state: 'unknown', draft: null }).detail).toMatch(/not in Wera/);
   });
 
-  it('says "Job applied", counts down, then closes the tab when the user wants that', async () => {
+  it('says "Job applied", counts down, then closes the tab when the user turned that on', async () => {
     vi.useFakeTimers();
     const sent = fakeRuntime();
     const onDone = vi.fn();
     render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={onDone} />);
-    expect(screen.getByRole('alertdialog', { name: 'Job applied' })).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Job applied' })).toBeTruthy();
     expect(screen.getByText(`Closing this tab in ${CLOSE_AFTER} s…`)).toBeTruthy();
     await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
     expect(sent).toEqual([{ type: 'wera:tab-close' }]);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('otherwise counts down, then Wera leaves the page and the tab stays', async () => {
+  it('otherwise is a quiet note in a corner: no countdown, no cover over the page, and the tab stays', async () => {
     vi.useFakeTimers();
     const sent = fakeRuntime();
     const onDone = vi.fn();
-    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
-    expect(screen.getByText(`Wera leaves this page in ${CLOSE_AFTER} s…`)).toBeTruthy();
+    const { container } = render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
+    const note = screen.getByRole('status', { name: 'Job applied' });
+    expect(note).toBe(container.firstElementChild);
+    expect(note.className).toMatch(/bottom-4/);
+    expect(screen.queryByText(/ s…/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Keep this tab' })).toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(sent).toEqual([]);
@@ -87,23 +91,31 @@ describe('the alert after applying', () => {
     fakeRuntime();
     const onDone = vi.fn();
     render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
-    fireEvent.mouseEnter(screen.getByRole('alertdialog'));
+    fireEvent.mouseEnter(screen.getByRole('status'));
     await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 3000); });
     expect(onDone).not.toHaveBeenCalled();
-    expect(screen.getByText('Paused while you read.')).toBeTruthy();
-    fireEvent.mouseLeave(screen.getByRole('alertdialog'));
+    fireEvent.mouseLeave(screen.getByRole('status'));
     await act(async () => { await vi.advanceTimersByTimeAsync(CLOSE_AFTER * 1000); });
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the tab when the user says so (or presses Escape), and Wera still leaves', async () => {
+  it('keeps the tab when the user says so (or dismisses it, or presses Escape in it), and Wera still leaves', async () => {
     const sent = fakeRuntime();
     const onDone = vi.fn();
     render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved', close: true }} onDone={onDone} />);
     screen.getByRole('button', { name: 'Keep this tab' }).click();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    expect(onDone).toHaveBeenCalledTimes(2);
+    screen.getByRole('button', { name: 'Dismiss' }).click();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Dismiss' }), { key: 'Escape' });
+    expect(onDone).toHaveBeenCalledTimes(3);
     expect(sent).toEqual([]);
+  });
+
+  it("leaves Escape on the page to the site", () => {
+    fakeRuntime();
+    const onDone = vi.fn();
+    render(<AppliedAlert api={quietApi()} reply={{ state: 'marked', job, previous: 'saved' }} onDone={onDone} />);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('undoes: the job moves back and Wera stays', async () => {

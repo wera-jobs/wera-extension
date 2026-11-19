@@ -1,5 +1,5 @@
-// "Copy diagnostics": what Wera made of this page and what happened, as
-// text the user can paste into a bug report. Every field with its kind,
+// The details of "Report a problem": what Wera made of this page and what
+// happened, sent with the person's note. Every field with its kind,
 // what Wera read it as, what it proposed and how filling went, then the
 // recent log of the panel and of each frame. Self-identification answers
 // are hidden and long text is cut short.
@@ -28,6 +28,12 @@ function field(r: Row) {
 }
 
 const lines = (entries: LogEntry[]) => entries.slice(-150).map((e) => `${new Date(e.at).toISOString().slice(11, 23)} ${e.level} ${e.scope}: ${e.msg}${e.data === undefined ? '' : ` ${short(JSON.stringify(e.data), 400)}`}`);
+
+/** The most the API takes for a report's details. */
+export const REPORT_DETAILS_MAX = 250_000;
+
+/** The page a report is about: its site and path, never its query (which can hold tokens). */
+export const reportPage = () => `${location.host}${location.pathname}`.slice(0, 500);
 
 /** The report as JSON text. */
 export async function diagnostics(input: DiagnosticsInput): Promise<string> {

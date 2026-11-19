@@ -11,9 +11,10 @@ const base: WeraJob = {
 const draft: JobDraft = { url: 'https://jobs.example/acme/2', company: 'Acme', title: 'Data Engineer', location: '', work_mode: '', employment_type: '', department: '', salary: '', industry: '', description: 'x', source: 'page-data' };
 
 /** chrome.* for the background, and a fake Wera API behind fetch. */
-function setup(opts: { signedIn?: boolean; found?: WeraJob | null; autoApplied?: boolean; closeAfterApply?: boolean } = {}) {
+function setup(opts: { signedIn?: boolean; found?: WeraJob | null; autoApplied?: boolean; closeTab?: boolean; settings?: Record<string, unknown> } = {}) {
   const local: Record<string, unknown> = opts.signedIn === false ? {} : { 'wera.session': { server: 'https://w.example', token: 't', user: { id: 1 } } };
-  if (opts.autoApplied === false || opts.closeAfterApply === false) local['wera.settings'] = { autoApplied: opts.autoApplied ?? true, closeAfterApply: opts.closeAfterApply ?? true };
+  if (opts.settings) local['wera.settings'] = opts.settings;
+  else if (opts.autoApplied === false || opts.closeTab) local['wera.settings'] = { autoApplied: opts.autoApplied ?? true, closeTabAfterApply: !!opts.closeTab };
   const session: Record<string, unknown> = {};
   const area = (data: Record<string, unknown>) => ({
     get: vi.fn(async (k: string | string[]) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in data).map((x) => [x, data[x]]))),
@@ -119,8 +120,8 @@ describe('job requests in the background', () => {
     expect(await handleJobRequest({ type: 'wera:job-submitted', url: done }, TAB, done)).toMatchObject({ state: 'marked' });
   });
 
-  it('asks to close the tab when the user just sent the application, adding a job Wera lacked', async () => {
-    const { calls } = setup({ found: null });
+  it('asks to close the tab when the user turned that on and just sent the application, adding a job Wera lacked', async () => {
+    const { calls } = setup({ found: null, closeTab: true });
     await handleJobRequest({ type: 'wera:job-seen', kind: 'form', draft }, TAB, `${draft.url}/apply`);
     await handleJobRequest({ type: 'wera:job-sending' }, TAB, `${draft.url}/apply`);
     expect(await handleJobRequest({ type: 'wera:job-submitted', url: `${draft.url}/thanks` }, TAB, `${draft.url}/thanks`))
@@ -128,12 +129,12 @@ describe('job requests in the background', () => {
     expect(calls).toContain('POST /api/ext/jobs');
   });
 
-  it('keeps the tab when the user turned closing off, or did not just click Submit', async () => {
-    setup({ closeAfterApply: false });
+  it('keeps the tab by default (even with the old setting that was on for everyone), or when the user did not just click Submit', async () => {
+    setup({ settings: { autoApplied: true, closeAfterApply: true } });
     await handleJobRequest({ type: 'wera:job-seen', kind: 'form', draft: null }, TAB, `${URL1}/apply`);
     await handleJobRequest({ type: 'wera:job-sending' }, TAB, `${URL1}/apply`);
     expect(await handleJobRequest({ type: 'wera:job-submitted', url: `${URL1}/thanks` }, TAB, `${URL1}/thanks`)).toMatchObject({ state: 'marked', close: false });
-    setup();
+    setup({ closeTab: true });
     await handleJobRequest({ type: 'wera:job-seen', kind: 'form', draft: null }, TAB, `${URL1}/apply`);
     expect(await handleJobRequest({ type: 'wera:job-submitted', url: `${URL1}/thanks` }, TAB, `${URL1}/thanks`)).toMatchObject({ state: 'marked', close: false });
   });
