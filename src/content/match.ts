@@ -2,7 +2,7 @@
 // wording, then by meaning ("Male" is "Man", "I am not a protected
 // veteran" is never "I am a protected veteran", "B.S." is a bachelor's,
 // "Dallas, TX" is "Dallas, Texas, United States", 5 years is "3-5 years").
-import { DECLINE } from '../shared/selfId';
+import { DECLINE, SELF_ID } from '../shared/selfId';
 import type { FieldPurpose } from '../shared/types';
 import type { Option } from './fields';
 import { norm, US_NAMES, US_STATES } from './places';
@@ -256,6 +256,8 @@ export function matchOption(options: Option[], value: string, purpose: FieldPurp
   const meant = meaningOption(real, value, purpose);
   if (meant) return meant;
   if (purpose && PROPER.has(purpose)) return sameName(real, value, 0);
+  // Self-identification is what the person said or nothing: "Asian" never becomes "East Asian".
+  if (purpose && SELF_ID.has(purpose)) return null;
   return (
     real.find((o) => [...wanted].some((w) => w.length > 2 && norm(o.label).startsWith(w))) ??
     (purpose && NAMED.has(purpose) ? sameName(real, value) : null) ??
