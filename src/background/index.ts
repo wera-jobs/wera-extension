@@ -8,7 +8,8 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
-import { loadSession } from '../shared/storage';
+import { DEFAULT_SERVER, loadSession } from '../shared/storage';
+import { acceptDashboardKey } from './connect';
 import type { ContentEvent } from '../shared/types';
 import { handleJobRequest } from './jobs';
 import { frameField } from './frames';
@@ -37,7 +38,8 @@ let syncing: Promise<void> = Promise.resolve();
 function syncAll(): Promise<void> {
   syncing = syncing.then(async () => {
     const s = await loadSession();
-    await syncBridge(s?.server ?? null);
+    // Signed out, the bridge waits on the default server, whose dashboard can connect the extension.
+    await syncBridge(s?.server ?? DEFAULT_SERVER);
   }).catch(() => {});
   return syncing;
 }
@@ -92,6 +94,14 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, reply) => {
     void chrome.tabs.sendMessage(tabId, { type: 'wera:frame-event', frameId, event }, { frameId: 0 }).catch(() => {});
   }
   return false;
+});
+
+// The dashboard's connect page hands over a key for the account signed in there: no password in the panel.
+chrome.runtime.onMessage.addListener((msg: { type?: string; token?: unknown }, sender, reply) => {
+  if (msg?.type !== 'wera:dashboard-connect' || sender.tab?.id == null) return false;
+  const from = sender.origin ?? (sender.url ? new URL(sender.url).origin : '');
+  void acceptDashboardKey(from, msg.token).then((ok) => reply({ ok }));
+  return true;
 });
 
 // "Apply on Acme's site" in the dashboard: remember the job, then tie it to the tab that click opens.

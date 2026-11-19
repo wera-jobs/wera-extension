@@ -27,6 +27,13 @@ describe('dashboard bridge script', () => {
     onMessage!({ type: 'wera:extension-changed', what: '/api/jobs/9/application' });
     await new Promise((r) => setTimeout(r, 10));
     expect(seen).toContainEqual({ source: 'wera-extension', type: 'changed', what: '/api/jobs/9/application' });
+
+    // The connect page's key goes to the background, and the page hears when it's kept.
+    sendMessage.mockImplementationOnce(async () => ({ ok: true }) as never);
+    post({ source: 'wera-dashboard', type: 'connect', token: 'wera_ext_abc' });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sendMessage).toHaveBeenLastCalledWith({ type: 'wera:dashboard-connect', token: 'wera_ext_abc' });
+    expect(seen).toContainEqual({ source: 'wera-extension', type: 'connected' });
   });
 });
 
