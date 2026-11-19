@@ -41,7 +41,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
   }, [a.plan, noteForm]);
 
   const needs = useMemo(() => needsYou(a.rows), [a.rows]);
-  const guesses = needs.filter(isGuess).length;
+  const guesses = needs.filter((r) => isGuess(r) && !r.confirm).length;
   const filled = a.rows.filter((r) => r.status === 'filled' || r.status === 'already');
   const total = a.rows.length;
   const done = a.phase === 'filled' || a.phase === 'final';
@@ -204,6 +204,7 @@ function NeedRow({ r, onUse }: { r: Row; onUse: (value: string) => void }) {
   const why = r.chosen ? `Wera chose "${r.result || r.value}": check it`
     : r.drafted ? (r.purpose === 'cover_letter' ? 'Wera wrote this letter for this job: read it in the panel below' : 'Wera drafted this answer: read it and make it yours')
     : r.status === 'review' ? r.result || r.note || 'check it'
+    : guess && r.confirm ? `${r.value} · ${r.note}`
     : guess ? `Wera's guess: ${r.value}`
     : r.group === 'consent' ? 'agree yourself after reading it'
     : r.note || 'required: fill it on the page';
