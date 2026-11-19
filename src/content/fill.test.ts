@@ -409,6 +409,13 @@ describe('options by meaning', () => {
     expect(pick(years, '12', 'years_experience')).toBe('10+ years');
   });
 
+  it('self-identification is never narrowed to a sub-group', () => {
+    // The 19 Nov live test: "Asian" became "East Asian" on a list of sub-groups.
+    expect(pick(['East Asian', 'South Asian', 'Southeast Asian', 'White'], 'Asian', 'race')).toBeNull();
+    expect(pick(['Asian (Not Hispanic or Latino)', 'White (Not Hispanic or Latino)'], 'Asian', 'race')).toBe('Asian (Not Hispanic or Latino)');
+    expect(pick(['Man', 'Trans man', 'Woman'], 'Male', 'gender')).toBe('Man');
+  });
+
   it('a school or employer is that one, never a namesake', () => {
     // The 19 Nov live test: Greenhouse's school search offered "Adams State University" for "State University".
     expect(pick(['Adams State University', 'Alabama State University'], 'State University', 'edu_school')).toBeNull();
