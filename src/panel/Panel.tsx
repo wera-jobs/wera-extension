@@ -6,7 +6,7 @@
 // dashboard. The views live in Apply.tsx, JobViews.tsx and SettingsView.tsx.
 import { useState } from 'react';
 import clsx from 'clsx';
-import { ChevronsRight, Settings2 } from 'lucide-react';
+import { ChevronsRight, IdCard, Settings2 } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import type { Settings } from '../shared/settings';
 import { Apply } from './Apply';
@@ -16,6 +16,7 @@ import { Referrals } from './Referrals';
 import { Launcher, type HideChoice } from './Launcher';
 import { setSiteHidden, siteKey } from '../shared/settings';
 import { Logo } from './Logo';
+import { DetailsView } from './DetailsView';
 import { SettingsView } from './SettingsView';
 import { SignIn } from './SignIn';
 import { Notice } from './ui';
@@ -44,6 +45,7 @@ export interface PanelProps {
 export function Panel(props: PanelProps) {
   const { api, page, open, onOpen } = props;
   const [menu, setMenu] = useState(false);
+  const [details, setDetails] = useState(false);
   const kind = page.info?.hasForm ? 'form' : page.handle.kind;
 
   // Collapsed: Wera's mark on a tab at the right edge, which the user can move up and down.
@@ -65,8 +67,14 @@ export function Panel(props: PanelProps) {
           : 'panel-shadow top-3 right-3 bottom-3 w-[372px] max-w-[calc(100vw-24px)] rounded-card border border-border')}>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3.5">
         <Logo />
-        <button type="button" className={clsx('ml-auto grid size-8 place-items-center rounded-lg hover:bg-surface-2', menu ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
-          onClick={() => setMenu((m) => !m)} aria-label="Settings" aria-pressed={menu} title="Settings">
+        {api && (
+          <button type="button" className={clsx('ml-auto grid size-8 place-items-center rounded-lg hover:bg-surface-2', details ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
+            onClick={() => { setDetails((d) => !d); setMenu(false); }} aria-label="My details" aria-pressed={details} title="My details, to copy">
+            <IdCard className="size-4" />
+          </button>
+        )}
+        <button type="button" className={clsx(!api && 'ml-auto', 'grid size-8 place-items-center rounded-lg hover:bg-surface-2', menu ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
+          onClick={() => { setMenu((m) => !m); setDetails(false); }} aria-label="Settings" aria-pressed={menu} title="Settings">
           <Settings2 className="size-4" />
         </button>
         <button type="button" className="grid size-8 place-items-center rounded-lg border border-border text-text hover:border-accent/40 hover:bg-surface-2" onClick={() => onOpen(false)} aria-label="Collapse the Wera panel" title="Collapse to the edge (Alt+Shift+W)">
@@ -75,6 +83,7 @@ export function Panel(props: PanelProps) {
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 [scrollbar-width:thin]">
         {menu ? <SettingsView {...props} onClose={() => setMenu(false)} />
+          : details && api ? <DetailsView api={api} onClose={() => setDetails(false)} />
           : !api ? <SignedOut {...props} kind={kind} />
           : <Main {...props} api={api} kind={kind} />}
       </div>
