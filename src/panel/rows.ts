@@ -145,7 +145,8 @@ export function needsYou(rows: Row[]): Row[] {
     if (r.status === 'filled' || r.status === 'already') return false;
     if (r.status === 'review') return true;
     if (isGuess(r)) return true;
-    return r.group === 'consent' || r.group === 'self_id' || (r.required && r.current === '');
+    // Work rights abroad are listed even when optional: an empty answer there can read as a no.
+    return r.group === 'consent' || r.group === 'self_id' || (r.required && r.current === '') || (!!r.abroad && r.current === '');
   });
 }
 

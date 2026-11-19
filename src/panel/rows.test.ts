@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldPlan } from '../shared/types';
-import { asSalaryOffer, followUpOf, isGuess, isSalary, mayChoose, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
+import { asSalaryOffer, followUpOf, isGuess, isSalary, mayChoose, needsYou, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
 
 const row = (over: Partial<Row>): Row => ({
   id: 'w1', label: 'Field', purpose: null, kind: 'text', options: [], required: false, current: '', value: '', source: null, group: 'other', checked: false, ...over,
@@ -32,6 +32,8 @@ describe('which rows Wera fills, asks the AI about, or drafts', () => {
   it('never asks the AI about work rights in another country', () => {
     expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', abroad: true, label: 'Will you need sponsorship to work in the UK?' }))).toBe(false);
     expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', label: 'Will you need sponsorship?' }))).toBe(true);
+    // Listed for the person even when the form doesn't require it.
+    expect(needsYou([row({ id: 'x', abroad: true, required: false, note: 'for work in Japan: answer it yourself' })]).map((r) => r.id)).toEqual(['x']);
   });
 
   it('never asks the AI about self-identification or who referred the user', () => {
