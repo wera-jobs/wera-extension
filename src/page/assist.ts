@@ -192,6 +192,7 @@ export function startAssist(doc: Document): () => void {
       current = d;
       draftBox.className = d.needs || d.error ? 'draft need' : 'draft';
       draftBox.textContent = d.error ? (d.text ? `${d.error}\n\n${d.text}` : d.error)
+        : d.needs && d.text ? `${d.text}\n\nAdd this yourself: ${d.needs}`
         : d.needs ? `Wera needs this from you first: ${d.needs}`
         : d.text || "Wera couldn't draft this one. Try again, or tell it what to say.";
       meta.textContent = d.text ? `${d.text.split(/\s+/).filter(Boolean).length} words · from your profile, resume and earlier answers` : '';

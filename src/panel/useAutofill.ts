@@ -292,7 +292,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
         if (a?.needs_input) merge([{ ...r, note: `add yourself: ${a.needs_input}` }]);
         return;
       }
-      const row: Row = { ...r, value: a.answer, source: 'ai', note: 'drafted by Wera: read it', checked: true, drafted: true };
+      const note = a.needs_input ? `drafted by Wera: read it, and add ${a.needs_input}` : 'drafted by Wera: read it';
+      const row: Row = { ...r, value: a.answer, source: 'ai', note, checked: true, drafted: true };
       merge([row]);
       await fill([row]);
     });
