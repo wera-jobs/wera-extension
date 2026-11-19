@@ -6,7 +6,7 @@
 // Anything that fails along the way is said in the panel (warnings), and
 // written to the log (Settings > Debug log, Copy diagnostics).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ResumeFile, SuggestField, Suggestion, WeraApi } from '../shared/api';
+import type { ResumeFile, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
 import { bestAnswer, type SavedAnswer } from '../shared/answers';
 import { describeError } from '../shared/errors';
 import { loadFlow, saveFlow, takeApplying, type Flow } from '../shared/flow';
@@ -380,12 +380,12 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   }, [api, posting.company, settings.learn, warn]);
 
   /** Counts the page (once) in Wera's record of this application. */
-  const count = useCallback(async (filled: number, fromAI: number, forJob: number | null) => {
+  const count = useCallback(async (filled: number, fromAI: number, forJob: number | null, sent: RunAttachments) => {
     if (tabId == null || !filled || counted.current) return;
     counted.current = true;
     try {
       const f = (await loadFlow(tabId, host)) ?? { runId: 0, host, jobId: forJob, pages: 1, continuing: false, at: Date.now() };
-      const runId = f.runId ? (await api.addRunPage(f.runId, filled, fromAI), f.runId) : (await api.startRun(host, forJob, filled, fromAI)).id;
+      const runId = f.runId ? (await api.addRunPage(f.runId, filled, fromAI, sent), f.runId) : (await api.startRun(host, forJob, filled, fromAI, sent)).id;
       const next = { ...f, runId, jobId: forJob ?? f.jobId, continuing: false };
       setFlow(next);
       await saveFlow(tabId, next);
@@ -464,8 +464,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     setPhase('filling');
     try {
       // The files first: many systems read an uploaded resume and fill the form themselves, over what is there.
-      const files = got.rows.filter((r) => r.group === 'documents');
-      await fill(files);
+      const docs = got.rows.filter((r) => r.group === 'documents');
+      await fill(docs);
       await fill(got.rows.filter((r) => r.group !== 'documents'));
       if (stopped()) return;
       // Answers can reveal more fields, and so can the AI's below.
@@ -493,7 +493,12 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       if (stopped()) return;
       const forJob = await ensureJob();
       const filled = latest.current.filter((x) => x.status === 'filled');
-      await count(filled.length, filled.filter((x) => x.source === 'ai').length, forJob);
+      // Which resume went in (and whether a letter), for the tracker's record of this application.
+      const resume = filled.some((x) => x.value === RESUME) ? files.current.resume : null;
+      await count(filled.length, filled.filter((x) => x.source === 'ai').length, forJob, {
+        resume: resume ? { kind: resume.kind, name: resume.name } : undefined,
+        letter: filled.some((x) => x.value === LETTER),
+      });
       page.clearNewStep();
       setPhase(!got.plan.next || got.plan.next.final ? 'final' : 'filled');
     } catch (e) {

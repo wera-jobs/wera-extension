@@ -178,6 +178,17 @@ export interface ResumeFile {
   kind: 'tailored' | 'base' | 'upload';
 }
 
+/** What went into an application's file fields on a page: the resume (which one) and a cover letter. */
+export interface RunAttachments {
+  resume?: Pick<ResumeFile, 'kind' | 'name'>;
+  letter?: boolean;
+}
+
+const attachments = (a: RunAttachments) => ({
+  ...(a.resume ? { resume: { kind: a.resume.kind, name: a.resume.name.slice(0, 200) } } : {}),
+  ...(a.letter ? { letter: true } : {}),
+});
+
 /** A company's H-1B filings and what it offered for titles like a job's. */
 export interface JobH1B {
   matched: boolean;
@@ -449,12 +460,12 @@ export class WeraApi {
     });
   }
 
-  startRun(host: string, jobId: number | null, filled: number, suggested: number) {
-    return this.call<AutofillRun>('/api/ext/autofill-runs', { method: 'POST', body: JSON.stringify({ host, job_id: jobId ?? 0, filled, suggested }) });
+  startRun(host: string, jobId: number | null, filled: number, suggested: number, sent: RunAttachments = {}) {
+    return this.call<AutofillRun>('/api/ext/autofill-runs', { method: 'POST', body: JSON.stringify({ host, job_id: jobId ?? 0, filled, suggested, ...attachments(sent) }) });
   }
 
-  addRunPage(runId: number, filled: number, suggested: number) {
-    return this.call<AutofillRun>(`/api/ext/autofill-runs/${runId}/pages`, { method: 'POST', body: JSON.stringify({ filled, suggested }) });
+  addRunPage(runId: number, filled: number, suggested: number, sent: RunAttachments = {}) {
+    return this.call<AutofillRun>(`/api/ext/autofill-runs/${runId}/pages`, { method: 'POST', body: JSON.stringify({ filled, suggested, ...attachments(sent) }) });
   }
 
   /** "Report a problem": the person's note, the page and the diagnostics, for the Wera team. */
