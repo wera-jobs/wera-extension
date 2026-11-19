@@ -42,6 +42,9 @@ const RULES: [FieldPurpose, RegExp][] = [
   ['twitter', /twitter|\bx\.com\b|\bx \(twitter\)|^x( profile| handle| url)?$/],
   ['portfolio', /portfolio|personal (web)?site|website|personal url|other (link|url|website)|^url\b/],
   ['needs_sponsorship', /sponsor/],
+  // "Will you require a work permit?", "Will you need us to support your immigration case?"; holding one is being authorized.
+  ['authorized_to_work', /\b(hold|have|possess)\b.{0,12}\b(valid )?(work|working) permit/],
+  ['needs_sponsorship', /\b(require|need)s?\b.{0,30}\b(work permit|working permit|immigration (case|support|assistance|sponsorship)|visa support)|support (for )?your immigration/],
   ['visa_status', /visa (status|type)|immigration status|current (work )?visa|type of (work )?visa/],
   ['needs_sponsorship', /visa|h-?1b/],
   ['authorized_to_work', /(authori[sz]ed|eligible|legally (able|permitted)) to work|work authori[sz]ation|right to work/],
