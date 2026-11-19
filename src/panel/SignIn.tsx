@@ -4,7 +4,8 @@ import { describeError } from '../shared/errors';
 import { Button, Field, INPUT, Notice } from './ui';
 import { LogoMark } from './Logo';
 
-export const DEFAULT_SERVER = 'https://www.wera-jobs.com';
+export { DEFAULT_SERVER } from '../shared/storage';
+import { DEFAULT_SERVER } from '../shared/storage';
 
 /** Connects this browser to the user's Wera (the background signs in and keeps the key). */
 export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?: boolean }) {
@@ -14,6 +15,7 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
   const [busy, setBusy] = useState(false);
   // Almost everyone uses wera-jobs.com: another server is one click away, not a field to read past.
   const [otherServer, setOtherServer] = useState(false);
+  const [withPassword, setWithPassword] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async (e: FormEvent) => {
@@ -46,12 +48,23 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
           <p className="text-xs text-muted">See your fit on every job, autofill applications and keep your tracker current. You review and submit.</p>
         </div>
       )}
+      {otherServer && (
+        <Field label="Wera address">
+          <input className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} required autoFocus />
+        </Field>
+      )}
+      {/* The easy way: the dashboard, where the person may already be signed in, connects this browser. */}
+      <a href={`${site}/connect-extension`} target="_blank" rel="noreferrer"
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-bg hover:bg-accent/85">
+        Connect with Wera
+      </a>
+      <p className="text-center text-[11px] text-faint">Opens Wera in a new tab. Sign in or create an account there, then come back here.</p>
+      {!withPassword ? (
+        <button type="button" onClick={() => setWithPassword(true)} className="mx-auto block text-[11px] text-muted underline-offset-2 hover:text-text hover:underline">
+          Or sign in here with your password
+        </button>
+      ) : (
       <form onSubmit={(e) => void submit(e)} className="space-y-3">
-        {otherServer && (
-          <Field label="Wera address">
-            <input className={INPUT} value={server} onChange={(e) => setServer(e.target.value)} required autoFocus />
-          </Field>
-        )}
         <Field label="Email">
           <input className={INPUT} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         </Field>
@@ -59,8 +72,9 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
           <input className={INPUT} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         </Field>
         {error && <Notice tone="bad">{error}</Notice>}
-        <Button type="submit" variant="primary" busy={busy} className="w-full py-2.5">Connect</Button>
+        <Button type="submit" variant="secondary" busy={busy} className="w-full py-2.5">Sign in</Button>
       </form>
+      )}
       <div className="flex items-center justify-between text-[11px]">
         <a href={`${site}/forgot-password`} target="_blank" rel="noreferrer" className="text-muted hover:text-text hover:underline">Forgot password?</a>
         <a href={`${site}/signup`} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">Create an account</a>

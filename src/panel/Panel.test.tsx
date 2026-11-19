@@ -127,9 +127,12 @@ describe('the Wera panel', () => {
   it('signs in from the page, then offers to save the posting', async () => {
     const { calls } = fakeBackground({ signedIn: false });
     render(<App handle={handle('posting')} show={show()} />);
+    // Connecting from the dashboard is the main way in; a password still works.
+    expect(await screen.findByRole('link', { name: 'Connect with Wera' })).toHaveAttribute('href', 'https://www.wera-jobs.com/connect-extension');
+    await userEvent.click(screen.getByRole('button', { name: /sign in here with your password/ }));
     await userEvent.type(await screen.findByLabelText('Email'), 'ada@example.com');
     await userEvent.type(screen.getByLabelText('Password'), 'secret password');
-    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await userEvent.click(await screen.findByRole('button', { name: /Save to Wera/ }));
     await screen.findByText('Open in Wera');
     expect(calls.find((c) => c.name === 'addJob')?.args[0]).toMatchObject({ company: 'Acme', title: 'SRE' });
@@ -614,7 +617,7 @@ describe('the Wera panel', () => {
     expect(screen.getByText('Acme')).toBeInTheDocument();
     expect(await screen.findByTitle('The pay the posting states')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sign in to see your fit and autofill' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Connect with Wera' })).toBeInTheDocument();
     // Nothing of an account's shows.
     expect(screen.queryByText('Open in Wera')).toBeNull();
     expect(screen.queryByRole('button', { name: /Autofill|Save to Wera/ })).toBeNull();
@@ -710,7 +713,7 @@ describe('the Wera panel', () => {
     await userEvent.click(screen.getByRole('switch', { name: /Draft open questions and cover letters/ }));
     await waitFor(() => expect(store['wera.settings']).toMatchObject({ aiQuestions: false }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByLabelText('Password')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Connect with Wera' })).toBeInTheDocument();
   });
 });
 

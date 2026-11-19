@@ -9,7 +9,9 @@ const SCRIPT_ID = 'wera-bridge';
 /** What the dashboard posts (window.postMessage) for the bridge to pass on. */
 export type BridgeMessage =
   | { type: 'open-job'; jobId: number; url: string }
-  | { type: 'changed'; what?: string };
+  | { type: 'changed'; what?: string }
+  /** The dashboard's connect page: a key for the account signed in there. */
+  | { type: 'connect'; token: string };
 
 /** Puts the bridge on the user's Wera dashboard (and its open tabs), or removes it after sign-out. */
 export async function syncBridge(server: string | null): Promise<void> {

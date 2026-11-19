@@ -136,9 +136,11 @@ test('sign in on a posting, save it, then autofill its application', async () =>
   const panel = panelOf(job);
   await panel.getByRole('button', { name: 'Use another Wera server' }).click();
   await panel.getByLabel('Wera address').fill(API);
+  await expect(panel.getByRole('link', { name: 'Connect with Wera' })).toHaveAttribute('href', `${API}/connect-extension`);
+  await panel.getByRole('button', { name: /sign in here with your password/ }).click();
   await panel.getByLabel('Email').fill(EMAIL);
   await panel.getByLabel('Password').fill(PASSWORD);
-  await panel.getByRole('button', { name: 'Connect' }).click();
+  await panel.getByRole('button', { name: 'Sign in' }).click();
   await panel.getByRole('button', { name: /Save to Wera/ }).click();
   await expect(panel.getByText('Open in Wera')).toBeVisible();
   await shot(job, 'posting-saved');
