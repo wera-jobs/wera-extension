@@ -402,8 +402,8 @@ export class WeraApi {
    * a draft and the user's steer ("shorter", "mention the migration"), it
    * reworks that draft instead.
    */
-  answer(question: string, jobId: number | null, maxWords = 150, posting?: { company: string; title: string; description: string }, rework?: { draft?: string; instructions?: string }) {
-    return this.call<{ answer?: string; needs_input?: string }>('/api/ext/answer', {
+  async answer(question: string, jobId: number | null, maxWords = 150, posting?: { company: string; title: string; description: string }, rework?: { draft?: string; instructions?: string }) {
+    const a = await this.call<{ answer?: string; needs_input?: string }>('/api/ext/answer', {
       method: 'POST',
       body: JSON.stringify({
         question, job_id: jobId ?? 0, max_words: maxWords,
@@ -412,6 +412,10 @@ export class WeraApi {
         ...(jobId == null && posting ? { company: posting.company, title: posting.title, description: posting.description.slice(0, 8000) } : {}),
       }),
     });
+    // An older server can leave the AI's request marker in the text: it never goes in a form.
+    const [answer, asks] = splitNeedsInput(a.answer ?? '');
+    const needs = [a.needs_input, asks].filter(Boolean).join('; ');
+    return { ...(answer ? { answer } : {}), ...(needs ? { needs_input: needs } : {}) };
   }
 
   /** Answers the user gave on forms (empty on a Wera too old to keep them). */
@@ -507,4 +511,10 @@ export class WeraApi {
   dashboardUrl(path = '/') {
     return `${this.server}${path}`;
   }
+}
+
+/** Splits an AI reply at its request marker ("NEEDS_INPUT: …"): the text for the form, and what it asks the person for. */
+export function splitNeedsInput(text: string): [string, string] {
+  const m = /\bneeds[_ ]input\s*:/i.exec(text);
+  return m ? [text.slice(0, m.index).trim(), text.slice(m.index + m[0].length).trim()] : [text, ''];
 }

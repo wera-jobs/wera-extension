@@ -167,6 +167,8 @@ export interface FieldPlan {
   trap?: TrapKind;
   /** The form asks for the applicant's own words here: Wera does not draft it. */
   ownWords?: boolean;
+  /** Work rights for a job in another country: the person answers, never the AI. */
+  abroad?: boolean;
 }
 
 /** The button that moves a multi-page application on. */

@@ -111,6 +111,13 @@ describe('what real forms ask', () => {
   it('still knows the plain questions', () => {
     for (const [label, kind, options, want] of [
       ['How many years of experience do you have?', 'text', [], 'years_experience'],
+      // Work rights, in the wordings live forms use (19 Nov live test and the systems' own phrasing).
+      ['Will you now or in the future require Notion to sponsor an immigration case in order to employ you?', 'radio', YES_NO, 'needs_sponsorship'],
+      ['Will you require a work permit to work in Germany?', 'radio', YES_NO, 'needs_sponsorship'],
+      ['Will you need us to support your immigration case?', 'radio', YES_NO, 'needs_sponsorship'],
+      ['Do you require visa support to work in the UK?', 'radio', YES_NO, 'needs_sponsorship'],
+      ['Do you hold a valid work permit for the Netherlands?', 'radio', YES_NO, 'authorized_to_work'],
+      ['Do you have the right to work in the UK?', 'radio', YES_NO, 'authorized_to_work'],
       ['Which state do you currently reside in?', 'combobox', [], 'state'],
       ['Which state do you currently live in?', 'select', ['Texas', 'Ohio'], 'state'],
       ['What is your primary state of residence?', 'select', ['Texas', 'Ohio'], 'state'],
@@ -172,6 +179,18 @@ describe('answers that depend on the job', () => {
     expect(proposed('Are you authorized to work in Canada?', 'radio', YES_NO)).toBe('');
     expect(proposed('Are you legally authorized to work in the UK?', 'combobox', [])).toBe('');
     expect(proposed('Will you require sponsorship to work in Germany?', 'radio', YES_NO)).toBe('');
+    expect(proposed('Will you require a work permit to work in Germany?', 'radio', YES_NO)).toBe('');
+    expect(proposed('Will you need us to support your immigration case?', 'radio', YES_NO)).toBe('No');
+    // The job's country, from its location: the 19 Nov live test (Palantir in London, Notion in Tokyo).
+    expect(proposed('Are you legally authorized to work in the country for which you are applying?', 'radio', YES_NO, { jobLocation: 'London, United Kingdom' })).toBe('');
+    expect(proposed('Will you now or in the future require Notion to sponsor an immigration case in order to employ you?', 'radio', YES_NO, { jobLocation: 'Tokyo, Japan' })).toBe('');
+    at('Are you legally authorized to work in the country for which you are applying?', 'radio', YES_NO);
+    const there = planForm(document, me, { jobLocation: 'London, United Kingdom' }).fields[0]!;
+    expect(there.abroad).toBe(true);
+    expect(there.note).toMatch(/for work in .*: answer it yourself/);
+    // A citizen of that country may work there.
+    at('Will you require sponsorship to work in the UK?', 'radio', YES_NO);
+    expect(planForm(document, { ...me, citizenship: 'United Kingdom' }, {}).fields[0]!.value).toBe('No');
     // "The country where the job is": the job's location says which.
     expect(proposed('Are you authorized to work in the country where the job is located?', 'radio', YES_NO, { jobLocation: 'Austin, TX, United States' })).toBe('Yes');
     expect(proposed('Are you authorized to work in the country where the job is located?', 'radio', YES_NO, { jobLocation: 'Toronto, Ontario, Canada' })).toBe('');

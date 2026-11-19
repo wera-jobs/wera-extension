@@ -7,7 +7,7 @@ import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } 
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
-import { markApplying } from '../shared/flow';
+import { applyingSince, markApplying } from '../shared/flow';
 import { prettyReason } from '../shared/jobs';
 import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
@@ -163,10 +163,45 @@ export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
   );
 }
 
+/** How long Apply with Wera waits for an application to open before it says it didn't. */
+export const APPLY_WAIT_MS = 10_000;
+
+/**
+ * Whether Apply with Wera pressed the page's button and no application
+ * opened: the press is still waiting after APPLY_WAIT_MS and this tab
+ * still shows the posting. An application here or in a new tab takes the
+ * press (see shared/flow), so it never says so wrongly. Survives a site
+ * that reloads the posting instead of opening a form.
+ */
+function useApplyStuck(tabId: number | null, pressed: number): boolean {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    if (tabId == null) return;
+    let gone = false;
+    let timer = 0;
+    const check = async () => {
+      const at = await applyingSince(tabId).catch(() => null);
+      if (gone) return;
+      if (at == null) return setStuck(false);
+      const left = at + APPLY_WAIT_MS - Date.now();
+      if (left <= 0) setStuck(true);
+      else timer = window.setTimeout(() => void check(), left + 50);
+    };
+    void check();
+    return () => {
+      gone = true;
+      window.clearTimeout(timer);
+    };
+  }, [tabId, pressed]);
+  return stuck;
+}
+
 /** A posting: apply from here, save it (with its fit), or say how to apply. */
 export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageState; tabId: number | null }) {
   const [busy, setBusy] = useState<'' | 'save' | 'apply'>('');
   const [going, setGoing] = useState(false);
+  const [pressed, setPressed] = useState(0);
+  const stuck = useApplyStuck(tabId, pressed);
   const [error, setError] = useState('');
   const [review, setReview] = useState<JobDraft | null>(null);
   // Only the first read shows a placeholder: a re-read (the page moved on) keeps the buttons where they are.
@@ -203,6 +238,7 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
       if (!page.job) await save().catch((e: unknown) => log.warn('posting', 'saving the job before applying failed', e));
       if (tabId != null) await markApplying(tabId);
       const { ok } = await frames('press-apply');
+      setPressed(Date.now());
       if (ok) setGoing(true);
       else setError("Wera couldn't press this page's Apply button. Press it yourself: Wera fills the application there.");
     } catch (e) {
@@ -220,7 +256,8 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
   }
   return (
     <div className="space-y-2">
-      {going ? <Notice tone="good">Opening the application: Wera fills it as soon as it shows.</Notice>
+      {stuck && !error ? <Notice tone="warn">The application didn't open. Press the site's own Apply button: Wera fills the form as soon as it shows.</Notice>
+        : going ? <Notice tone="good">Opening the application: Wera fills it as soon as it shows.</Notice>
         : apply && (
           <BigButton className="w-full" onClick={() => void onApply()} busy={busy === 'apply'}>
             {busy !== 'apply' && <Send className="size-4" />} Apply with Wera

@@ -409,8 +409,28 @@ describe('options by meaning', () => {
     expect(pick(years, '12', 'years_experience')).toBe('10+ years');
   });
 
+  it('self-identification is never narrowed to a sub-group', () => {
+    // The 19 Nov live test: "Asian" became "East Asian" on a list of sub-groups.
+    expect(pick(['East Asian', 'South Asian', 'Southeast Asian', 'White'], 'Asian', 'race')).toBeNull();
+    expect(pick(['Asian (Not Hispanic or Latino)', 'White (Not Hispanic or Latino)'], 'Asian', 'race')).toBe('Asian (Not Hispanic or Latino)');
+    expect(pick(['Man', 'Trans man', 'Woman'], 'Male', 'gender')).toBe('Man');
+  });
+
+  it('a school or employer is that one, never a namesake', () => {
+    // The 19 Nov live test: Greenhouse's school search offered "Adams State University" for "State University".
+    expect(pick(['Adams State University', 'Alabama State University'], 'State University', 'edu_school')).toBeNull();
+    expect(pick(['Princeton Theological Seminary', 'Princeton University'], 'Princeton', 'school')).toBe('Princeton University');
+    expect(pick(['The University of Texas at Dallas', 'Texas A&M University'], 'University of Texas at Dallas', 'school')).toBe('The University of Texas at Dallas');
+    expect(pick(['Princeton Theological Seminary'], 'Princeton University', 'school')).toBeNull();
+    expect(pick(['Google LLC', 'Google Fiber'], 'Google', 'exp_company')).toBe('Google LLC');
+    // "How did you hear" is no name: loose matching still helps there.
+    expect(pick(['Company Website (Airbnb Careers)', 'LinkedIn'], 'Company website', 'how_heard')).toBe('Company Website (Airbnb Careers)');
+  });
+
   it('whole words only when nothing else matches', () => {
-    expect(pick(['Data Science', 'Computer Science and Engineering'], 'Computer Science', 'major')).toBe('Computer Science and Engineering');
+    expect(pick(['Data Science', 'Computer Science and Engineering'], 'Computer Science', null)).toBe('Computer Science and Engineering');
+    // A name is that name or nothing: the person picks a near one themselves.
+    expect(pick(['Data Science', 'Computer Science and Engineering'], 'Computer Science', 'major')).toBeNull();
     expect(pick(['Female'], 'male', 'how_heard')).toBeNull();
   });
 });

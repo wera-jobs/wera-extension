@@ -19,24 +19,41 @@ export interface Row extends FieldPlan {
   chosen?: boolean;
   /** What to ask the AI, when the label alone is not the whole question (see followUpOf). */
   asked?: string;
+  /** Wera has a value but the person decides each time (salary): offered with one click, never entered by itself. */
+  confirm?: boolean;
+}
+
+/** A salary question: the person's call on every application, whatever Wera knows. */
+export function isSalary(r: Pick<Row, 'purpose' | 'label'>): boolean {
+  return r.purpose === 'salary_expectation'
+    || /(salary|compensation|pay) (expectations?|requirements?)|(desired|expected|target|minimum) (annual |base |total )?(salary|compensation|pay|ctc)/i.test(r.label);
+}
+
+/** Where a salary waits for the person: offered, not entered, with the posting's currency when it differs. */
+export function asSalaryOffer(r: Row, postingPay = ''): Row {
+  const sign = postingPay.trim()[0] ?? '';
+  const other = sign && sign !== '$' ? `; the posting pays in ${sign}` : '';
+  return { ...r, checked: false, confirm: true, chosen: undefined, note: `your salary expectation: check it for this job${other}` };
 }
 
 /** The rows for a plan: values Wera trusts are filled; what the page already shows is left. */
-export function rowsFor(plan: PagePlan, sources: Record<string, string> = {}): Row[] {
-  return plan.fields.map((f) => ({
+export function rowsFor(plan: PagePlan, sources: Record<string, string> = {}, postingPay = ''): Row[] {
+  return plan.fields.map((f): Row => ({
     ...f,
     source: f.source === 'details' && f.purpose && sources[f.purpose] ? (sources[f.purpose] === 'resume' ? 'resume' : 'profile') : f.source,
     checked: f.value !== '' && f.group !== 'consent' && f.current === '',
     status: f.current !== '' && f.current === f.value ? 'already' : undefined,
-  }));
+  })).map((r) => (r.value && r.current === '' && isSalary(r) ? asSalaryOffer(r, postingPay) : r));
 }
 
 /** Questions the AI never answers: self-identification, and what only the user knows (who referred them). */
 const NOT_FOR_AI = new Set(['referral', ...SELF_ID]);
+/** Asked of the person alone, whatever the field: how they say their name. */
+const ONLY_THEIRS = /pronounc/i;
 
 /** Fields worth asking the AI about: empty, not answered by anything Wera knows, and not the user's to answer. */
 export function needsSuggestion(r: Row): boolean {
-  return !r.trap && r.label.trim() !== '' && r.value === '' && r.current === '' && r.entry == null && !(r.purpose && NOT_FOR_AI.has(r.purpose))
+  return !r.trap && !r.abroad && !ONLY_THEIRS.test(r.label) && r.label.trim() !== '' && r.value === '' && r.current === '' && r.entry == null && !(r.purpose && NOT_FOR_AI.has(r.purpose))
     && (r.group === 'details' || r.group === 'other' || (r.group === 'questions' && r.kind !== 'textarea'))
     && r.kind !== 'file' && r.kind !== 'checkbox';
 }
@@ -46,7 +63,7 @@ const CATCH_ALL = /^(additional|other|further) (information|info|comments|detail
 
 /** Open questions Wera drafts an answer for: an empty text area asking something (not the cover letter). */
 export function needsDraft(r: Row): boolean {
-  return !r.trap && !r.ownWords && r.group === 'questions' && r.kind === 'textarea' && r.purpose === 'question' && r.value === '' && r.current === ''
+  return !r.trap && !r.ownWords && !ONLY_THEIRS.test(r.label) && r.group === 'questions' && r.kind === 'textarea' && r.purpose === 'question' && r.value === '' && r.current === ''
     && r.label.trim().length >= 8 && (r.required || !CATCH_ALL.test(r.label.trim()));
 }
 
@@ -117,7 +134,7 @@ export function mayChoose(r: Pick<Row, 'kind' | 'options' | 'trap' | 'group'>, v
 }
 
 /** An AI answer Wera did not trust enough to enter by itself. */
-export const isGuess = (r: Row) => r.source === 'ai' && !!r.value && !r.checked && r.status !== 'filled';
+export const isGuess = (r: Row) => (r.source === 'ai' || !!r.confirm) && !!r.value && !r.checked && r.status !== 'filled';
 
 /**
  * What still needs the user once Wera is done: required fields left
@@ -130,7 +147,8 @@ export function needsYou(rows: Row[]): Row[] {
     if (r.status === 'filled' || r.status === 'already') return false;
     if (r.status === 'review') return true;
     if (isGuess(r)) return true;
-    return r.group === 'consent' || r.group === 'self_id' || (r.required && r.current === '');
+    // Work rights abroad are listed even when optional: an empty answer there can read as a no.
+    return r.group === 'consent' || r.group === 'self_id' || (r.required && r.current === '') || (!!r.abroad && r.current === '');
   });
 }
 

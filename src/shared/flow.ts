@@ -57,6 +57,13 @@ export async function takeApplying(tabId: number): Promise<boolean> {
   return Date.now() - at < APPLYING_TTL;
 }
 
+/** When the user pressed Apply with Wera on this tab, if no application has taken it yet (it is still waiting). */
+export async function applyingSince(tabId: number): Promise<number | null> {
+  const got = await chrome.storage.session.get(APPLYING);
+  const at = (got[APPLYING] as Record<string, number> | undefined)?.[tabId];
+  return at != null && Date.now() - at < APPLYING_TTL ? at : null;
+}
+
 /** An Apply button often opens the application in a new tab: the wish goes with it. */
 export async function passApplying(fromTab: number, toTab: number): Promise<void> {
   if (await takeApplying(fromTab)) await markApplying(toTab);

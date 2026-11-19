@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldPlan } from '../shared/types';
-import { followUpOf, isGuess, mayChoose, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
+import { asSalaryOffer, followUpOf, isGuess, isSalary, mayChoose, needsYou, needsDraft, needsLetter, needsSuggestion, readsLikeAnswer, rowsFor, type Row } from './rows';
 
 const row = (over: Partial<Row>): Row => ({
   id: 'w1', label: 'Field', purpose: null, kind: 'text', options: [], required: false, current: '', value: '', source: null, group: 'other', checked: false, ...over,
@@ -14,6 +14,33 @@ describe('which rows Wera fills, asks the AI about, or drafts', () => {
       row({ id: 'c', value: 'Ada', current: 'Ada', group: 'details' }),
     ];
     expect(rowsFor({ fields, next: null, errors: 0 }).map((r) => [r.id, r.checked, r.status])).toEqual([['a', true, undefined], ['b', false, undefined], ['c', false, 'already']]);
+  });
+
+  it('offers a salary instead of entering it, with the posting\'s currency when it differs', () => {
+    // The 19 Nov live test: 120000 went into a role in Europe unasked.
+    const fields: FieldPlan[] = [row({ id: 's', label: 'Expected salary', purpose: 'salary_expectation', value: '120000', group: 'details', source: 'details' })];
+    const [s] = rowsFor({ fields, next: null, errors: 0 }, {}, '€70K – €90K a year');
+    expect(s).toMatchObject({ checked: false, confirm: true });
+    expect(s!.note).toMatch(/check it for this job; the posting pays in €/);
+    expect(isGuess(s!)).toBe(true);
+    expect(rowsFor({ fields, next: null, errors: 0 }, {}, '$100K – $120K a year')[0]!.note).not.toMatch(/pays in/);
+    expect(isSalary(row({ label: 'What are your compensation expectations?' }))).toBe(true);
+    expect(isSalary(row({ label: 'Our salary range for this role is listed above. Do you agree?' }))).toBe(false);
+    expect(asSalaryOffer(row({ value: '90000', source: 'ai', checked: true, label: 'Desired salary' })).checked).toBe(false);
+  });
+
+  it('never asks the AI how the person says their name', () => {
+    // The 19 Nov final live run: Duolingo's "How do you pronounce your name? (e.g., 'An-na' or 'Ah-na')" got "Alex".
+    const label = "How do you pronounce your name? (e.g., 'An-na' or 'Ah-na')";
+    expect(needsSuggestion(row({ label, group: 'other' }))).toBe(false);
+    expect(needsDraft(row({ label, group: 'questions', kind: 'textarea', purpose: 'question' }))).toBe(false);
+  });
+
+  it('never asks the AI about work rights in another country', () => {
+    expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', abroad: true, label: 'Will you need sponsorship to work in the UK?' }))).toBe(false);
+    expect(needsSuggestion(row({ group: 'details', purpose: 'needs_sponsorship', label: 'Will you need sponsorship?' }))).toBe(true);
+    // Listed for the person even when the form doesn't require it.
+    expect(needsYou([row({ id: 'x', abroad: true, required: false, note: 'for work in Japan: answer it yourself' })]).map((r) => r.id)).toEqual(['x']);
   });
 
   it('never asks the AI about self-identification or who referred the user', () => {
