@@ -695,10 +695,10 @@ describe('AI answers that cannot be right', () => {
     fakeBackground();
     const sent = { state: 'marked' as const, job: { id: 9, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved' };
     const { container } = render(<App handle={{ ...handle('form'), submitted: sent }} show={show()} />);
-    expect(await screen.findByRole('alertdialog', { name: 'Job applied' })).toBeTruthy();
+    expect(await screen.findByRole('status', { name: 'Job applied' })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'Wera' })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'OK' }));
-    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('status', { name: 'Job applied' })).toBeNull();
     expect(container).toBeEmptyDOMElement();
   });
 
