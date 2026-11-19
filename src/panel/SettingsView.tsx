@@ -93,7 +93,7 @@ export function SettingsView({ api, settings, setSettings, onSignedOut, onClose,
       </Group>
       <Group title="After you apply">
         <Toggle label="Mark applied when the site confirms" hint={'"Thank you for applying" moves the job to Applied.'} on={settings.autoApplied} set={(v) => setSettings({ autoApplied: v })} />
-        <Toggle label="Close the tab after applying" hint="Once the site confirms, Wera says so, then closes the tab." on={settings.closeAfterApply} set={(v) => setSettings({ closeAfterApply: v })} />
+        <Toggle label="Close the tab after applying" hint="Once the site confirms, Wera says so, then closes the tab after a few seconds." on={settings.closeTabAfterApply} set={(v) => setSettings({ closeTabAfterApply: v })} />
       </Group>
       <Group title="Where Wera shows">
         <Toggle label="On job pages" hint="Off: open it from the toolbar icon (Alt+Shift+W)." on={settings.launcher} set={(v) => setSettings({ launcher: v })} />

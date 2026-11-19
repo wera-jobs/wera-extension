@@ -5,8 +5,11 @@ export interface Settings {
   launcher: boolean;
   /** Move the job to Applied when the site confirms the application. */
   autoApplied: boolean;
-  /** After the site confirms an application the user just sent: say so on the page, then close the tab. */
-  closeAfterApply: boolean;
+  /**
+   * After the site confirms an application the user just sent, close the tab. Off unless the
+   * user turns it on (a new name, so the old setting, on for everyone, does not carry over).
+   */
+  closeTabAfterApply: boolean;
   /** Ask the AI for fields Wera could not fill from what it knows. */
   aiSuggest: boolean;
   /** Fill each new step of an application Wera has started filling, as soon as it appears. */
@@ -21,7 +24,7 @@ export interface Settings {
   debug: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { launcher: true, autoApplied: true, closeAfterApply: true, aiSuggest: true, autoContinue: true, learn: true, aiQuestions: true, assist: true, debug: false };
+export const DEFAULT_SETTINGS: Settings = { launcher: true, autoApplied: true, closeTabAfterApply: false, aiSuggest: true, autoContinue: true, learn: true, aiQuestions: true, assist: true, debug: false };
 
 export const SETTINGS_KEY = 'wera.settings';
 

@@ -1,10 +1,11 @@
-// The alert after the user sends an application and the site confirms
-// it: "Job applied", what Wera did (marked Applied, added it, or could not
-// find it), a short countdown, then Wera leaves the page, or the tab
-// closes when the user wants that. Hovering over the alert pauses the
-// countdown; "Undo" and the next match are there meanwhile.
+// The note after the user sends an application and the site confirms it:
+// "Job applied" and what Wera did (marked Applied, added it, or could not
+// find it), in a corner of the page, never over it. It goes by itself
+// after a few seconds (longer with a next match to read), and Wera leaves
+// the page; the tab closes only when the user turned that on. Hovering or
+// focusing the note holds it; "Undo" and the next match are there meanwhile.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, CircleCheck } from 'lucide-react';
+import { ArrowRight, CircleCheck, X } from 'lucide-react';
 import type { WeraApi, WeraJob } from '../shared/api';
 import { describeError } from '../shared/errors';
 import type { SubmitReply } from '../shared/jobs';
@@ -12,10 +13,10 @@ import { log } from '../shared/log';
 import { rpc } from '../shared/rpc';
 import { Button } from './ui';
 
-/** Seconds the alert shows before Wera leaves (or the tab closes). */
-export const CLOSE_AFTER = 5;
+/** Seconds the note shows before Wera leaves (or the tab closes). */
+export const CLOSE_AFTER = 8;
 /** Seconds when it offers a next match: there is more to read and decide. */
-export const CLOSE_WITH_NEXT = 12;
+export const CLOSE_WITH_NEXT = 15;
 
 export type Confirmed = Exclude<SubmitReply, { state: 'off' }>;
 
@@ -66,7 +67,7 @@ export function NextMatch({ job, onOpen }: { job: WeraJob; onOpen: () => void })
 }
 
 /**
- * `onDone`: the countdown ran out or the user dismissed it; the panel
+ * `onDone`: the time ran out or the user dismissed it; the panel
  * leaves the page (the tab closes first when `reply.close`). `onUndo`
  * puts the job back where it was, for a job Wera just marked; after it
  * `onStay` closes the alert and the panel stays.
@@ -112,13 +113,6 @@ export function AppliedAlert({ api, reply, onDone, onUndo, onStay }: {
   useEffect(() => {
     if (left === 0 && !error && !undone) finish();
   }, [left, error, undone, finish]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') (undone ? (onStay ?? onDone) : onDone)();
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onDone, onStay, undone]);
 
   const undo = async () => {
     if (!onUndo) return;
@@ -130,41 +124,44 @@ export function AppliedAlert({ api, reply, onDone, onUndo, onStay }: {
     }
   };
 
+  // Only a closing tab is worth a countdown; otherwise the note just goes.
   const status = error || (undone ? 'Moved back. Wera stays on this page.'
-    : paused ? 'Paused while you read.'
-    : left > 0 ? (closeTab ? `Closing this tab in ${left} s…` : `Wera leaves this page in ${left} s…`) : 'Done.');
+    : closeTab ? (paused ? 'The tab stays open while you read.' : left > 0 ? `Closing this tab in ${left} s…` : 'Closing…') : '');
+  const dismiss = undone ? (onStay ?? onDone) : onDone;
 
   return (
-    <div className="fixed inset-0 z-[2147483647] grid place-items-center bg-black/30 p-4" onClick={(e) => e.target === e.currentTarget && (undone ? (onStay ?? onDone) : onDone)()}>
-      <div role="alertdialog" aria-modal="true" aria-labelledby="wera-applied-title" aria-describedby="wera-applied-detail"
-        onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
-        className="anim-rise panel-shadow w-[380px] max-w-full overflow-hidden rounded-card border border-border bg-bg">
-        <div className="flex gap-3 p-4">
-          <CircleCheck className="mt-0.5 size-7 shrink-0 text-good" />
-          <div className="min-w-0 flex-1">
-            <h2 id="wera-applied-title" className="text-base font-semibold">{undone ? 'Moved back' : title}</h2>
-            <p id="wera-applied-detail" className="mt-1 text-xs text-muted">{detail}</p>
-            <p className="mt-2 text-xs text-faint" aria-live="polite">{status}</p>
-          </div>
+    <section role="status" aria-labelledby="wera-applied-title" aria-describedby="wera-applied-detail"
+      // Escape dismisses it from inside; on the page, Escape is the site's.
+      onKeyDown={(e) => e.key === 'Escape' && dismiss()}
+      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setPaused(false)}
+      className="anim-rise panel-shadow fixed right-4 bottom-4 z-[2147483647] w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-card border border-border bg-bg">
+      <div className="flex gap-2.5 p-3.5 pr-2.5">
+        <CircleCheck className="mt-px size-5 shrink-0 text-good" />
+        <div className="min-w-0 flex-1">
+          <h2 id="wera-applied-title" className="text-sm font-semibold">{undone ? 'Moved back' : title}</h2>
+          <p id="wera-applied-detail" className="mt-0.5 text-xs text-muted">{detail}</p>
+          {status && <p className="mt-1.5 text-xs text-faint" aria-live="polite">{status}</p>}
         </div>
-        {next && !undone && <div className="px-4 pb-3"><NextMatch job={next} onOpen={openNext} /></div>}
-        <div className="h-1 bg-surface-2">
-          <div className="h-full bg-good transition-[width] duration-1000 ease-linear" style={{ width: `${undone ? 0 : (left / total) * 100}%` }} />
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border bg-surface px-4 py-3">
+        <button type="button" aria-label="Dismiss" onClick={dismiss}
+          className="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-surface-2 hover:text-text">
+          <X className="size-3.5" />
+        </button>
+      </div>
+      {next && !undone && <div className="px-3.5 pb-3"><NextMatch job={next} onOpen={openNext} /></div>}
+      {((reply.state === 'marked' && onUndo && !undone) || closeTab || undone) && (
+        <div className="flex items-center justify-end gap-2 border-t border-border bg-surface px-3.5 py-2">
           {reply.state === 'marked' && onUndo && !undone && (
             <button type="button" className="mr-auto text-xs text-faint hover:text-text" onClick={() => void undo()}>Undo</button>
           )}
-          {undone ? <Button variant="primary" autoFocus onClick={onStay ?? onDone}>OK</Button> : closeTab ? (
+          {undone ? <Button onClick={dismiss}>OK</Button> : closeTab && (
             <>
               <Button onClick={onDone}>Keep this tab</Button>
-              <Button variant="primary" autoFocus onClick={finish}>Close now</Button>
+              <Button variant="primary" onClick={finish}>Close now</Button>
             </>
-          ) : (
-            <Button variant="primary" autoFocus onClick={finish}>OK</Button>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 }

@@ -169,7 +169,7 @@ async function submitted(api: WeraApi, tabId: number, url: string, tabUrl = url)
   const formSeen = !!seen?.formAt && Date.now() - seen.formAt < FORM_TTL && sameApplication(seen, url, tabUrl);
   if (!settings.autoApplied || (!flow && !formSeen)) return { state: 'off' };
   const sent = !!seen?.sentAt && Date.now() - seen.sentAt < SEND_TTL;
-  const close = sent && settings.closeAfterApply;
+  const close = sent && settings.closeTabAfterApply;
   if (sent) await notePage(tabId, { sentAt: 0 });
   let job = (await resolveJob(api, tabId, url)) ?? (tabUrl !== url ? await resolveJob(api, tabId, tabUrl) : null);
   let added = false;
