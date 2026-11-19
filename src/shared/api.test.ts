@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, WeraApi } from './api';
+import { ApiError, splitNeedsInput, WeraApi } from './api';
 import { normalizeServer } from './storage';
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -144,5 +144,13 @@ describe('the next best match', () => {
 
   it('is nothing when nothing is left', async () => {
     await expect(api([job(1)]).nextMatch(1)).resolves.toBeNull();
+  });
+});
+
+describe('the AI request marker', () => {
+  it('splits a reply into the text for the form and what it asks the person for', () => {
+    expect(splitNeedsInput('Mostly internal work. NEEDS_INPUT: links to public PRs')).toEqual(['Mostly internal work.', 'links to public PRs']);
+    expect(splitNeedsInput('Needs input: your notice period')).toEqual(['', 'your notice period']);
+    expect(splitNeedsInput('A plain answer.')).toEqual(['A plain answer.', '']);
   });
 });
