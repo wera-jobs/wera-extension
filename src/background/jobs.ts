@@ -8,7 +8,7 @@ import { learnedDetails } from '../shared/details';
 import type { LearnedAnswer } from '../shared/learn';
 import { briefOf, PAST_APPLIED, type JobConfirmed, type JobRequest, type JobContext, type SubmitReply } from '../shared/jobs';
 import { log } from '../shared/log';
-import { loadFlow } from '../shared/flow';
+import { loadFlow, saveFlow } from '../shared/flow';
 import { loadSettings } from '../shared/settings';
 import { loadSession, notePage, rememberTabJob, tabJob, tabPages as pages } from '../shared/storage';
 import { hostOf, originOf, siteOf } from '../shared/url';
@@ -79,6 +79,12 @@ export async function handleJobRequest(msg: JobRequest, tabId: number, tabUrl: s
     case 'wera:job-sending':
       await notePage(tabId, { sentAt: Date.now() });
       return true;
+    case 'wera:job-continuing': {
+      const host = hostOf(tabUrl);
+      const flow = host ? await loadFlow(tabId, host) : null;
+      if (flow) await saveFlow(tabId, { ...flow, continuing: true, pages: flow.pages + 1, at: Date.now() });
+      return true;
+    }
     case 'wera:job-submitted': {
       const reply: SubmitReply = api ? await submitted(api, tabId, msg.url, tabUrl) : { state: 'off' };
       // A form embedded from its ATS confirmed: the panel (top frame) says so.
