@@ -193,5 +193,14 @@ describe('job requests in the background', () => {
     ] }, TAB, URL1);
     expect(keys).toEqual(['gender', 'phone']);
     expect(saved).toMatchObject({ first_name: 'Ada', gender: 'Female', race: 'White', veteran: '', phone: '512 555 0142' });
+    expect((chrome.storage.session.remove as ReturnType<typeof vi.fn>).mock.calls).toContainEqual(['wera.profileCache']);
+  });
+
+  it('keeps job context across cross-origin Apply redirects to an ATS matching the company or role', async () => {
+    setup();
+    const lookups = fetch as unknown as ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>;
+    lookups.mockImplementation((url) => Promise.resolve(new Response(JSON.stringify(url.includes(encodeURIComponent(URL1)) ? { job: base } : { job: null }), { status: 200 })));
+    const workdayUrl = 'https://acme.wd5.myworkdayjobs.com/en-US/Careers/job/SRE/apply';
+    expect(await handleJobRequest({ type: 'wera:job-resolve', url: workdayUrl, title: 'SRE - Acme', referrer: URL1 }, 8, workdayUrl)).toMatchObject({ id: 9 });
   });
 });
