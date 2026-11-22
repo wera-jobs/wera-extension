@@ -40,6 +40,8 @@ const SCORE_WAIT = 3000;
 export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames = 0) {
   const [state, setState] = useState<PanelPage>({ handle, info: null, job: null, loading: true, error: '', newStep: 0, submitted: handle.submitted, form: null });
   const run = useRef(0);
+  const hasFormRef = useRef(false);
+  hasFormRef.current = !!state.info?.hasForm;
 
   const refresh = useCallback(async () => {
     const mine = ++run.current;
@@ -85,8 +87,14 @@ export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames =
         setState((s) => ({ ...s, job: msg.job }));
       } else if (msg?.type === 'wera:frame-event') {
         const e = msg.event;
-        if (e.type === 'wera:form-changed' && e.step) setState((s) => ({ ...s, newStep: e.fields }));
-        else if (e.type === 'wera:navigated') {
+        if (e.type === 'wera:form-changed') {
+          if (e.step) setState((s) => ({ ...s, newStep: e.fields }));
+          // A form appeared on the same URL (tab, modal, drawer, SPA step) while the panel was still in posting mode.
+          if (!hasFormRef.current && e.fields > 0) {
+            window.clearTimeout(later.current);
+            later.current = window.setTimeout(() => void refresh(), 250);
+          }
+        } else if (e.type === 'wera:navigated') {
           window.clearTimeout(later.current);
           later.current = window.setTimeout(() => void refresh(), 600);
         }
