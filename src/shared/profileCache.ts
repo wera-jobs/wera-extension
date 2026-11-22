@@ -17,7 +17,7 @@ export interface ProfileCache {
 }
 
 export async function loadProfileCache(server: string, now = Date.now()): Promise<{ view: ApplicantView; saved: SavedAnswer[] } | null> {
-  const got = await chrome.storage.session.get(KEY).catch((): Record<string, unknown> => ({}));
+  const got = (await chrome.storage?.session?.get(KEY).catch((): Record<string, unknown> => ({}))) ?? {};
   const entry = got[KEY] as ProfileCache | undefined;
   if (!entry || entry.server !== server || now - entry.at >= TTL_MS) return null;
   return { view: entry.view, saved: entry.saved };
@@ -25,9 +25,9 @@ export async function loadProfileCache(server: string, now = Date.now()): Promis
 
 export async function saveProfileCache(server: string, view: ApplicantView, saved: SavedAnswer[], now = Date.now()): Promise<void> {
   const entry: ProfileCache = { server, at: now, view, saved };
-  await chrome.storage.session.set({ [KEY]: entry }).catch(() => {});
+  await chrome.storage?.session?.set({ [KEY]: entry }).catch(() => {});
 }
 
 export async function clearProfileCache(): Promise<void> {
-  await chrome.storage.session.remove?.(KEY).catch(() => {});
+  await chrome.storage?.session?.remove?.(KEY).catch(() => {});
 }
