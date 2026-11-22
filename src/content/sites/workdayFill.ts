@@ -226,7 +226,9 @@ async function skills(input: HTMLInputElement, value: string): Promise<string | 
 
 /** One part of a split date box: the month, day or year of value ("2026-10-22", "2024-06", "2023"). */
 export function datePartValue(el: HTMLElement, value: string): string | null {
-  const part = /dateSection(Month|Day|Year)/i.exec(el.getAttribute('data-automation-id') ?? '')?.[1]?.toLowerCase();
+  const auto = el.getAttribute('data-automation-id') ?? '';
+  const part = /dateSection(Month|Day|Year)/i.exec(auto)?.[1]?.toLowerCase()
+    ?? (el.getAttribute('role') === 'spinbutton' ? /\b(month|day|year)\b/i.exec(el.getAttribute('aria-label') ?? '')?.[1]?.toLowerCase() : undefined);
   if (!part) return null;
   const m = /^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/.exec(value.trim());
   if (!m) return /^\d{1,4}$/.test(value.trim()) ? value.trim() : null; // already one part (a block's month or year)
@@ -236,19 +238,41 @@ export function datePartValue(el: HTMLElement, value: string): string | null {
   return d ? d.padStart(2, '0') : null;
 }
 
+function setInputRaw(el: HTMLInputElement, val: string) {
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- native setter called on el
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (setter) setter.call(el, val);
+  else el.value = val;
+}
+
 async function datePart(el: HTMLInputElement, value: string): Promise<string | null> {
   const v = datePartValue(el, value);
   if (!v) return null;
   focusField(el);
   pointer(el);
-  setNativeValue(el, v);
-  // Workday's date boxes take typed digits.
+  // Set value and dispatch InputEvent without blurring first: Workday's spinbutton
+  // validates on blur and clears the box if React state has not synced yet.
+  setInputRaw(el, v);
+  el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: v }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  await wait(20);
+  // If the widget ignored bulk input, type the digits one by one.
   if (el.value.replace(/^0+/, '') !== v.replace(/^0+/, '')) {
-    for (const ch of v) for (const type of ['keydown', 'keypress', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: ch, code: `Digit${ch}`, bubbles: true }));
+    let typed = '';
+    for (const ch of v) {
+      typed += ch;
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: `Digit${ch}`, bubbles: true, cancelable: true }));
+      el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: ch }));
+      setInputRaw(el, typed);
+      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: `Digit${ch}`, bubbles: true }));
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   }
   el.dispatchEvent(new Event('blur', { bubbles: true }));
+  el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
   await wait(40);
-  return el.value ? el.value : null;
+  return /\d/.test(el.value) ? el.value : null;
 }
 
 /** Fills a Workday field its own way: the value it now shows, null when it did not take, undefined to leave it to the general filler. */
@@ -257,6 +281,8 @@ export async function fillWorkday(f: Field, purpose: FieldPurpose | null, value:
   if (f.kind === 'combobox' && isWorkdayPrompt(f.el)) {
     return purpose === 'skills' ? skills(f.el as HTMLInputElement, value) : prompt(f.el as HTMLInputElement, value, purpose);
   }
-  if (f.el instanceof HTMLInputElement && /dateSection(Month|Day|Year)/i.test(f.el.getAttribute('data-automation-id') ?? '')) return datePart(f.el, value);
+  if (f.el instanceof HTMLInputElement && (/dateSection(Month|Day|Year)/i.test(f.el.getAttribute('data-automation-id') ?? '') || (f.el.getAttribute('role') === 'spinbutton' && datePartValue(f.el, value) != null))) {
+    return datePart(f.el, value);
+  }
   return undefined;
 }
