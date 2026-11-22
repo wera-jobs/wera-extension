@@ -63,6 +63,13 @@ describe('job requests in the background', () => {
     expect(session['wera.tabPages']).toMatchObject({ [TAB]: { formAt: expect.any(Number) } });
   });
 
+  it('marks an active autofill flow as continuing when the user clicks the site Next button', async () => {
+    const { session } = setup();
+    session['wera.flows'] = { [TAB]: { runId: 5, host: 'jobs.example', jobId: 9, pages: 1, continuing: false, at: Date.now() } };
+    expect(await handleJobRequest({ type: 'wera:job-continuing' }, TAB, `${URL1}/apply`)).toBe(true);
+    expect((session['wera.flows'] as Record<number, { continuing: boolean; pages: number }>)[TAB]).toMatchObject({ continuing: true, pages: 2 });
+  });
+
   it('knows an application by the posting that led to it, and remembers the job a panel saved', async () => {
     setup();
     // Only the posting's address is in Wera: the form page finds its job through the page it came from.

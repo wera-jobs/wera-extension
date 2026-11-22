@@ -109,7 +109,11 @@ function SignedOut(props: PanelProps & { kind: 'form' | 'posting' | null }) {
 function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | null }) {
   const { api, page, kind } = props;
   const [forceFormUrl, setForceFormUrl] = useState('');
-  const viewKind = kind === 'form' || forceFormUrl === location.href ? 'form' : kind;
+  const [stickyFormHost, setStickyFormHost] = useState('');
+  // Keep Apply mounted during transient loading/spinner states between multi-page ATS steps (e.g. Workday).
+  if (kind === 'form' && stickyFormHost !== location.host) setStickyFormHost(location.host);
+  else if (kind === 'posting' && stickyFormHost) setStickyFormHost('');
+  const viewKind = kind === 'form' || forceFormUrl === location.href || (kind === null && stickyFormHost === location.host) ? 'form' : kind;
   // An application has no Save button: the job is saved for its fit score from the keyword card,
   // as the page's own data names it, else as the AI reads it off the page (as a fill saves it).
   const scoreJob = async () => {

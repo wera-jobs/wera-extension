@@ -182,6 +182,7 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     const text = (b instanceof HTMLInputElement ? b.value : b.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (!MOVES_ON.test(text)) return;
     if (SENDS.test(text)) void ask({ type: 'wera:job-sending' });
+    else void ask({ type: 'wera:job-continuing' });
     // Read now: the page may be gone a moment later.
     const snap = snapshot(doc);
     const entries = formDetails(doc, snap);
