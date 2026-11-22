@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.19.3](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.2...wera-extension-v0.19.3) (2026-11-22)
+
+
+### Bug Fixes
+
+* **assist:** invalidate SPA job context and avoid DOM mutation on focus ([edc69ac](https://github.com/wera-jobs/wera-extension/commit/edc69ac6e465821eed31e4d3243cdc7c0382da4f))
+* **autofill:** clear watchUser on blur and verify file uploads before marking filled ([1ffa976](https://github.com/wera-jobs/wera-extension/commit/1ffa9767eb7e89ac689923c5e8f274422e49fc24))
+* **background:** preserve job context across cross-origin Apply redirects and clear profileCache after learning ([9b4be2b](https://github.com/wera-jobs/wera-extension/commit/9b4be2b6d7e026a3dfb0367cbef0f9c0b26b691a))
+* **match:** handle parenthetical acronyms in proper names and between-range values ([a302b1d](https://github.com/wera-jobs/wera-extension/commit/a302b1d06ecaf4e02ca6acb40f5806c8fecf9ac0))
+
 ## [0.19.2](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.1...wera-extension-v0.19.2) (2026-11-22)
 
 
