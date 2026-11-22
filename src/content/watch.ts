@@ -63,7 +63,7 @@ export function looksSubmitted(text: string): boolean {
 
 /** The fillable fields now on the page, as a signature that changes when a new step appears. */
 export function formSignature(doc: Document): { count: number; key: string; labels: string[] } {
-  const labels = collectFields(doc).filter((f) => classify(f) !== null).map((f) => f.label);
+  const labels = collectFields(doc, undefined, true).filter((f) => classify(f) !== null).map((f) => f.label);
   return { count: labels.length, key: labels.join('|'), labels };
 }
 

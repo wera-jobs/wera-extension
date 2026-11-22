@@ -270,7 +270,7 @@ export function ownApplicationForm(doc: Document): boolean {
   const applicantSite = atsSite || isJobUrl(url);
   // Cheap: most pages have no form, and web components only hide fields on systems Wera knows.
   if (!applicantSite && doc.querySelectorAll('input, select, textarea').length < 2) return false;
-  const raw = collectFields(doc);
+  const raw = collectFields(doc, undefined, true);
   const fields = raw.map(classify);
   const known = fields.filter((p) => p !== null && p !== 'question' && p !== 'consent').length;
   // Some systems start with nothing but the applicant's email (Oracle, iCIMS).
