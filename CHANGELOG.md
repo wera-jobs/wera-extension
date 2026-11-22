@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.19.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.0...wera-extension-v0.19.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **deps:** bump lucide-react ([3792285](https://github.com/wera-jobs/wera-extension/commit/37922857741b9115cb7ccad1f53b42752da09ed8))
+* **deps:** bump lucide-react from 1.70.0 to 1.75.0 in the production group across 1 directory ([d990b3b](https://github.com/wera-jobs/wera-extension/commit/d990b3ba45620effe5978fdb1d2b1194896daa14))
+* **hydration:** avoid DOM mutations during passive form detection ([aa12e63](https://github.com/wera-jobs/wera-extension/commit/aa12e63c94218d2dbbaace22c134ca265a40c810)), closes [#179](https://github.com/wera-jobs/wera-extension/issues/179)
+* **panel:** keep autofill reachable after Apply and improve form detection ([92f00a8](https://github.com/wera-jobs/wera-extension/commit/92f00a83521b380c364b8dfc8050e98d58786db9))
+
+
+### Performance
+
+* **autofill:** cache applicant details and saved answers in session storage ([5182035](https://github.com/wera-jobs/wera-extension/commit/51820359d607641ecc2b42d3d72eb30b45fbe377)), closes [#149](https://github.com/wera-jobs/wera-extension/issues/149)
+
+
+### Documentation
+
+* **readme:** make README more concise and scannable ([96c7b80](https://github.com/wera-jobs/wera-extension/commit/96c7b80b1ec48c88b38bebd472d17f45b4be0054))
+
 ## [0.19.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.18.0...wera-extension-v0.19.0) (2026-11-19)
 
 
