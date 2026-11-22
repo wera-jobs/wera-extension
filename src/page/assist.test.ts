@@ -131,6 +131,36 @@ describe('the Wera button', () => {
     await vi.waitFor(() => expect(shadow()!.querySelector('.draft')!.textContent).toBe('Draft for job 2'));
     expect(ctxCalls).toBe(2);
   });
+
+  it('offers one-click inline quick-fill on empty profile fields without drafting', async () => {
+    const send = chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn<(m: { type: string; method?: string; args?: unknown[] }) => Promise<unknown>>>;
+    send.mockImplementation(async (m) => {
+      if (m.type === 'wera:api' && m.method === 'applicant') {
+        return {
+          ok: true,
+          value: {
+            applicant: { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com', phone: '512-555-0142', linkedin: 'https://linkedin.com/in/ada' },
+            saved: true,
+            sources: {},
+            experience: [],
+            education: [],
+            skills: [],
+          },
+        };
+      }
+      return null;
+    });
+    const email = document.querySelector<HTMLInputElement>('#em')!;
+    email.focus();
+    await vi.waitFor(() => expect(button('Fill from your Wera profile')).toBeTruthy());
+    button('Fill from your Wera profile')!.click();
+    await vi.waitFor(() => expect(shadow()!.querySelector('.qf-row.best')).toBeTruthy());
+    const best = shadow()!.querySelector<HTMLButtonElement>('.qf-row.best')!;
+    expect(best.textContent).toContain('ada@example.com');
+    best.click();
+    expect(email.value).toBe('ada@example.com');
+    expect(shadow()!.querySelector('.pop')).toBeNull();
+  });
 });
 
 describe('looking at a focused box', () => {

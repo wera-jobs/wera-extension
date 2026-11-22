@@ -8,8 +8,10 @@ import type { FieldPurpose } from '../../shared/types';
 import type { Field } from '../fields';
 import { ashby } from './ashby';
 import { greenhouse } from './greenhouse';
+import { indeed } from './indeed';
 import { jobvite } from './jobvite';
 import { lever } from './lever';
+import { linkedin } from './linkedin';
 import { workable } from './workable';
 import { workday } from './workday';
 
@@ -41,7 +43,7 @@ export interface Site {
   noBlocks?: boolean;
 }
 
-const SITES: Site[] = [workday, greenhouse, lever, ashby, jobvite, workable];
+const SITES: Site[] = [workday, greenhouse, lever, ashby, jobvite, workable, linkedin, indeed];
 
 /** The site rules for a document, if Wera has some. Not remembered: a single-page site can change what it shows. */
 export function siteFor(doc: Document): Site | null {

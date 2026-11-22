@@ -23,7 +23,7 @@ function typeSearch(el: HTMLInputElement, value: string) {
 }
 
 /** Sets a value the way typing would, so React/Vue/Angular forms see it. */
-export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string, blur = true) {
   const proto = Object.getPrototypeOf(el) as object;
   // The prototype's native setter, called on el: it bypasses the
   // framework's own value tracking so the events below register.
@@ -32,9 +32,14 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement | HTML
   el.focus?.();
   if (setter) setter.call(el, value);
   else el.value = value;
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-  el.dispatchEvent(new Event('blur', { bubbles: true }));
+  const inputEv = el instanceof HTMLSelectElement
+    ? new Event('input', { bubbles: true })
+    : new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value });
+  el.dispatchEvent(inputEv);
+  if (blur) {
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
 }
 
 function check(input: HTMLInputElement) {
@@ -46,10 +51,15 @@ function check(input: HTMLInputElement) {
   }
 }
 
-/** A click as a pointer makes it: some widgets open or pick on mousedown, others on click. */
+/** A click as a pointer makes it: React-Select v5, Radix, and Workday listen for pointer and mouse events with button 0. */
 export function press(el: HTMLElement) {
-  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  const r = el.getBoundingClientRect();
+  const at = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+  const Pointer = typeof PointerEvent === 'function' ? PointerEvent : MouseEvent;
+  el.dispatchEvent(new Pointer('pointerdown', { ...at, pointerType: 'mouse', isPrimary: true }));
+  el.dispatchEvent(new MouseEvent('mousedown', at));
+  el.dispatchEvent(new Pointer('pointerup', { ...at, pointerType: 'mouse', isPrimary: true }));
+  el.dispatchEvent(new MouseEvent('mouseup', at));
   el.click();
 }
 
@@ -77,7 +87,9 @@ export function wait(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** The visible options of an open dropdown: its own list when it names one, else any listbox on the page. */
+const OPTION_SEL = '[role="option"], [data-automation-id="promptOption"], [class*="select__option"], [id*="-option-"], [data-radix-collection-item]';
+
+/** The visible options of an open dropdown: its own list when it names one, else any listbox or react-select portal on the page. */
 function openOptions(el: HTMLElement): (Option & { node: HTMLElement })[] {
   const scope = scopeOf(el);
   const doc = el.ownerDocument;
@@ -87,13 +99,17 @@ function openOptions(el: HTMLElement): (Option & { node: HTMLElement })[] {
   if (own) lists.push(own);
   else {
     // The list beside the field (a Workday prompt's results), then the newest popup
-    // (Workday adds it at the end of the page), then any list on the page.
+    // (Workday/React-Select/Radix add portals at the end of the page), then any list on the page.
     const field = el.closest('[data-uxi-widget-type], [data-automation-id^="formField"]');
     if (field) lists.push(field);
-    lists.push(...[...doc.querySelectorAll('[data-automation-widget="wd-popup"]')].reverse(), ...[...doc.querySelectorAll('[role="listbox"]')].reverse(), scope);
+    lists.push(
+      ...[...doc.querySelectorAll('[data-automation-widget="wd-popup"], [class*="select__menu"], [class*="menu-portal"], [data-radix-popper-content-wrapper]')].reverse(),
+      ...[...doc.querySelectorAll('[role="listbox"]')].reverse(),
+      scope,
+    );
   }
   for (const list of lists) {
-    const nodes = [...list.querySelectorAll<HTMLElement>('[role="option"], [data-automation-id="promptOption"]')].filter((o) => o.getAttribute('aria-disabled') !== 'true' && !isHidden(o));
+    const nodes = [...list.querySelectorAll<HTMLElement>(OPTION_SEL)].filter((o) => o.getAttribute('aria-disabled') !== 'true' && !isHidden(o));
     if (nodes.length) return nodes.map((node) => ({ label: (node.textContent ?? '').trim(), value: '', node }));
   }
   return [];
@@ -179,8 +195,11 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
   const searches = alternatives(value).map((alt) => searchText(alt, purpose));
   const prompt = isWorkdayPrompt(el);
   const typedFirst = searches.length === 1 && searches[0]!.length <= 24;
+  const control = !prompt ? el.closest<HTMLElement>('[class*="select__control"], [class*="control"]') : null;
   for (const typed of [...new Set(typedFirst ? [searches[0]!, ''] : ['', ...searches])]) {
     focusField(el);
+    // Embedded React-Select v5 (Stripe/Greenhouse) often only opens its menu on pointerdown on the control wrapper.
+    if (control && !openOptions(el).length) press(control);
     typeSearch(el, typed);
     // A Workday prompt searches when Enter is pressed; elsewhere Enter would pick the first choice.
     if (prompt) for (const type of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
@@ -189,7 +208,7 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     if (!hit) continue;
     await wait(60);
     if (!comboboxChoice(el) && hit.node.isConnected) {
-      hit.node.click();
+      press(hit.node);
       await wait(60);
     }
     if (comboboxChoice(el)) return hit.label;
@@ -373,6 +392,14 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
         return;
       }
       setNativeValue(el, shaped);
+      // Controlled React inputs (e.g. Duolingo) can clear the box when blur fires synchronously before
+      // React flushes the input state update: retry with a brief settle before change/blur.
+      if (!el.value.trim()) {
+        setNativeValue(el, shaped, false);
+        await wait(40);
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
+      }
       // Date part boxes (Workday's month and year) also listen for the digits being typed.
       if (el.getAttribute('role') === 'spinbutton') {
         for (const key of shaped) for (const type of ['keydown', 'keypress', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key, code: /\d/.test(key) ? `Digit${key}` : key, bubbles: true }));
