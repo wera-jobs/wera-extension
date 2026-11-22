@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.19.2](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.1...wera-extension-v0.19.2) (2026-11-22)
+
+
+### Bug Fixes
+
+* **autofill:** verify combobox widgets keep their selected option ([38da73b](https://github.com/wera-jobs/wera-extension/commit/38da73b19215636456f0100e9277ba31cc8f030d))
+* **autofill:** wait for slow ATS add-blocks to render before scanning ([c346f68](https://github.com/wera-jobs/wera-extension/commit/c346f6892c4c94147b8aad7f9affd4dba793e058))
+* **panel:** display Wera's stored company logo before scraping the page ([e19ac01](https://github.com/wera-jobs/wera-extension/commit/e19ac0144c496a140d24c221ecd37a63c74fdbef))
+* **workday:** continue autofilling across multi-page steps and spinners ([26bab9f](https://github.com/wera-jobs/wera-extension/commit/26bab9f1b5c327919636970bbc3763acecda7a84))
+* **workday:** fill start and end dates inside fieldsets and spinbuttons ([81204da](https://github.com/wera-jobs/wera-extension/commit/81204dafde857a234427742a35295ed4f8e3da39))
+
 ## [0.19.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.0...wera-extension-v0.19.1) (2026-11-22)
 
 
