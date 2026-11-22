@@ -224,6 +224,25 @@ describe('fillForm on harder forms', () => {
     expect(out.find((r) => r.label === 'School')).toMatchObject({ status: 'review', note: 'pick the matching option' });
     expect((document.getElementById('sch') as HTMLInputElement).value).toBe('');
   });
+
+  it('marks a combobox for review when clicking the option does not stick', async () => {
+    document.body.innerHTML = `
+      <div><label for="st">State</label><div class="select__control">
+        <input id="st" role="combobox" aria-autocomplete="list" aria-controls="st-list">
+      </div><ul id="st-list" role="listbox"></ul></div>`;
+    const input = document.getElementById('st') as HTMLInputElement;
+    const list = document.getElementById('st-list')!;
+    input.addEventListener('input', () => {
+      list.innerHTML = '<li role="option">Texas</li><li role="option">California</li>';
+    });
+    // Simulate a widget that clears the input on option mousedown/click without committing a selection.
+    list.addEventListener('click', () => {
+      input.value = '';
+      list.innerHTML = '';
+    });
+    const out = await fillForm(document, ada, {});
+    expect(out.find((r) => r.label === 'State')).toMatchObject({ status: 'review', note: 'pick the matching option' });
+  });
 });
 
 describe('comboboxChoice', () => {
