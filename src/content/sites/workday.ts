@@ -67,8 +67,8 @@ const NAMES: [RegExp, FieldPurpose | ((f: Field) => FieldPurpose | null | undefi
   [/firstyearattended\b/, 'edu_start'],
   [/lastyearattended\b/, 'edu_end'],
   // Names whose meaning depends on the block they sit in.
-  [/(^|[\s_-])startdate\b/, (f) => (f.section === 'education' ? 'edu_start' : f.section === 'experience' ? 'exp_start' : undefined)],
-  [/(^|[\s_-])enddate\b/, (f) => (f.section === 'education' ? 'edu_end' : f.section === 'experience' ? 'exp_end' : undefined)],
+  [/(^|[\s_-])startdate\b/, (f) => (f.section === 'education' || /education/i.test(workdayKey(f.el)) ? 'edu_start' : f.section === 'experience' || /workexperience/i.test(workdayKey(f.el)) ? 'exp_start' : undefined)],
+  [/(^|[\s_-])enddate\b/, (f) => (f.section === 'education' || /education/i.test(workdayKey(f.el)) ? 'edu_end' : f.section === 'experience' || /workexperience/i.test(workdayKey(f.el)) ? 'exp_end' : undefined)],
   [/(^|[\s_-])description\b/, (f) => (f.section === 'experience' ? 'exp_description' : undefined)],
   [/(^|[\s_-])location\b/, (f) => (f.section === 'experience' ? 'exp_location' : undefined)],
   [/(^|[\s_-])(country|countrydropdown)\b|address(section)?[-_]+country\b|country--country\b/, 'country'],

@@ -23,16 +23,19 @@ function headingText(el: Element): string {
 /** The section a field sits in, from its blocks' ids (Workday's "workExperience-3") or the nearest heading above it. */
 export function sectionOf(el: HTMLElement): Section | null {
   let n: Element | null = el.parentElement;
-  for (let depth = 0; n && depth < 12; depth++, n = n.parentElement) {
+  for (let depth = 0; n && depth < 18; depth++, n = n.parentElement) {
     const attrs = `${n.id} ${n.getAttribute('data-automation-id') ?? ''} ${n.getAttribute('data-section') ?? ''} ${n.getAttribute('name') ?? ''}`;
     if (EDU_ATTR.test(attrs)) return 'education';
     if (EXP_ATTR.test(attrs) && !/years/i.test(attrs)) return 'experience';
     // The nearest heading decides: one that opens this block, or one just before it.
+    // Field-level legends ("From", "To", "Start Date") are not section headings: keep walking up.
     const own = n.querySelector(':scope > ' + HEADINGS.split(', ').join(', :scope > '));
     const h = own ?? siblingsBefore(n)[0];
     if (h) {
       const t = headingText(h);
-      return EDU_HEAD.test(t) ? 'education' : EXP_HEAD.test(t) ? 'experience' : null;
+      if (EDU_HEAD.test(t)) return 'education';
+      if (EXP_HEAD.test(t)) return 'experience';
+      if (h.tagName !== 'LEGEND') return null;
     }
     if (n.tagName === 'FORM' || n.tagName === 'BODY') break;
   }
@@ -57,7 +60,10 @@ function siblingsBefore(el: Element): Element[] {
 /** Which part of a date a box takes when it takes only one ("MM", "Year"). */
 export function datePart(f: Field): 'month' | 'year' | null {
   const el = f.el;
-  const own = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('placeholder') ?? ''} ${f.hints} ${f.label}`.toLowerCase();
+  const auto = el.getAttribute('data-automation-id') ?? '';
+  if (/dateSectionMonth/i.test(auto)) return 'month';
+  if (/dateSectionYear/i.test(auto)) return 'year';
+  const own = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('placeholder') ?? ''} ${auto} ${f.hints} ${f.label}`.toLowerCase();
   if (/month/.test(own) || /^\s*mm\s*$/i.test(el.getAttribute('placeholder') ?? '')) return 'month';
   if (/\byear\b|dateSectionYear/i.test(own) || /^\s*yyyy\s*$/i.test(el.getAttribute('placeholder') ?? '')) return /mm|month/.test(own) ? null : 'year';
   return null;
