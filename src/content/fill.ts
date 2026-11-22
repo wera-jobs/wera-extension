@@ -112,7 +112,7 @@ function saysNoOptions(el: HTMLElement): boolean {
 }
 
 /** Waits up to ~2s (lists that search as you type load late) for an option that means value to show, then picks it. */
-async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null): Promise<string | null> {
+async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null): Promise<(Option & { node: HTMLElement }) | null> {
   const start = Date.now();
   let shownSince = 0;
   while (Date.now() - start < 2000) {
@@ -121,7 +121,7 @@ async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | 
     const hit = matchOption(options, value, purpose) as (Option & { node: HTMLElement }) | null;
     if (hit) {
       press(hit.node);
-      return hit.label;
+      return hit;
     }
     // A list that has shown its choices for a while without this one does not have it
     // ("Loading..." and "Searching..." rows are not choices yet).
@@ -145,7 +145,7 @@ export function comboboxChoice(el: HTMLInputElement): string {
     const shown = n.querySelector('[class*="singleValue"], [class*="single-value"], [class*="SingleValue"]');
     if (shown?.textContent?.trim()) return shown.textContent.trim();
     // A multi-select shows each choice as a chip (Greenhouse's demographic questions).
-    const chips = [...n.querySelectorAll('[class*="multi-value__label"], [class*="multiValueLabel"], [class*="MultiValueLabel"]')]
+    const chips = [...n.querySelectorAll('[class*="multi-value__label"], [class*="multiValueLabel"], [class*="MultiValueLabel"], [class*="Chip-label"]')]
       .map((c) => c.textContent?.trim() ?? '').filter(Boolean);
     if (chips.length) return chips.join(', ');
   }
@@ -172,7 +172,7 @@ function arrowDown(el: HTMLElement) {
   }
 }
 
-/** Searchable dropdowns: type, then pick the option that appears; else list everything and look. */
+/** Searchable dropdowns: type, then pick the option that appears and verify it kept the choice; else list everything and look. */
 async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldPurpose | null): Promise<string | null> {
   // A long answer ("No, I do not have a disability") is rarely worded the same in the list:
   // look through the whole list first, then search. Each alternative is searched in turn.
@@ -185,8 +185,14 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     // A Workday prompt searches when Enter is pressed; elsewhere Enter would pick the first choice.
     if (prompt) for (const type of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
     else arrowDown(el);
-    const got = await pickOpen(el, value, purpose);
-    if (got) return got;
+    const hit = await pickOpen(el, value, purpose);
+    if (!hit) continue;
+    await wait(60);
+    if (!comboboxChoice(el) && hit.node.isConnected) {
+      hit.node.click();
+      await wait(60);
+    }
+    if (comboboxChoice(el)) return hit.label;
   }
   // Leave no half-typed search behind.
   typeSearch(el, '');
@@ -198,9 +204,12 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
 async function fillListbox(el: HTMLElement, value: string, purpose: FieldPurpose | null): Promise<string | null> {
   focusField(el);
   press(el);
-  const got = await pickOpen(el, value, purpose);
-  if (!got) escape(el);
-  return got;
+  const hit = await pickOpen(el, value, purpose);
+  if (!hit) {
+    escape(el);
+    return null;
+  }
+  return hit.label;
 }
 
 /**
