@@ -18,6 +18,14 @@ describe("whose site a job page is on", () => {
 });
 
 describe("where a company's logo may be", () => {
+  it("prefers Wera's stored logo URL before scraping the page", () => {
+    const doc = page('https://jobs.example.com/1', '<script type="application/ld+json">{"@type":"JobPosting","hiringOrganization":{"name":"Acme","logo":"https://cdn.example.com/acme.png"}}</script>');
+    expect(companyLogos(doc, 'Acme', 'https://www.wera-jobs.com/api/companies/7/logo?v=1')).toEqual([
+      'https://www.wera-jobs.com/api/companies/7/logo?v=1',
+      'https://cdn.example.com/acme.png',
+    ]);
+  });
+
   it('takes the logo the job data names first', () => {
     const doc = page('https://jobs.example.com/1', '<script type="application/ld+json">{"@type":"JobPosting","hiringOrganization":{"name":"Acme","logo":"https://cdn.example.com/acme.png"}}</script>');
     expect(companyLogos(doc, 'Acme')[0]).toBe('https://cdn.example.com/acme.png');

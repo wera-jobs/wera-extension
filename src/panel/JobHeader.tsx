@@ -74,8 +74,9 @@ function siteIcons(doc: Document): string[] {
  * job board's own icon. The card tries each in turn and falls back to a
  * letter (see Logo).
  */
-export function companyLogos(doc: Document, company: string): string[] {
+export function companyLogos(doc: Document, company: string, weraLogo?: string): string[] {
   const out: string[] = [];
+  if (weraLogo && /^https?:/.test(weraLogo)) out.push(weraLogo);
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
     const m = /"logo"\s*:\s*(?:\{[^}]*?"url"\s*:\s*)?"(https?:[^"]+)"/.exec(s.textContent ?? '');
     if (m?.[1]) out.push(m[1]);
@@ -105,20 +106,21 @@ export function companyLogos(doc: Document, company: string): string[] {
 // Tile colors for a logo-less company, picked by its name so it stays the same.
 const TILES = ['bg-accent/15 text-accent', 'bg-accent-2/15 text-accent-2', 'bg-good/15 text-good', 'bg-warn/15 text-warn'];
 
-function Logo({ srcs, company }: { srcs: string[]; company: string }) {
+function Logo({ srcs, company, trustedSrc }: { srcs: string[]; company: string; trustedSrc?: string }) {
   // The candidate being shown; one that fails to load, or would not read in a square, gives way to the next.
   const [at, setAt] = useState(0);
   const letter = (company.trim()[0] ?? 'W').toUpperCase();
   const tile = TILES[[...company].reduce((n, c) => n + c.charCodeAt(0), 0) % TILES.length];
   const src = srcs[at];
   if (src) {
+    const trusted = !!trustedSrc && src === trustedSrc;
     return (
       <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-1">
         <img key={src} src={src} alt="" className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" onError={() => setAt((n) => n + 1)}
           onLoad={(e) => {
             const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-            // A wordmark or a share image (wider than tall) turns to a smudge in a square, and a 16 px icon to a blur.
-            if (w > 1.7 * h || h > 1.7 * w || (w > 0 && w < 24)) setAt((n) => n + 1);
+            // Wera's own stored logos are already vetted (including wordmarks); scraped page images must fit a square.
+            if (trusted ? w === 0 || h === 0 : w > 1.7 * h || h > 1.7 * w || (w > 0 && w < 24)) setAt((n) => n + 1);
           }} />
       </span>
     );
@@ -142,7 +144,8 @@ export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: Pane
   const title = job?.title || draft?.title || page.handle.title || 'This job';
   const company = job?.company || draft?.company || page.handle.company || '';
   const place = job?.location_raw || draft?.location || '';
-  const logos = useMemo(() => companyLogos(document, company), [company]);
+  const weraLogo = job?.logo_url ? (/^https?:/.test(job.logo_url) ? job.logo_url : api?.dashboardUrl(job.logo_url) ?? '') : '';
+  const logos = useMemo(() => companyLogos(document, company, weraLogo || undefined), [company, weraLogo]);
   const facts = postingFacts(job, draft, page.info?.text ?? '');
   const [status, statusCls] = job?.application_status ? STATUS[job.application_status] ?? [job.application_status, STATUS.not_interested![1]] : ['', ''];
   const score = job ? (job.fit_score ?? job.estimated_score) : null;
@@ -154,7 +157,7 @@ export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: Pane
   return (
     <div className="anim-rise space-y-2.5">
       <div className="flex items-start gap-3">
-        {page.loading && !job && !draft ? <Skeleton className="size-11 rounded-xl" /> : <Logo key={logos.join(' ')} srcs={logos} company={company} />}
+        {page.loading && !job && !draft ? <Skeleton className="size-11 rounded-xl" /> : <Logo key={logos.join(' ')} srcs={logos} company={company} trustedSrc={weraLogo || undefined} />}
         <div className="min-w-0 flex-1">
           <h2 className="line-clamp-2 text-[15px] leading-snug font-semibold tracking-tight text-text">{title}</h2>
           <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-xs text-muted">

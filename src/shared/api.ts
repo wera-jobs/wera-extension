@@ -45,6 +45,8 @@ export interface WeraJob {
   posted_at?: string | null;
   first_seen_at?: string;
   closed_at?: string | null;
+  /** Where Wera serves the company's logo (e.g. "/api/companies/7/logo?v=1"); absent when it has none. */
+  logo_url?: string | null;
 }
 
 export interface CoverLetter {
