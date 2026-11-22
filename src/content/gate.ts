@@ -16,7 +16,7 @@ export function accountWall(doc: Document): string | null {
   const words = [...doc.querySelectorAll<HTMLElement>('button, a, [role="button"], input[type="submit"]')]
     .filter((c) => !isHidden(c)).map((c) => (c.textContent || (c as HTMLInputElement).value || '').trim());
   if (!password && !(words.some((w) => SIGN_IN.test(w)) && words.some((w) => NEW_ACCOUNT.test(w)))) return null;
-  return collectFields(doc).filter((f) => f.kind !== 'file').length > MOST_SIGN_IN_BOXES ? null : ASK;
+  return collectFields(doc, undefined, true).filter((f) => f.kind !== 'file').length > MOST_SIGN_IN_BOXES ? null : ASK;
 }
 
 /** What the page wants first, if anything. */

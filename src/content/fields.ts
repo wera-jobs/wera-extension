@@ -37,9 +37,10 @@ import { boxConcealed, boxOutOfReach, outOfSight, textConcealed } from './hidden
 const ID_ATTR = 'data-wera-id';
 let seq = 0;
 
-function idFor(el: Element): string {
+function idFor(el: Element, readonly = false): string {
   let id = el.getAttribute(ID_ATTR);
   if (!id) {
+    if (readonly) return '';
     id = `w${++seq}`;
     el.setAttribute(ID_ATTR, id);
   }
@@ -297,7 +298,7 @@ export function isPressed(b: HTMLElement): boolean {
 }
 
 /** A Yes/No button pair (Ashby asks yes/no questions this way), starting at its Yes button. */
-function yesNoButtons(button: HTMLElement): Field | null {
+function yesNoButtons(button: HTMLElement, readonly = false): Field | null {
   if (!/^yes$/i.test(clean(button.textContent))) return null;
   const parent = button.parentElement;
   if (!parent) return null;
@@ -307,7 +308,7 @@ function yesNoButtons(button: HTMLElement): Field | null {
   for (let n: Element | null = parent.parentElement, i = 0; n && i < 4 && !raw; n = n.parentElement, i++) raw = textOf(n).slice(0, 300);
   if (!raw) return null;
   return {
-    id: idFor(parent), kind: 'buttons', ...named(parent, raw), hints: '', autocomplete: '', inputType: 'buttons', el: parent,
+    id: idFor(parent, readonly), kind: 'buttons', ...named(parent, raw), hints: '', autocomplete: '', inputType: 'buttons', el: parent,
     options: buttons.map((b) => ({ label: clean(b.textContent), value: clean(b.textContent), el: b })),
   };
 }
@@ -411,7 +412,7 @@ function dialogWithForm(root: ParentNode): HTMLElement | null {
  * merged. Decoys are left out (found hears of them), so nothing can fill
  * them.
  */
-export function collectFields(page: ParentNode, found?: Trap[]): Field[] {
+export function collectFields(page: ParentNode, found?: Trap[], readonly = false): Field[] {
   const root = dialogWithForm(page) ?? page;
   const fields: Field[] = [];
   const groups = new Map<string, Field>();
@@ -419,13 +420,13 @@ export function collectFields(page: ParentNode, found?: Trap[]): Field[] {
     if (node.matches(LISTBOX)) {
       if (isWrappingListbox(node) || node.getAttribute('aria-disabled') === 'true' || isHidden(node)) continue;
       fields.push({
-        id: idFor(node), kind: 'listbox', ...named(node, rawLabel(node)), hints: clean(`${node.getAttribute('name') ?? ''} ${node.id}`).toLowerCase(),
+        id: idFor(node, readonly), kind: 'listbox', ...named(node, rawLabel(node)), hints: clean(`${node.getAttribute('name') ?? ''} ${node.id}`).toLowerCase(),
         autocomplete: '', inputType: 'listbox', el: node, options: [],
       });
       continue;
     }
     if (node.tagName === 'BUTTON') {
-      const pair = isHidden(node) ? null : yesNoButtons(node);
+      const pair = isHidden(node) ? null : yesNoButtons(node, readonly);
       if (pair) fields.push(pair);
       continue;
     }
@@ -447,7 +448,7 @@ export function collectFields(page: ParentNode, found?: Trap[]): Field[] {
         let g = groups.get(key);
         if (!g) {
           g = {
-            id: idFor(node), kind: type === 'radio' ? 'radio' : 'checkboxes', ...named(node, rawLabel(node, input.name)), hints, autocomplete: '',
+            id: idFor(node, readonly), kind: type === 'radio' ? 'radio' : 'checkboxes', ...named(node, rawLabel(node, input.name)), hints, autocomplete: '',
             inputType: type, el: node, options: [],
           };
           groups.set(key, g);
@@ -466,7 +467,7 @@ export function collectFields(page: ParentNode, found?: Trap[]): Field[] {
       : node.getAttribute('role') === 'combobox' || node.getAttribute('aria-autocomplete') === 'list' || isWorkdayPrompt(node) ? 'combobox'
       : 'text';
     fields.push({
-      id: idFor(node),
+      id: idFor(node, readonly),
       kind,
       ...named(node, rawLabel(node)),
       hints,
@@ -485,7 +486,7 @@ export function collectFields(page: ParentNode, found?: Trap[]): Field[] {
     const radios = [...group.querySelectorAll<HTMLElement>('[role="radio"]')].filter((r) => !isHidden(r) && r.getAttribute('aria-disabled') !== 'true');
     if (radios.length < 2) continue;
     fields.push({
-      id: idFor(group), kind: 'buttons', ...named(group, groupTitle(group) || rawLabel(group)), hints: clean(`${group.getAttribute('name') ?? ''} ${group.id}`).toLowerCase(), autocomplete: '', inputType: 'radiogroup',
+      id: idFor(group, readonly), kind: 'buttons', ...named(group, groupTitle(group) || rawLabel(group)), hints: clean(`${group.getAttribute('name') ?? ''} ${group.id}`).toLowerCase(), autocomplete: '', inputType: 'radiogroup',
       el: group,
       options: radios.map((r) => ({ label: clean(r.getAttribute('aria-label') || r.textContent), value: clean(r.getAttribute('aria-label') || r.textContent), el: r })),
     });

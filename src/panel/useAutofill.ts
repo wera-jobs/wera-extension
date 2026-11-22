@@ -10,6 +10,7 @@ import type { ResumeFile, RunAttachments, SuggestField, Suggestion, WeraApi } fr
 import { bestAnswer, type SavedAnswer } from '../shared/answers';
 import { describeError } from '../shared/errors';
 import { loadFlow, saveFlow, takeApplying, type Flow } from '../shared/flow';
+import { clearProfileCache, loadProfileCache, saveProfileCache } from '../shared/profileCache';
 import { log } from '../shared/log';
 import { frames } from '../shared/rpc';
 import type { Settings } from '../shared/settings';
@@ -101,12 +102,22 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     setError('');
     setWarnings([]);
     try {
-      const [view, saved, file, cover] = await Promise.all([
-        api.applicant(),
-        api.answers().catch((e: unknown) => {
-          warn(describeError(e, "Couldn't load your earlier answers, so Wera fills without them"), e);
-          return [] as SavedAnswer[];
-        }),
+      const serverKey = api.dashboardUrl('');
+      const cached = await loadProfileCache(serverKey);
+      const fetchProfile = async (silent: boolean) => {
+        const [v, s] = await Promise.all([
+          api.applicant(),
+          api.answers().catch((e: unknown) => {
+            if (!silent) warn(describeError(e, "Couldn't load your earlier answers, so Wera fills without them"), e);
+            return [] as SavedAnswer[];
+          }),
+        ]);
+        void saveProfileCache(serverKey, v, s);
+        return { view: v, saved: s };
+      };
+      if (cached) void fetchProfile(true).catch(() => {});
+      const [{ view, saved }, file, cover] = await Promise.all([
+        cached ? Promise.resolve(cached) : fetchProfile(false),
         api.resumeFile(jobId).catch((e: unknown) => {
           warn(describeError(e, "Couldn't load your resume, so Wera won't attach it"), e);
           return null;
@@ -372,6 +383,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       const answers = answersToLearn(list, snap, bank.current, posting.company);
       if (answers.length) {
         await api.saveAnswers(answers);
+        void clearProfileCache();
         log.info('autofill', `remembered ${answers.length} answer(s) for next time`);
       }
     } catch (e) {
