@@ -100,7 +100,28 @@ export function startAssist(doc: Document): () => void {
   let pop: HTMLElement | null = null;
   let hideTimer = 0;
   let context: Promise<JobContext | null> | null = null;
+  let contextUrl = '';
   let bank: Promise<SavedAnswer[]> | null = null;
+  let bankAt = 0;
+
+  const getContext = () => {
+    const href = doc.location?.href ?? '';
+    if (!context || contextUrl !== href) {
+      contextUrl = href;
+      context = sendSafe<JobContext>({ type: 'wera:job-context' });
+    }
+    return context;
+  };
+  const getBank = (server: string) => {
+    if (!bank || Date.now() - bankAt > 60_000) {
+      bankAt = Date.now();
+      bank = remoteApi(server).answers().catch((e: unknown) => {
+        log.warn('assist', 'loading earlier answers failed', e);
+        return [];
+      });
+    }
+    return bank;
+  };
 
   const ensureUi = () => {
     if (ui) return ui;
@@ -208,8 +229,7 @@ export function startAssist(doc: Document): () => void {
       draftBox.replaceChildren(icon(doc, 'loader', 'i spin'), rework ? 'Reworking…' : 'Drafting from your profile…');
       const server = (await loadSession().catch(() => null))?.server;
       if (!server) return show({ text: '', needs: '', error: 'Sign in to Wera first: click the Wera icon in the toolbar.' });
-      context ??= sendSafe<JobContext>({ type: 'wera:job-context' });
-      const ctx = await context;
+      const ctx = await getContext();
       try {
         const r = await remoteApi(server).answer(label, ctx?.jobId ?? null, length, ctx?.posting ?? undefined, rework);
         show({ text: (r.answer ?? '').trim(), needs: r.needs_input ?? '' });
@@ -249,14 +269,10 @@ export function startAssist(doc: Document): () => void {
 
     // An answer the user gave to the same question before comes first.
     const server = (await loadSession().catch(() => null))?.server;
-    bank ??= server ? remoteApi(server).answers().catch((e: unknown) => {
-      log.warn('assist', 'loading earlier answers failed', e);
-      return [];
-    }) : Promise.resolve([]);
+    const savedBank = server ? getBank(server) : Promise.resolve([]);
     // Not an answer that names another company ("Why Stripe?" on Ramp's form).
-    context ??= sendSafe<JobContext>({ type: 'wera:job-context' });
-    const company = (await context.catch(() => null))?.posting?.company ?? '';
-    const hit = bestAnswer(await bank, label, 0.75, company);
+    const company = (await getContext().catch(() => null))?.posting?.company ?? '';
+    const hit = bestAnswer(await savedBank, label, 0.75, company);
     if (hit && hit.answer.length >= 20) {
       const useSaved = el(doc, 'button', { class: 'btn', type: 'button' }, icon(doc, 'history'), 'Use this');
       useSaved.addEventListener('click', () => show({ text: hit.answer, needs: '' }));
@@ -285,7 +301,7 @@ export function startAssist(doc: Document): () => void {
       // Only on application forms: a comment box elsewhere is not Wera's business.
       const onForm = doc.defaultView?.__weraPage?.kind === 'form' || pageKind(doc) === 'form';
       if (!onForm) return;
-      const f = collectFields(doc).find((x) => x.el === target);
+      const f = collectFields(doc, undefined, true).find((x) => x.el === target);
       if (f && isOpenQuestion(f) && doc.activeElement === target) {
         closePop();
         showMark(f);
