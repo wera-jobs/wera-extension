@@ -43,13 +43,22 @@ export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames =
   const hasFormRef = useRef(false);
   hasFormRef.current = !!state.info?.hasForm;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (fromNav = false) => {
     const mine = ++run.current;
     setState((s) => ({ ...s, loading: true, error: '' }));
     try {
       const info = await frames('read');
       const job = signedIn ? await sendSafe<WeraJob | null>({ type: 'wera:job-resolve', url: location.href, title: handle.title || info.draft?.title || '', referrer: document.referrer }) : null;
-      if (mine === run.current) setState((s) => ({ ...s, info, job, loading: false, newStep: 0 }));
+      if (mine === run.current) {
+        setState((s) => ({
+          ...s,
+          info,
+          job,
+          loading: false,
+          // Preserve a pending step notification during refresh; if a SPA navigation landed on a form step, signal it.
+          newStep: info.hasForm ? (fromNav ? 1 : s.newStep) : 0,
+        }));
+      }
     } catch (e) {
       log.warn('page', 'reading the page failed', e);
       if (mine === run.current) setState((s) => ({ ...s, loading: false, error: describeError(e, "Couldn't read this page") }));
@@ -96,7 +105,7 @@ export function usePanelPage(handle: PageHandle, signedIn: boolean, formFrames =
           }
         } else if (e.type === 'wera:navigated') {
           window.clearTimeout(later.current);
-          later.current = window.setTimeout(() => void refresh(), 600);
+          later.current = window.setTimeout(() => void refresh(true), 600);
         }
       }
     };

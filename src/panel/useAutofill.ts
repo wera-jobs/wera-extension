@@ -146,8 +146,13 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
         for (const ad of p.adders) added += await frames('add-entries', ad.frameId ?? 0, ad.section, ad.missing);
         if (added) {
           log.info('autofill', `added ${added} job/school block(s) for the resume`);
-          await wait(400);
+          await wait(200);
           p = await frames('scan', req);
+          // Slow ATSs (Workday) may still be mounting the new block's inputs: give them one more settle pass.
+          if (p.adders?.length) {
+            await wait(600);
+            p = await frames('scan', req);
+          }
         }
       }
       const next = rowsFor(p, view.sources, payFromText(posting.description));
@@ -617,7 +622,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     const t = window.setTimeout(() => {
       setError('The page did not move on. It may want a field fixed (look for red marks), then press Continue again.');
       setPhase('filled');
-    }, 8000);
+    }, 10000);
     return () => window.clearTimeout(t);
   }, [phase]);
 

@@ -151,6 +151,32 @@ describe('other layouts', () => {
     const { fields } = planForm(document, { ...profile, experience: [] });
     expect(by(fields, 'Job Title')).toMatchObject({ value: '', note: 'your resume lists 0 jobs' });
   });
+
+  it('fills Workday From/To date spinbuttons wrapped inside fieldsets with legends', () => {
+    document.body.innerHTML = `<form><section><h3>Work Experience</h3>
+      <div><div><div><div><div><div>
+        <label for="jt">Job Title</label><input id="jt" data-automation-id="jobTitle">
+        <fieldset><legend>From *</legend>
+          <div data-automation-id="formField-startDate">
+            <input id="sm" role="spinbutton" data-automation-id="dateSectionMonth-input">
+            <input id="sy" role="spinbutton" data-automation-id="dateSectionYear-input">
+          </div>
+        </fieldset>
+        <fieldset><legend>To</legend>
+          <div data-automation-id="formField-endDate">
+            <input id="em" role="spinbutton" data-automation-id="dateSectionMonth-input">
+            <input id="ey" role="spinbutton" data-automation-id="dateSectionYear-input">
+          </div>
+        </fieldset>
+      </div></div></div></div></div></div>
+    </section></form>`;
+    const { fields } = planForm(document, { ...profile, experience: [profile.experience![1]!] });
+    const byId = (id: string) => fields.find((f) => document.querySelector(`[data-wera-id="${f.id}"]`)?.id === id)!;
+    expect(byId('sm')).toMatchObject({ purpose: 'exp_start', value: '06' });
+    expect(byId('sy')).toMatchObject({ purpose: 'exp_start', value: '2020' });
+    expect(byId('em')).toMatchObject({ purpose: 'exp_end', value: '07' });
+    expect(byId('ey')).toMatchObject({ purpose: 'exp_end', value: '2022' });
+  });
 });
 
 describe('Add buttons', () => {
@@ -167,5 +193,19 @@ describe('Add buttons', () => {
     const plan = planForm(document, profile);
     expect(plan.adders).toEqual([]);
     expect(by(plan.fields, 'Job Title', 1).value).toBe('Data Analyst');
+  });
+
+  it('waits for slow ATS add-blocks to finish rendering before returning', async () => {
+    document.body.innerHTML = `<form><section data-automation-id="workExperienceSection"><h3>Work Experience</h3><div id="list"></div><button type="button" id="add">Add</button></section></form>`;
+    let n = 0;
+    document.querySelector('#add')!.addEventListener('click', () => {
+      const idx = ++n;
+      setTimeout(() => {
+        document.querySelector('#list')!.insertAdjacentHTML('beforeend', workdayJob(idx));
+      }, 120);
+    });
+    expect(await addEntries(document, 'experience', 1, 200)).toBe(1);
+    const plan = planForm(document, profile);
+    expect(by(plan.fields, 'Job Title', 0).value).toBe('Data Scientist');
   });
 });

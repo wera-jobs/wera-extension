@@ -732,6 +732,37 @@ describe('the Wera panel', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Autofill this page/ }));
     expect(await screen.findByRole('button', { name: /^Autofill$/ })).toBeInTheDocument();
   });
+
+  it('keeps Apply mounted across transient spinner refreshes and auto-continues on SPA navigation', async () => {
+    let hasForm = true;
+    let step = 1;
+    const applied: string[] = [];
+    const { emit } = fakeBackground({
+      job,
+      frames: {
+        read: () => ({ url: draft.url, title: 'SRE at Acme', text: 'About', draft, hasForm }),
+        scan: () => ({
+          fields: [{ id: `f${step}`, label: `Email ${step}`, purpose: 'email', group: 'details', kind: 'text', required: true, options: [], current: applied.includes(`f${step}`) ? 'ada@example.com' : '', value: 'ada@example.com', source: 'details', note: '' }],
+          next: { id: 'n1', label: 'Save and Continue', final: false },
+          errors: 0,
+          site: 'Workday',
+        }),
+        apply: ({ items }: ApplyRequest) => {
+          applied.push(...items.map((i) => i.id));
+          return items.map((i): FillResult => ({ id: i.id, label: '', purpose: null, status: 'filled', value: i.value, required: false }));
+        },
+      },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    expect(await screen.findByRole('button', { name: /Continue to the next page/ }, { timeout: 3000 })).toBeInTheDocument();
+    expect(applied).toEqual(['f1']);
+    // Workday navigates to the next step via SPA route change: auto-continue fills step 2 without unmounting Apply.
+    step = 2;
+    hasForm = true;
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:navigated', url: `${draft.url}/step-2` } });
+    await waitFor(() => expect(applied).toContain('f2'), { timeout: 3000 });
+  });
 });
 
 describe('AI answers that cannot be right', () => {

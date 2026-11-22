@@ -41,6 +41,8 @@ export type JobRequest =
   | { type: 'wera:job-submitted'; url: string }
   /** The user clicked the form's Submit (or sent it with Enter): a confirmation that follows is theirs. */
   | { type: 'wera:job-sending' }
+  /** The user clicked the site's own Next / Save and Continue button on a form. */
+  | { type: 'wera:job-continuing' }
   /** Which job the tab's application is for, and its posting: what drafted answers are written for. */
   | { type: 'wera:job-context' }
   /** The job the tab is on, as Wera has it (the panel's job card); null when not in Wera or signed out. */
