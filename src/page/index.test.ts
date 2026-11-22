@@ -461,4 +461,30 @@ describe('a job title without its company', () => {
     expect(bareTitle('Engineer - Platform', 'Acme')).toBe('Engineer - Platform');
     expect(bareTitle('Senior Engineer - Payments - Remote', 'Acme')).toBe('Senior Engineer - Payments - Remote');
   });
+
+  it('reads the proper company name from a Greenhouse page title instead of the raw board slug', async () => {
+    const { jobSummary } = await import('../content/detect');
+    const doc = new JSDOM('<!doctype html><title>Job Application for AI Infrastructure System Engineer at Together AI</title><h1>AI Infrastructure System Engineer</h1>', {
+      url: 'https://job-boards.greenhouse.io/togetherai/jobs/5180155007',
+    }).window.document;
+    expect(jobSummary(doc)).toEqual({ title: 'AI Infrastructure System Engineer', company: 'Together AI' });
+  });
+
+  it('recognizes ATS resume-only or screening-question steps and embedded ATS iframes as forms', async () => {
+    const { hasApplicationForm, ownApplicationForm } = await import('../content/detect');
+    const resumeStep = new JSDOM('<form><label for="r">Resume</label><input id="r" type="file"></form>', {
+      url: 'https://ats.rippling.com/acme/jobs/1234/apply',
+    }).window.document;
+    expect(ownApplicationForm(resumeStep)).toBe(true);
+
+    const questionsStep = new JSDOM('<form><label for="q1">Why do you want to work here?</label><textarea id="q1"></textarea><label for="q2">Describe a system you built</label><textarea id="q2"></textarea></form>', {
+      url: 'https://jobs.ashbyhq.com/acme/11111111-1111-1111-1111-111111111111/application',
+    }).window.document;
+    expect(ownApplicationForm(questionsStep)).toBe(true);
+
+    const embedded = new JSDOM('<iframe src="https://apply.workable.com/acme/j/ABCDEF1234/"></iframe>', {
+      url: 'https://www.acme.com/careers/sre',
+    }).window.document;
+    expect(hasApplicationForm(embedded)).toBe(true);
+  });
 });

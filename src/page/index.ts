@@ -151,8 +151,8 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     shownFor = key;
     if (!top) {
       // An application form embedded in a careers page: the panel (in the top frame) fills it.
-      if (kind === 'form' && !asked && (await allowed(doc))) {
-        asked = true;
+      // Notify on every transition into a form (or new form URL), not only once per frame lifetime.
+      if (kind === 'form' && (await allowed(doc))) {
         void sendSafe({ type: 'wera:panel-ensure' });
       }
       return;

@@ -3,7 +3,7 @@
 // an application.
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X } from 'lucide-react';
+import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X, Zap } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
@@ -197,7 +197,7 @@ function useApplyStuck(tabId: number | null, pressed: number): boolean {
 }
 
 /** A posting: apply from here, save it (with its fit), or say how to apply. */
-export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageState; tabId: number | null }) {
+export function Posting({ api, page, tabId, onUseForm }: { api: WeraApi; page: PanelPageState; tabId: number | null; onUseForm?: () => void }) {
   const [busy, setBusy] = useState<'' | 'save' | 'apply'>('');
   const [going, setGoing] = useState(false);
   const [pressed, setPressed] = useState(0);
@@ -269,6 +269,15 @@ export function Posting({ api, page, tabId }: { api: WeraApi; page: PanelPageSta
         <BigButton className="w-full" onClick={() => void onSave()} busy={busy === 'save'}>
           {busy !== 'save' && <Bookmark className="size-4" />} Save to Wera
         </BigButton>
+      ))}
+      {onUseForm && (!apply ? (
+        <Button className="w-full py-2" onClick={onUseForm}>
+          <Zap className="size-3.5" /> Autofill this page
+        </Button>
+      ) : (
+        <button type="button" onClick={onUseForm} className="block w-full text-center text-[11px] text-muted hover:text-text hover:underline">
+          Already on the application form? Open autofill
+        </button>
       ))}
       <p className="text-[11px] text-faint">
         {page.job ? (apply ? 'Presses the Apply button, then fills the application.' : <>Press the site's <b className="text-text">Apply</b> button: Wera autofills the application there.</>)
