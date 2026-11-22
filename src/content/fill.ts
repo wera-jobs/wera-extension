@@ -254,6 +254,32 @@ export function attachFile(input: HTMLInputElement, file: File) {
   input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+const UPLOAD_ERR = /upload|file|format|size|invalid|failed|unsupported|rejected|error|could not|unable/i;
+
+/**
+ * Verifies that an ATS accepted an attached file: no inline upload error
+ * appeared, and either input.files still holds the file or the widget shows
+ * an uploaded attachment pill/filename.
+ */
+export async function verifyFileUpload(input: HTMLInputElement, fileName: string): Promise<{ ok: boolean; note?: string }> {
+  await wait(80);
+  const box = input.closest('[data-automation-id^="formField-"], [data-automation-id="file-upload-drop-zone"], fieldset, .field, .application-field') ?? input.parentElement;
+  if (box) {
+    for (const err of box.querySelectorAll<HTMLElement>('[role="alert"], [data-automation-id*="error" i], [class*="error" i]')) {
+      if (isHidden(err)) continue;
+      const t = (err.textContent ?? '').trim();
+      if (t && UPLOAD_ERR.test(t)) return { ok: false, note: 'the site rejected the file: attach it yourself' };
+    }
+  }
+  if (input.files && input.files.length > 0) return { ok: true };
+  if (box) {
+    if (box.querySelector('[data-automation-id="file-upload-item"]')) return { ok: true };
+    const text = (box.textContent ?? '').toLowerCase();
+    if (fileName && text.includes(fileName.toLowerCase())) return { ok: true };
+  }
+  return { ok: false, note: 'the site did not accept the file: attach it yourself' };
+}
+
 // Text boxes that suggest places as you type (Lever's location, Google Places): a suggestion must be picked.
 const SUGGESTING = new Set<FieldPurpose>(['location', 'city']);
 const SUGGESTIONS = '[role="option"], .dropdown-location, [class*="suggestion"] li, [class*="suggestion-item"], [class*="autocomplete"] li, [class*="results"]:not([class*="no-results"]):not([class*="loading"]) > div, .pac-item';
