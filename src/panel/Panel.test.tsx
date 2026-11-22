@@ -715,6 +715,23 @@ describe('the Wera panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByRole('link', { name: 'Connect with Wera' })).toBeInTheDocument();
   });
+
+  it('switches to Autofill when a form appears on the same URL (wera:form-changed)', async () => {
+    let hasForm = false;
+    const { emit } = fakeBackground({ job, frames: { read: () => ({ url: draft.url, title: 'SRE at Acme', text: 'About', draft, hasForm }) } });
+    render(<App handle={handle('posting')} show={show()} />);
+    await screen.findByRole('button', { name: /Autofill this page/ });
+    hasForm = true;
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:form-changed', fields: 4, step: true } });
+    expect(await screen.findByRole('button', { name: /^Autofill$/ })).toBeInTheDocument();
+  });
+
+  it('lets the user open Autofill manually when form auto-detection misses a page', async () => {
+    fakeBackground({ job, info: { hasForm: false } });
+    render(<App handle={handle('posting')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Autofill this page/ }));
+    expect(await screen.findByRole('button', { name: /^Autofill$/ })).toBeInTheDocument();
+  });
 });
 
 describe('AI answers that cannot be right', () => {

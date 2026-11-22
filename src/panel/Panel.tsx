@@ -108,6 +108,8 @@ function SignedOut(props: PanelProps & { kind: 'form' | 'posting' | null }) {
 
 function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | null }) {
   const { api, page, kind } = props;
+  const [forceFormUrl, setForceFormUrl] = useState('');
+  const viewKind = kind === 'form' || forceFormUrl === location.href ? 'form' : kind;
   // An application has no Save button: the job is saved for its fit score from the keyword card,
   // as the page's own data names it, else as the AI reads it off the page (as a fill saves it).
   const scoreJob = async () => {
@@ -119,10 +121,10 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
   return (
     <>
       {page.submitted && <Submitted api={api} page={page} />}
-      <JobHeader api={api} page={page} kind={kind} />
+      <JobHeader api={api} page={page} kind={viewKind} />
       {page.error && <Notice tone="bad">{page.error}</Notice>}
-      {kind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} />}
-      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} onScore={kind === 'form' ? scoreJob : undefined} />}
+      {viewKind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} onUseForm={() => setForceFormUrl(location.href)} />}
+      {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} onScore={viewKind === 'form' ? scoreJob : undefined} />}
       {(page.info || !page.loading) && !page.submitted && (
         <Referrals api={api} jobId={page.job?.id ?? null}
           company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}

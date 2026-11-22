@@ -266,13 +266,21 @@ const APPLICATION_TOO = new Set<FieldPurpose>([
  */
 export function ownApplicationForm(doc: Document): boolean {
   const url = doc.location.href;
-  const applicantSite = !!siteFor(doc) || isJobUrl(url) || isApplicantHost(doc.location.hostname);
+  const atsSite = !!siteFor(doc) || isApplicantHost(doc.location.hostname);
+  const applicantSite = atsSite || isJobUrl(url);
   // Cheap: most pages have no form, and web components only hide fields on systems Wera knows.
   if (!applicantSite && doc.querySelectorAll('input, select, textarea').length < 2) return false;
-  const fields = collectFields(doc).map(classify);
+  const raw = collectFields(doc);
+  const fields = raw.map(classify);
   const known = fields.filter((p) => p !== null && p !== 'question' && p !== 'consent').length;
   // Some systems start with nothing but the applicant's email (Oracle, iCIMS).
   if (known === 1 && applicantSite && applyStep(url) && fields.includes('email')) return true;
+  // On an ATS host or explicit apply step, a resume upload or >= 2 fillable controls (including screening questions) is an application form.
+  if (atsSite || (applicantSite && applyStep(url))) {
+    if (fields.includes('resume')) return true;
+    const fillable = raw.filter((f, i) => !f.trap && fields[i] !== 'consent').length;
+    if (fillable >= 2 && (known >= 1 || fields.includes('question'))) return true;
+  }
   if (known < 2) return false;
   const only = new Set(fields.filter((p) => p !== null && APPLICATION_ONLY.has(p)));
   const too = new Set(fields.filter((p) => p !== null && APPLICATION_TOO.has(p)));
@@ -303,7 +311,7 @@ export function hasApplicationForm(doc: Document): boolean {
   });
 }
 
-const EMBEDDED_FORM = /greenhouse\.io\/embed\/job_app|jobs\.(eu\.)?lever\.co\/[^?#]+\/apply|ashbyhq\.com\/[^?#]+\/(application|embed)/;
+const EMBEDDED_FORM = /greenhouse\.io\/embed\/job_app|jobs\.(eu\.)?lever\.co\/[^?#]+\/apply|ashbyhq\.com\/[^?#]+\/(application|embed)|apply\.workable\.com\/[^?#]+\/j\/|jobs\.smartrecruiters\.com\/oneclick-ui\/|ats\.rippling\.com\/[^?#]+\/jobs\/|jobs\.jobvite\.com\/[^?#]+\/job\/|\.(breezy\.hr|recruitee\.com|teamtailor\.com|pinpointhq\.com|bamboohr\.com)\/|app\.dover\.com\/apply\//i;
 
 /** Whether the page is an application form, one job's posting, or neither. */
 /**
@@ -368,14 +376,20 @@ export function bareTitle(title: string, company: string): string {
   return t.trim();
 }
 
+/** Company name from an ATS page title ("Job Application for SRE at Together AI"). */
+function companyFromTitle(docTitle: string): string {
+  const m = /\b(?:job\s+application|apply)\s+for\s+.+\s+at\s+([^|–—]+)$/i.exec(docTitle.trim());
+  return m?.[1]?.trim() ?? '';
+}
+
 /** A first look at the job: its title and company, for the Wera panel's first look (it reads the page fully later). */
 export function jobSummary(doc: Document): { title: string; company: string } {
   const data = readJobPosting(doc, doc.location.href);
-  if (data) return { title: data.title, company: data.company || companyFromUrl(doc.location.href) };
+  if (data) return { title: data.title, company: data.company || companyFromTitle(doc.title) || companyFromUrl(doc.location.href) };
   const meta = (name: string) => doc.querySelector<HTMLMetaElement>(`meta[property="${name}"], meta[name="${name}"]`)?.content?.trim() ?? '';
   // LinkedIn and Indeed name the company next to the title.
   const site = doc.querySelector('.job-details-jobs-unified-top-card__company-name, [data-testid="inlineHeader-companyName"], [data-company-name="true"]')?.textContent?.trim() ?? '';
   const title = headline(doc) || meta('og:title') || doc.title.split(/\s[|–-]\s/)[0]!.trim();
-  const company = (site || companyFromUrl(doc.location.href) || meta('og:site_name')).slice(0, 80);
+  const company = (site || companyFromTitle(doc.title) || companyFromUrl(doc.location.href) || meta('og:site_name')).slice(0, 80);
   return { title: bareTitle(title, company).slice(0, 140), company };
 }
