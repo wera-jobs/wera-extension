@@ -8,7 +8,7 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
-import { DEFAULT_SERVER, loadSession } from '../shared/storage';
+import { DEFAULT_SERVER, loadSession, passTabJob } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
 import type { ContentEvent } from '../shared/types';
 import { handleJobRequest } from './jobs';
@@ -121,5 +121,8 @@ chrome.tabs.onCreated.addListener((tab) => {
   if (id == null) return;
   // "Apply on the company's site" in the dashboard: the user is applying, so the application fills itself.
   void takeHandoff(tab).then((handed) => (handed ? markApplying(id) : undefined)).catch(() => {});
-  if (tab.openerTabId != null) void passApplying(tab.openerTabId, id).catch(() => {});
+  if (tab.openerTabId != null) {
+    void passApplying(tab.openerTabId, id).catch(() => {});
+    void passTabJob(tab.openerTabId, id).catch(() => {});
+  }
 });

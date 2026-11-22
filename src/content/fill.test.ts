@@ -243,6 +243,27 @@ describe('fillForm on harder forms', () => {
     const out = await fillForm(document, ada, {});
     expect(out.find((r) => r.label === 'State')).toMatchObject({ status: 'review', note: 'pick the matching option' });
   });
+
+  it('matches proper names with parenthetical acronyms and between-range experience values', () => {
+    const schools = [{ label: 'University of Texas at Arlington (UTA)', value: 'uta' }, { label: 'Adams State University', value: 'asu' }];
+    expect(matchOption(schools, 'University of Texas at Arlington', 'school')?.value).toBe('uta');
+    // Namesake guard still holds outside parentheses.
+    expect(matchOption(schools, 'State University', 'school')).toBeNull();
+    const majors = [{ label: 'Computer Science (B.S.)', value: 'cs' }];
+    expect(matchOption(majors, 'Computer Science', 'major')?.value).toBe('cs');
+    const ranges = [{ label: '0-1 years', value: '0-1' }, { label: '1-2 years', value: '1-2' }, { label: '3-5 years', value: '3-5' }];
+    expect(matchOption(ranges, '2.5', 'years_experience')?.value).toBe('1-2');
+  });
+
+  it('marks a file upload for review when the site rejects it with an error', async () => {
+    document.body.innerHTML = `<div class="field"><label for="res">Resume</label><input id="res" type="file"><div id="err" role="alert"></div></div>`;
+    const input = document.getElementById('res') as HTMLInputElement;
+    input.addEventListener('change', () => {
+      document.getElementById('err')!.textContent = 'File upload failed: unsupported format';
+    });
+    const out = await fillForm(document, ada, { resume });
+    expect(out.find((r) => r.purpose === 'resume')).toMatchObject({ status: 'review', note: expect.stringMatching(/rejected the file/) });
+  });
 });
 
 describe('comboboxChoice', () => {

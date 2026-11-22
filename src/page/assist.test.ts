@@ -105,6 +105,32 @@ describe('the Wera button', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(button('Draft this answer with Wera')).toBeUndefined();
   });
+
+  it('does not stamp data-wera-id on passive focus and refreshes job context on SPA URL change', async () => {
+    let ctxCalls = 0;
+    const send = chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn<(m: { type: string; method?: string; args?: unknown[] }) => Promise<unknown>>>;
+    send.mockImplementation(async (m) => {
+      if (m.type === 'wera:job-context') {
+        ctxCalls++;
+        return { jobId: ctxCalls === 1 ? 7 : 8, posting: null };
+      }
+      if (m.type !== 'wera:api') return null;
+      calls.push({ method: m.method!, args: m.args! });
+      if (m.method === 'answers') return { ok: true, value: [] };
+      return { ok: true, value: { answer: `Draft for job ${ctxCalls}` } };
+    });
+    const why = document.querySelector<HTMLTextAreaElement>('#why')!;
+    why.focus();
+    await vi.waitFor(() => expect(button('Draft this answer with Wera')).toBeTruthy());
+    expect(why.hasAttribute('data-wera-id')).toBe(false);
+    button('Draft this answer with Wera')!.click();
+    await vi.waitFor(() => expect(shadow()!.querySelector('.draft')!.textContent).toBe('Draft for job 1'));
+
+    history.pushState({}, '', '/jobs/job-b');
+    button('Again')!.click();
+    await vi.waitFor(() => expect(shadow()!.querySelector('.draft')!.textContent).toBe('Draft for job 2'));
+    expect(ctxCalls).toBe(2);
+  });
 });
 
 describe('looking at a focused box', () => {

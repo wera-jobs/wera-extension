@@ -100,17 +100,30 @@ function monthOf(s: string): number {
 function rangeOption(options: Option[], value: string): Option | null {
   const n = Number(/\d+(\.\d+)?/.exec(value)?.[0] ?? NaN);
   if (!Number.isFinite(n)) return null;
+  let lower: Option | null = null;
+  let lowerHi = -Infinity;
   for (const o of options) {
     const t = o.label.toLowerCase();
     const nums = (t.match(/\d+(\.\d+)?/g) ?? []).map(Number);
     if (!nums.length) continue;
     if (/less than|under|fewer than|<|up to/.test(t) && n < nums[0]!) return o;
     if (/\+|or more|more than|over|above|at least|>|plus/.test(t) && nums.length === 1 && n >= nums[0]!) return o;
-    if (nums.length >= 2 && n >= nums[0]! && n <= nums[1]!) return o;
-    if (nums.length === 1 && n === nums[0] && !/less|under|more|over|\+/.test(t)) return o;
+    if (nums.length >= 2) {
+      if (n >= nums[0]! && n <= nums[1]!) return o;
+      if (nums[1]! < n && nums[1]! > lowerHi) {
+        lowerHi = nums[1]!;
+        lower = o;
+      }
+    } else if (nums.length === 1 && !/less|under|more|over|\+/.test(t)) {
+      if (n === nums[0]) return o;
+      if (nums[0]! < n && nums[0]! > lowerHi) {
+        lowerHi = nums[0]!;
+        lower = o;
+      }
+    }
   }
   // Between ranges ("2.5" with "1-2" and "3-5"): the nearest lower one.
-  return null;
+  return lower;
 }
 
 /** The option for the same place: its city first, then the state by code or name ("Dallas, TX" is "Dallas, Texas, United States"). */
@@ -152,18 +165,29 @@ const nameWords = (s: string) => norm(s).replace(/\+/g, ' ').split(' ').filter((
 /** Whether a field takes a proper name (school, subject, employer) that must match exactly. */
 export const isProperName = (purpose: FieldPurpose | null) => !!purpose && PROPER.has(purpose);
 
+const stripParens = (s: string) => s.replace(/\s*\([^)]*\)/g, ' ');
+
 /** The option naming the same thing: every telling word of value, and the fewest others (none when two tie). */
 function sameName(real: Option[], value: string, most = 2): Option | null {
-  const want = nameWords(value);
-  if (!want.length) return null;
+  const wantRaw = nameWords(value);
+  const wantBare = /\([^)]*\)/.test(value) ? nameWords(stripParens(value)) : wantRaw;
+  if (!wantRaw.length && !wantBare.length) return null;
   let best: Option | null = null;
   let bestExtra = Infinity;
   let tie = false;
   for (const o of real) {
     const words = nameWords(o.label);
-    if (!want.every((w) => words.includes(w))) continue;
-    const extra = words.length - want.length;
-    if (extra > most) continue;
+    const bare = /\([^)]*\)/.test(o.label) ? nameWords(stripParens(o.label)) : null;
+    let extra = Infinity;
+    if (wantRaw.length && wantRaw.every((w) => words.includes(w)) && words.length - wantRaw.length <= most) {
+      extra = words.length - wantRaw.length;
+    } else if (bare?.length && wantBare.length && wantBare.every((w) => bare.includes(w)) && bare.length - wantBare.length <= most) {
+      // Parenthetical acronym/suffix ("University of Texas at Arlington (UTA)", "Computer Science (B.S.)"): slight penalty vs exact.
+      extra = bare.length - wantBare.length + 0.5;
+    } else if (wantBare.length && wantBare !== wantRaw && wantBare.every((w) => words.includes(w)) && words.length - wantBare.length <= most) {
+      extra = words.length - wantBare.length + 0.5;
+    }
+    if (extra === Infinity) continue;
     if (extra < bestExtra) {
       best = o;
       bestExtra = extra;

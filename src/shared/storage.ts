@@ -24,23 +24,49 @@ export async function saveSession(s: Session | null): Promise<void> {
 }
 
 const TAB_JOBS = 'wera.tabJobs';
+const TAB_JOB_TTL = 15 * 60_000;
+
+interface TabJobEntry {
+  origin: string;
+  jobId: number;
+  at?: number;
+}
 
 /**
  * The job a tab was on, so moving from a posting to its application form
- * (often a different URL) keeps the job. Session storage: cleared when
- * the browser closes.
+ * (often a different URL or external ATS) keeps the job. Session storage:
+ * cleared when the browser closes.
  */
 export async function rememberTabJob(tabId: number, origin: string, jobId: number): Promise<void> {
   const got = await chrome.storage.session.get(TAB_JOBS);
-  const map = (got[TAB_JOBS] as Record<string, { origin: string; jobId: number }> | undefined) ?? {};
-  map[tabId] = { origin, jobId };
+  const map = (got[TAB_JOBS] as Record<string, TabJobEntry> | undefined) ?? {};
+  map[tabId] = { origin, jobId, at: Date.now() };
   await chrome.storage.session.set({ [TAB_JOBS]: map });
 }
 
 export async function tabJob(tabId: number, origin: string): Promise<number | null> {
   const got = await chrome.storage.session.get(TAB_JOBS);
-  const hit = (got[TAB_JOBS] as Record<string, { origin: string; jobId: number }> | undefined)?.[tabId];
+  const hit = (got[TAB_JOBS] as Record<string, TabJobEntry> | undefined)?.[tabId];
   return hit && hit.origin === origin ? hit.jobId : null;
+}
+
+/** A recently remembered job on this tab across origins (e.g. careers page redirecting to Workday/Greenhouse). */
+export async function recentTabJob(tabId: number, maxAgeMs = TAB_JOB_TTL): Promise<number | null> {
+  const got = await chrome.storage.session.get(TAB_JOBS);
+  const hit = (got[TAB_JOBS] as Record<string, TabJobEntry> | undefined)?.[tabId];
+  if (!hit) return null;
+  if (hit.at != null && Date.now() - hit.at > maxAgeMs) return null;
+  return hit.jobId;
+}
+
+/** Copies a tab's recent job to a new tab opened from it (e.g. clicking Apply that opens an ATS in a new tab). */
+export async function passTabJob(fromTabId: number, toTabId: number): Promise<void> {
+  const got = await chrome.storage.session.get(TAB_JOBS);
+  const map = (got[TAB_JOBS] as Record<string, TabJobEntry> | undefined) ?? {};
+  const hit = map[fromTabId];
+  if (!hit || (hit.at != null && Date.now() - hit.at > TAB_JOB_TTL)) return;
+  map[toTabId] = { ...hit, at: Date.now() };
+  await chrome.storage.session.set({ [TAB_JOBS]: map });
 }
 
 /** "http://192.168.4.68:3000/" -> "http://192.168.4.68:3000"; null when not http(s). */

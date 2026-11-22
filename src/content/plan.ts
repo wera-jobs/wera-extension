@@ -13,7 +13,7 @@ import { LETTER, RESUME } from '../shared/markers';
 import { SELF_ID } from '../shared/selfId';
 import { classify } from './classify';
 import { byId, collectFields, isPressed, isWorkdayPrompt, listboxValue, type Field } from './fields';
-import { attachFile, base64ToFile, comboboxChoice, enterValue, mark, setNativeValue, wait } from './fill';
+import { attachFile, base64ToFile, comboboxChoice, enterValue, mark, setNativeValue, verifyFileUpload, wait } from './fill';
 import { isPlaceholderOption, matchOption } from './match';
 import { countryAnswer, countryIn, norm, sameCountry, stateName } from './places';
 import { choicesOf, firstChoice, OR, valueFor } from './values';
@@ -445,12 +445,19 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
           res.note = 'agree yourself after reading it';
         } else if (item.value === RESUME) {
           if (opts.resume && f.kind === 'file') {
-            attachFile(f.el as HTMLInputElement, base64ToFile(opts.resume.base64, opts.resume.name));
-            res.status = 'filled';
-            res.value = opts.resume.name;
-            // Some systems read the resume and fill the form from it: let that finish first.
-            const reads = doc ? siteFor(doc)?.readsResume : 0;
-            if (reads) await wait(reads);
+            const input = f.el as HTMLInputElement;
+            attachFile(input, base64ToFile(opts.resume.base64, opts.resume.name));
+            const check = await verifyFileUpload(input, opts.resume.name);
+            if (check.ok) {
+              res.status = 'filled';
+              res.value = opts.resume.name;
+              // Some systems read the resume and fill the form from it: let that finish first.
+              const reads = doc ? siteFor(doc)?.readsResume : 0;
+              if (reads) await wait(reads);
+            } else {
+              res.status = 'review';
+              res.note = check.note;
+            }
           } else {
             res.note = 'no resume to attach';
           }
@@ -460,22 +467,34 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
             res.status = 'filled';
             res.value = 'cover letter';
           } else if (opts.letterFile && f.kind === 'file') {
-            attachFile(f.el as HTMLInputElement, base64ToFile(opts.letterFile.base64, opts.letterFile.name));
-            res.status = 'filled';
-            res.value = opts.letterFile.name;
+            const input = f.el as HTMLInputElement;
+            attachFile(input, base64ToFile(opts.letterFile.base64, opts.letterFile.name));
+            const check = await verifyFileUpload(input, opts.letterFile.name);
+            if (check.ok) {
+              res.status = 'filled';
+              res.value = opts.letterFile.name;
+            } else {
+              res.status = 'review';
+              res.note = check.note;
+            }
           } else {
             res.note = 'write your cover letter first';
           }
         } else if (item.value.trim()) {
           // The site's own widgets (Workday's dropdowns and prompts) are filled its way.
-          const own = siteFiller(f.el.ownerDocument);
-          const got = own ? await own(f, purpose, item.value.trim()) : undefined;
-          if (got === undefined) await enterValue(f, purpose, item.value.trim(), res, true);
-          else if (got) {
-            res.status = 'filled';
-            res.value = got;
-          } else {
-            res.note = `pick "${item.value.trim()}" yourself: the page did not take it`;
+          user?.setFilling(true);
+          try {
+            const own = siteFiller(f.el.ownerDocument);
+            const got = own ? await own(f, purpose, item.value.trim()) : undefined;
+            if (got === undefined) await enterValue(f, purpose, item.value.trim(), res, true);
+            else if (got) {
+              res.status = 'filled';
+              res.value = got;
+            } else {
+              res.note = `pick "${item.value.trim()}" yourself: the page did not take it`;
+            }
+          } finally {
+            user?.setFilling(false);
           }
         } else {
           res.status = 'skipped';
@@ -515,24 +534,47 @@ const USER_WAIT_MAX = 15_000;
 export function watchUser(doc: Document) {
   let at = 0;
   let mine: Element | null = null;
+  let filling = false;
+  const EDITABLE = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="combobox"], [role="textbox"]';
   const onAct = (e: Event) => {
     if (!e.isTrusted) return;
     at = Date.now();
     const t = e.target;
-    if (t instanceof Element && t.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="combobox"], [role="textbox"]')) mine = t;
+    if (t instanceof Element && t.matches(EDITABLE)) mine = t;
+    else if (e.type === 'pointerdown' && mine && (!(t instanceof Node) || !mine.contains(t))) mine = null;
+  };
+  const onBlur = (e: FocusEvent) => {
+    if (filling || !mine) return;
+    const t = e.target;
+    if (t instanceof Node && (t === mine || mine.contains(t))) {
+      const next = e.relatedTarget;
+      if (!next || !(next instanceof Node) || !mine.contains(next)) mine = null;
+    }
   };
   for (const type of ['keydown', 'pointerdown', 'input']) doc.addEventListener(type, onAct, true);
+  doc.addEventListener('focusout', onBlur, true);
   return {
     async quiet() {
       const until = Date.now() + USER_WAIT_MAX;
       while (Date.now() - at < USER_PAUSE && Date.now() < until) await wait(200);
     },
+    setFilling(v: boolean) {
+      filling = v;
+    },
     inside: (el: Element) => !!mine && mine.isConnected && (mine === el || el.contains(mine) || mine.contains(el)),
     giveBack() {
-      if (mine instanceof HTMLElement && mine.isConnected && doc.activeElement !== mine) mine.focus({ preventScroll: true });
+      if (mine instanceof HTMLElement && mine.isConnected && doc.activeElement !== mine) {
+        filling = true;
+        try {
+          mine.focus({ preventScroll: true });
+        } finally {
+          filling = false;
+        }
+      }
     },
     stop() {
       for (const type of ['keydown', 'pointerdown', 'input']) doc.removeEventListener(type, onAct, true);
+      doc.removeEventListener('focusout', onBlur, true);
     },
   };
 }
