@@ -38,9 +38,14 @@ export function whenSettled(doc: Document, cap = 2500): Promise<void> {
       resolve();
     };
     const idle = () => {
-      // After the load event the page's own startup has run; one idle moment more lets it finish its first render.
-      if (win && 'requestIdleCallback' in win) win.requestIdleCallback(finish, { timeout: 500 });
-      else setTimeout(finish, 200);
+      // After the load event, wait two animation frames plus an idle turn so module-loaded
+      // React hydration (Remix / Next.js) commits before Wera appends its panel host.
+      const afterFrames = () => {
+        if (win && 'requestIdleCallback' in win) win.requestIdleCallback(finish, { timeout: 500 });
+        else setTimeout(finish, 200);
+      };
+      if (win && 'requestAnimationFrame' in win) win.requestAnimationFrame(() => win.requestAnimationFrame(afterFrames));
+      else afterFrames();
     };
     if (doc.readyState === 'complete') idle();
     else win?.addEventListener('load', idle, { once: true });

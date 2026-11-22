@@ -487,4 +487,13 @@ describe('a job title without its company', () => {
     }).window.document;
     expect(hasApplicationForm(embedded)).toBe(true);
   });
+
+  it('does not mutate DOM attributes (data-wera-id) during passive form detection', async () => {
+    const { ownApplicationForm } = await import('../content/detect');
+    const doc = new JSDOM('<form><label for="e">Email</label><input id="e" type="email"><label for="r">Resume</label><input id="r" type="file"></form>', {
+      url: 'https://job-boards.greenhouse.io/togetherai/jobs/5180155007',
+    }).window.document;
+    expect(ownApplicationForm(doc)).toBe(true);
+    expect(doc.querySelectorAll('[data-wera-id]').length).toBe(0);
+  });
 });
