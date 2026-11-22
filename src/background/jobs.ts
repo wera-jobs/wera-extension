@@ -9,8 +9,9 @@ import type { LearnedAnswer } from '../shared/learn';
 import { briefOf, PAST_APPLIED, type JobConfirmed, type JobRequest, type JobContext, type SubmitReply } from '../shared/jobs';
 import { log } from '../shared/log';
 import { loadFlow, saveFlow } from '../shared/flow';
+import { clearProfileCache } from '../shared/profileCache';
 import { loadSettings } from '../shared/settings';
-import { loadSession, notePage, rememberTabJob, tabJob, tabPages as pages } from '../shared/storage';
+import { loadSession, notePage, recentTabJob, rememberTabJob, tabJob, tabPages as pages } from '../shared/storage';
 import { hostOf, originOf, siteOf } from '../shared/url';
 import type { FieldPurpose } from '../shared/types';
 
@@ -24,11 +25,21 @@ export async function signedInApi(): Promise<WeraApi | null> {
   return s ? new WeraApi(s.server, s.token, undefined, (path) => void notifyDashboard(s.server, path)) : null;
 }
 
+/** Whether a cross-origin ATS page (URL or title) clearly belongs to the candidate job. */
+function matchesCrossOriginJob(url: string, title: string, job: WeraJob): boolean {
+  if (title && sameRole(title, job.title)) return true;
+  const company = job.company.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (company.length < 3) return false;
+  const hay = `${url} ${title}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return hay.includes(company);
+}
+
 /**
  * The job a tab is on: by its address, else by the page it came from on
  * the same site (the posting whose Apply button led here), else the one
  * this tab showed on the same site, else the one the dashboard opened it
- * for, else the one an autofill in progress is for.
+ * for, else the one an autofill in progress is for, else a recent
+ * cross-origin Apply redirect whose ATS URL or title matches the job.
  */
 export async function resolveJob(api: WeraApi, tabId: number, url: string, title = '', referrer = ''): Promise<WeraJob | null> {
   const origin = originOf(url);
@@ -46,6 +57,15 @@ export async function resolveJob(api: WeraApi, tabId: number, url: string, title
   if (!job && origin) {
     const flow = await loadFlow(tabId, hostOf(url));
     if (flow?.jobId) job = await api.job(flow.jobId).catch(() => null);
+  }
+  if (!job && referrer && referrer !== url && originOf(referrer) !== origin) {
+    const fromRef = await api.lookup(referrer).then((r) => r.job).catch(() => null);
+    if (fromRef && matchesCrossOriginJob(url, title, fromRef)) job = fromRef;
+  }
+  if (!job) {
+    const recent = await recentTabJob(tabId);
+    const cand = recent ? await api.job(recent).catch(() => null) : null;
+    if (cand && matchesCrossOriginJob(url, title, cand)) job = cand;
   }
   if (job && origin) await rememberTabJob(tabId, origin, job.id);
   return job;
@@ -128,7 +148,10 @@ export async function learnDetails(api: WeraApi, entries: { purpose: FieldPurpos
   const view = await api.applicant();
   const learned = learnedDetails(view.applicant, entries);
   const keys = Object.keys(learned);
-  if (keys.length) await api.saveApplicant({ ...view.applicant, ...learned });
+  if (keys.length) {
+    await api.saveApplicant({ ...view.applicant, ...learned });
+    void clearProfileCache();
+  }
   log.info('jobs', keys.length ? `learned ${keys.join(', ')} from the form` : 'nothing new to learn from the form');
   return keys;
 }
@@ -154,7 +177,10 @@ export async function learnAnswers(api: WeraApi, tabId: number, answers: Learned
   const fresh = answers
     .filter((a) => known.get(answerKey(a.question)) !== a.answer)
     .map((a) => ({ ...a, company: a.company || company }));
-  if (fresh.length) await api.saveAnswers(fresh);
+  if (fresh.length) {
+    await api.saveAnswers(fresh);
+    void clearProfileCache();
+  }
   log.info('jobs', fresh.length ? `remembered ${fresh.length} answer(s) from the form` : 'no new answers to remember');
   return fresh.length;
 }
