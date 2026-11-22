@@ -261,4 +261,28 @@ describe('the Next button', () => {
     document.body.innerHTML = '<div><button data-automation-id="bottom-navigation-next-button">Save and Continue</button></div>';
     expect(findNext(document)).toMatchObject({ final: false });
   });
+
+  it('watchUser clears the active field on focusout when not filling programmatically', async () => {
+    const { watchUser } = await import('./plan');
+    document.body.innerHTML = '<input id="a"><input id="b">';
+    const a = document.getElementById('a') as HTMLInputElement;
+    const handlers = new Map<string, (e: Event) => void>();
+    const fakeDoc = {
+      activeElement: a,
+      addEventListener: (type: string, fn: (e: Event) => void) => handlers.set(type, fn),
+      removeEventListener: (type: string) => handlers.delete(type),
+    } as unknown as Document;
+    const w = watchUser(fakeDoc);
+    handlers.get('pointerdown')!({ type: 'pointerdown', isTrusted: true, target: a } as unknown as Event);
+    expect(w.inside(a)).toBe(true);
+    // Programmatic focusout while Wera is filling does not clear mine.
+    w.setFilling(true);
+    handlers.get('focusout')!({ type: 'focusout', target: a, relatedTarget: null } as unknown as FocusEvent);
+    w.setFilling(false);
+    expect(w.inside(a)).toBe(true);
+    // User blurring input a clears mine so Autofill will not skip it.
+    handlers.get('focusout')!({ type: 'focusout', target: a, relatedTarget: null } as unknown as FocusEvent);
+    expect(w.inside(a)).toBe(false);
+    w.stop();
+  });
 });
