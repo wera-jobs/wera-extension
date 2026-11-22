@@ -4,6 +4,7 @@
 import { ApiError, WeraApi } from '../shared/api';
 import { notifyDashboard } from '../shared/bridge';
 import { remoteCallable, settle, type PanelRequest, type RpcReply } from '../shared/rpc';
+import { clearProfileCache } from '../shared/profileCache';
 import { loadSession, normalizeServer, rememberTabJob, saveSession } from '../shared/storage';
 import { signedInApi } from './jobs';
 import * as frames from './frames';
@@ -43,6 +44,7 @@ export async function handlePanel(msg: PanelRequest, tabId: number, frameId: num
         const s = await loadSession();
         if (s) await new WeraApi(s.server, s.token, undefined, (p) => void notifyDashboard(s.server, p)).disconnect().catch(() => {});
         await saveSession(null);
+        await clearProfileCache();
         return null;
       });
     case 'wera:panel-ensure':
