@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.20.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.3...wera-extension-v0.20.0) (2026-11-22)
+
+
+### Features
+
+* **assist:** add inline quick-fill picker for individual application fields ([bb1f55e](https://github.com/wera-jobs/wera-extension/commit/bb1f55e2ce4977d853fcf37620b5104a1768f844))
+* **sites:** add LinkedIn Easy Apply and Indeed Apply site adapters ([7b82c59](https://github.com/wera-jobs/wera-extension/commit/7b82c591dcaa704bfe27bd34a69a2f3e63981927))
+
+
+### Bug Fixes
+
+* **autofill:** handle embedded React-Select v5 portals and async controlled inputs ([0e85ea1](https://github.com/wera-jobs/wera-extension/commit/0e85ea112844fd89fe864afbe9fdba396aa0105d))
+
 ## [0.19.3](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.2...wera-extension-v0.19.3) (2026-11-22)
 
 
