@@ -345,15 +345,25 @@ function adders(root: ParentNode, fields: FieldPlan[], p: Profile): NonNullable<
   return out;
 }
 
-/** Presses a section's Add button count times, waiting for each new block. */
+/** Presses a section's Add button count times, waiting for each new block's fields to render. */
 export async function addEntries(root: ParentNode, section: Section, count: number, delay = 600): Promise<number> {
+  const countIn = () => collectFields(root, undefined, true).filter((f) => f.section === section).length;
+  const maxWait = delay >= 100 ? Math.max(delay, 2500) : Math.max(delay, 50);
+  const settle = Math.min(delay, 120);
   let added = 0;
   for (let i = 0; i < Math.min(count, 4); i++) {
     const b = findAdder(root, section);
     if (!b) break;
+    const before = countIn();
     b.click();
     added++;
-    await wait(delay);
+    const end = Date.now() + maxWait;
+    let grew = countIn() > before;
+    while (!grew && Date.now() < end) {
+      await wait(Math.min(50, maxWait));
+      grew = countIn() > before;
+    }
+    if (settle > 0) await wait(settle);
   }
   return added;
 }
