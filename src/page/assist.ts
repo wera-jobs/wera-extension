@@ -7,15 +7,19 @@ import { classify } from '../content/classify';
 import { pageKind } from '../content/detect';
 import { collectFields, type Field } from '../content/fields';
 import { insertText } from '../content/fill';
+import { firstChoice, valueFor } from '../content/values';
 import { bestAnswer, type SavedAnswer } from '../shared/answers';
+import type { ApplicantView } from '../shared/api';
 import { extensionAlive, sendSafe } from '../shared/alive';
 import { describeError } from '../shared/errors';
 import type { JobContext } from '../shared/jobs';
 import { log } from '../shared/log';
+import { loadProfileCache } from '../shared/profileCache';
 import { remoteApi } from '../shared/rpc';
 import { loadSettings } from '../shared/settings';
 import { loadSession } from '../shared/storage';
 import { followTheme } from '../shared/theme';
+import type { Applicant } from '../shared/types';
 import { BASE, el, icon, logoMark, mountShadow } from './ui';
 
 const CSS = `${BASE}
@@ -51,6 +55,12 @@ const CSS = `${BASE}
 .saved[hidden] { display: none; }
 .saved { padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
 .saved p { margin: 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.qf-list { max-height: 220px; overflow: auto; display: grid; gap: 4px; }
+.qf-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); text-align: left; font-size: 12px; }
+.qf-row:hover { border-color: color-mix(in oklab, var(--accent) 50%, transparent); background: var(--surface-2); }
+.qf-row.best { border-color: color-mix(in oklab, var(--accent) 55%, transparent); background: color-mix(in oklab, var(--accent) 10%, var(--bg)); }
+.qf-k { color: var(--muted); font-size: 11px; shrink: 0; }
+.qf-v { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .pop { animation: none; } .spin { animation: none; } }`;
 
 /**
@@ -76,6 +86,45 @@ export function isOpenQuestion(f: Field): boolean {
   return p === 'question' || (p === 'cover_letter' && f.kind === 'textarea');
 }
 
+/** A regular application input where Wera can offer one-click profile quick-fill. */
+export function isQuickFillField(f: Field): boolean {
+  if ((f.kind !== 'text' && f.kind !== 'combobox') || f.trap) return false;
+  if (isOpenQuestion(f)) return false;
+  const p = classify(f);
+  return p !== 'consent';
+}
+
+/** Profile details offered in the inline quick-fill picker. */
+function quickFillItems(a: Applicant): { label: string; value: string }[] {
+  const full = [a.first_name, a.last_name].filter(Boolean).join(' ');
+  const loc = [a.city, a.state].filter(Boolean).join(', ');
+  const pairs: [string, string][] = [
+    ['Full name', full],
+    ['First name', a.first_name],
+    ['Last name', a.last_name],
+    ['Email', a.email],
+    ['Phone', a.phone],
+    ['LinkedIn', a.linkedin],
+    ['GitHub', a.github],
+    ['Portfolio', a.portfolio],
+    ['Location', loc],
+    ['Address', a.address],
+    ['City', a.city],
+    ['State', a.state],
+    ['Postal code', a.postal_code],
+    ['Country', a.country],
+    ['School', a.school],
+    ['Degree', a.degree],
+    ['Major', a.major],
+    ['Graduation year', a.graduation_year],
+    ['GPA', a.gpa],
+    ['Current company', a.current_company],
+    ['Current title', a.current_title],
+    ['Years experience', a.years_experience],
+  ];
+  return pairs.filter(([, v]) => typeof v === 'string' && v.trim().length > 0).map(([label, value]) => ({ label, value: value.trim() }));
+}
+
 /** How long an answer the field takes: its character limit, else a short answer for a text box. */
 export function wordsFor(f: Field): number {
   const max = (f.el as HTMLInputElement | HTMLTextAreaElement).maxLength;
@@ -96,6 +145,7 @@ export function startAssist(doc: Document): () => void {
   let ui: ReturnType<typeof mountShadow> | null = null;
   let stopTheme = () => {};
   let field: Field | null = null;
+  let markMode: 'draft' | 'quick' = 'draft';
   let mark: HTMLButtonElement | null = null;
   let pop: HTMLElement | null = null;
   let hideTimer = 0;
@@ -103,6 +153,8 @@ export function startAssist(doc: Document): () => void {
   let contextUrl = '';
   let bank: Promise<SavedAnswer[]> | null = null;
   let bankAt = 0;
+  let profileView: Promise<ApplicantView | null> | null = null;
+  let profileAt = 0;
 
   const getContext = () => {
     const href = doc.location?.href ?? '';
@@ -121,6 +173,18 @@ export function startAssist(doc: Document): () => void {
       });
     }
     return bank;
+  };
+  const getProfile = (server: string) => {
+    if (!profileView || Date.now() - profileAt > 60_000) {
+      profileAt = Date.now();
+      profileView = loadProfileCache(server)
+        .then((c) => c?.view ?? remoteApi(server).applicant())
+        .catch((e: unknown) => {
+          log.warn('assist', 'loading profile for quick-fill failed', e);
+          return null;
+        });
+    }
+    return profileView;
   };
 
   const ensureUi = () => {
@@ -161,17 +225,86 @@ export function startAssist(doc: Document): () => void {
     pop = null;
   };
 
-  const showMark = (f: Field) => {
+  const showMark = (f: Field, mode: 'draft' | 'quick' = 'draft') => {
     field = f;
+    markMode = mode;
     const { box } = ensureUi();
+    const label = mode === 'draft' ? 'Draft this answer with Wera' : 'Fill from your Wera profile';
     if (!mark) {
-      mark = el(doc, 'button', { class: 'mark', type: 'button', title: 'Draft this answer with Wera', 'aria-label': 'Draft this answer with Wera' }, logoMark(doc, 18));
+      mark = el(doc, 'button', { class: 'mark', type: 'button', title: label, 'aria-label': label }, logoMark(doc, 18));
       // Keep the field's focus (and the mark) while clicking it.
       mark.addEventListener('mousedown', (e) => e.preventDefault());
-      mark.addEventListener('click', () => void openPop());
+      mark.addEventListener('click', () => void (markMode === 'draft' ? openPop() : openQuickFill()));
       box.append(mark);
+    } else {
+      mark.title = label;
+      mark.setAttribute('aria-label', label);
     }
     place();
+  };
+
+  const openQuickFill = async () => {
+    const f = field;
+    if (!f) return;
+    closePop();
+    const { box } = ensureUi();
+    const label = f.label.replace(/\s*\*\s*$/, '') || 'Quick fill';
+    const x = el(doc, 'button', { class: 'x', type: 'button', 'aria-label': 'Close' }, icon(doc, 'x'));
+    x.addEventListener('click', closePop);
+    const filter = el(doc, 'input', { type: 'text', placeholder: 'Filter your details…', 'aria-label': 'Filter your details' });
+    const list = el(doc, 'div', { class: 'qf-list' });
+    pop = el(doc, 'section', { class: 'pop', role: 'dialog', 'aria-label': 'Fill from your Wera profile' },
+      el(doc, 'div', { class: 'top' }, logoMark(doc, 18), el(doc, 'b', {}, 'Wera'), el(doc, 'span', { class: 'q', title: label }, label), x),
+      el(doc, 'div', { class: 'steer' }, filter),
+      list);
+    pop.addEventListener('mousedown', (e) => {
+      if (e.target !== filter) e.preventDefault();
+    });
+    box.append(pop);
+    place();
+
+    const server = (await loadSession().catch(() => null))?.server;
+    if (!server) {
+      list.replaceChildren(el(doc, 'div', { class: 'draft need' }, 'Sign in to Wera first: click the Wera icon in the toolbar.'));
+      place();
+      return;
+    }
+    const view = await getProfile(server);
+    if (!view?.applicant) {
+      list.replaceChildren(el(doc, 'div', { class: 'draft need' }, "Couldn't load your Wera profile details."));
+      place();
+      return;
+    }
+    const purpose = classify(f);
+    const suggested = purpose ? firstChoice(valueFor(purpose, view.applicant)) : '';
+    const all = quickFillItems(view.applicant);
+    const ordered = suggested
+      ? [{ label: 'Best match', value: suggested, best: true }, ...all.filter((it) => it.value !== suggested).map((it) => ({ ...it, best: false }))]
+      : all.map((it) => ({ ...it, best: false }));
+
+    const render = (q: string) => {
+      const needle = q.trim().toLowerCase();
+      const shown = needle ? ordered.filter((it) => it.label.toLowerCase().includes(needle) || it.value.toLowerCase().includes(needle)) : ordered;
+      if (!shown.length) {
+        list.replaceChildren(el(doc, 'div', { class: 'meta' }, 'No matching details in your profile.'));
+        return;
+      }
+      list.replaceChildren(...shown.map((it) => {
+        const row = el(doc, 'button', { class: it.best ? 'qf-row best' : 'qf-row', type: 'button' },
+          el(doc, 'span', { class: 'qf-k' }, it.label),
+          el(doc, 'span', { class: 'qf-v' }, it.value));
+        row.addEventListener('click', () => {
+          if (!f.el.isConnected) return;
+          insertText(f.el, it.value);
+          closePop();
+          hideMark();
+        });
+        return row;
+      }));
+      place();
+    };
+    filter.addEventListener('input', () => render(filter.value));
+    render('');
   };
 
   const openPop = async () => {
@@ -288,7 +421,7 @@ export function startAssist(doc: Document): () => void {
   const focused = (target: HTMLElement | null) => {
     if (!target || !(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement)) return;
     window.clearTimeout(hideTimer);
-    if (field?.el === target) return showMark(field);
+    if (field?.el === target) return showMark(field, markMode);
     if (looked(target)) {
       // Seen a moment ago (Autofill just filled it, or the page keeps focusing it):
       // look once more when the moment is over, if the person is still in it.
@@ -302,9 +435,13 @@ export function startAssist(doc: Document): () => void {
       const onForm = doc.defaultView?.__weraPage?.kind === 'form' || pageKind(doc) === 'form';
       if (!onForm) return;
       const f = collectFields(doc, undefined, true).find((x) => x.el === target);
-      if (f && isOpenQuestion(f) && doc.activeElement === target) {
+      if (!f || doc.activeElement !== target) return;
+      if (isOpenQuestion(f)) {
         closePop();
-        showMark(f);
+        showMark(f, 'draft');
+      } else if (isQuickFillField(f) && !target.value.trim()) {
+        closePop();
+        showMark(f, 'quick');
       }
     })();
   };
