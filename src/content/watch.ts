@@ -5,61 +5,10 @@
 import type { ContentEvent } from '../shared/types';
 import { classify } from './classify';
 import { collectFields } from './fields';
+import { currentValue, isApplying } from './plan';
+import { bodyText, looksSubmitted, shown, submittedAddress } from './submitted';
 
-const SUBMITTED = [
-  /thank(s| you) for (applying|your application|submitting)/i,
-  /application (has been |was )?(successfully )?(submitted|received|sent)/i,
-  /we('ve| have) received your application/i,
-  /your application is (complete|in)/i,
-  /successfully applied/i,
-];
-
-// Where ATSs send the browser once an application went through.
-const SUBMITTED_PATH = /\/(thank[-_]?you|thanks|confirmation|application[-_]?(submitted|received|complete)|submitted|success)(\/|$|\?|#)/i;
-
-/** Whether the address is a "thank you for applying" page. */
-export function submittedAddress(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return SUBMITTED_PATH.test(u.pathname + (u.pathname.endsWith('/') ? '' : '/'));
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The text a person can read on the page. A document that is not shown
- * (an ATS form in a hidden tab, Airbnb's) has none: there the browser's
- * innerText is every text, scripts included, and Greenhouse's page data
- * holds its own "Thank you for applying" message. Where innerText is
- * missing (jsdom), the text outside scripts and styles.
- */
-export function bodyText(doc: Document): string {
-  const body = doc.body;
-  if (!body) return '';
-  if (!shown(doc)) return '';
-  return body.innerText || textOutsideScripts(body);
-}
-
-/** Whether the document has room on screen: a frame that is not shown has a window of no size. */
-export function shown(doc: Document): boolean {
-  const view = doc.defaultView;
-  return !!view && view.innerWidth > 0 && view.innerHeight > 0;
-}
-
-function textOutsideScripts(el: Element): string {
-  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement?.closest('script, style, noscript, template') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
-  });
-  let out = '';
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) out += `${n.nodeValue ?? ''} `;
-  return out;
-}
-
-/** Whether the page text says the application went through. */
-export function looksSubmitted(text: string): boolean {
-  return SUBMITTED.some((re) => re.test(text.slice(0, 20000)));
-}
+export { bodyText, looksSubmitted, shown, submittedAddress };
 
 /** The fillable fields now on the page, as a signature that changes when a new step appears. */
 export function formSignature(doc: Document): { count: number; key: string; labels: string[] } {
@@ -103,11 +52,25 @@ export function watchPage(doc: Document, notify: (e: ContentEvent) => void, dela
   const schedule = () => {
     if (!timer) timer = window.setTimeout(check, delay);
   };
+  const onChange = (e: Event) => {
+    if (isApplying()) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const marked = target.closest?.('[data-wera-id]');
+    const id = marked?.getAttribute('data-wera-id') ?? '';
+    const field = id
+      ? collectFields(doc, undefined, true).find((f) => f.id === id)
+      : collectFields(doc, undefined, true).find((f) => f.el === target || f.options.some((o) => o.el === target));
+    if (!field?.id) return;
+    notify({ type: 'wera:field-changed', id: field.id, value: currentValue(field) });
+  };
   const obs = new MutationObserver(schedule);
   obs.observe(doc.body, { childList: true, subtree: true });
+  doc.addEventListener('change', onChange, true);
   window.addEventListener('popstate', schedule);
   return () => {
     obs.disconnect();
+    doc.removeEventListener('change', onChange, true);
     window.removeEventListener('popstate', schedule);
     window.clearTimeout(timer);
   };

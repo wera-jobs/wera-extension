@@ -12,7 +12,11 @@ import * as frames from './frames';
 /** Puts the panel on the tab's page (once) and tells it to show: open, and fill, when asked; formFrame: a frame holds the form. */
 export async function ensurePanel(tabId: number, opts: { open?: boolean; fill?: boolean; formFrame?: boolean } = {}): Promise<boolean> {
   const ok = await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: ['panel.js'] }).then(() => true, () => false);
-  if (ok) await chrome.tabs.sendMessage(tabId, { type: 'wera:panel-show', tabId, ...opts }, { frameId: 0 }).catch(() => {});
+  if (ok) {
+    // Watch ATS submit requests in the page's main world (best-effort, job pages only).
+    void chrome.scripting.executeScript({ target: { tabId, allFrames: true }, world: 'MAIN', files: ['submitWatch.js'] }).catch(() => {});
+    await chrome.tabs.sendMessage(tabId, { type: 'wera:panel-show', tabId, ...opts }, { frameId: 0 }).catch(() => {});
+  }
   return ok;
 }
 

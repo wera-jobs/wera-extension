@@ -113,6 +113,20 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
         <p className="text-[11px] text-muted">Last page: check everything, then press <b className="text-text">{a.plan.next.label}</b> on the site yourself.</p>
       )}
 
+      {a.corrections.length > 0 && (
+        <div className="anim-rise space-y-1.5">
+          {a.corrections.map((c) => (
+            <div key={c.key} className="rounded-lg border border-accent/30 bg-surface px-2.5 py-2 text-xs">
+              <p className="text-text">You changed <span className="font-medium">{c.label}</span> to <span className="font-medium">"{c.to}"</span>. Update your Wera details?</p>
+              <div className="mt-1.5 flex justify-end gap-1.5">
+                <Button variant="ghost" className="px-2 py-1" onClick={() => a.dismissCorrection(c.key)}>Dismiss</Button>
+                <Button variant="primary" className="px-2.5 py-1" onClick={() => void a.acceptCorrection(c)}>Update</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <Docs api={api} page={page} a={a} />
 
       {filled.length > 0 && (

@@ -228,11 +228,13 @@ function meaningOption(real: Option[], value: string, purpose: FieldPurpose | nu
 }
 
 // On normalized text, where "don't" reads "don t".
-const NEGATED = /\b(not|no|never|cannot)\b|n t\b/;
+const NEGATED = /\b(not|no|never|cannot|nicht|nein|non|nee|niet|geen)\b|n t\b/;
+const YES_OPTION = /^(yes|ja|oui|si)\b/;
+const NO_OPTION = /^(no|nein|non|nee)\b/;
 
 /** A dropdown's prompt ("Select...", "Choose one", "-- Please select --"), not an answer ("Choose not to disclose" is one). */
 export function isPlaceholderOption(label: string): boolean {
-  return /^(-{2,}.*|(please )?(select|choose|pick)( one| an? (option|answer|item)| your answer| from the list)?\s*(\.{3}|…|:)?\s*(-{2,})?|month|year|day)$/i.test(label.trim());
+  return /^(-{2,}.*|(please )?(select|choose|pick)( one| an? (option|answer|item)| your answer| from the list)?\s*(\.{3}|…|:)?\s*(-{2,})?|bitte w[aä]hlen|ausw[aä]hlen|veuillez s[eé]lectionner|s[eé]lectionner|seleccionar|seleccione|selecteer|kies|month|year|day)$/i.test(label.trim());
 }
 
 /** Picks the option that means value (or its first alternative that fits), or null. */
@@ -250,7 +252,8 @@ export function matchOption(options: Option[], value: string, purpose: FieldPurp
   const v = norm(value);
   if (v === 'decline') return real.find((o) => DECLINE.test(o.label)) ?? null;
   if (v === 'yes' || v === 'no') {
-    const direct = real.filter((o) => new RegExp(`^${v}\\b`).test(norm(o.label)));
+    const wordRe = v === 'yes' ? YES_OPTION : NO_OPTION;
+    const direct = real.filter((o) => wordRe.test(norm(o.label)));
     // Several ways of saying yes ("Yes, I live nearby", "Yes, I would relocate"): which one takes more than a yes.
     if (direct.length > 1) return null;
     if (direct[0]) return direct[0];

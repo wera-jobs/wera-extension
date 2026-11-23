@@ -275,3 +275,109 @@ describe('labels that do not say', () => {
     expect(collectFields(document)[0]!.label).toBe('Cover Letter');
   });
 });
+
+describe('forms in German, French, Spanish, and Dutch', () => {
+  it('recognizes German application labels and Ja/Nein options', () => {
+    for (const [label, kind, options, want] of [
+      ['Vorname', 'text', [], 'first_name'],
+      ['Nachname', 'text', [], 'last_name'],
+      ['Telefonnummer', 'text', [], 'phone'],
+      ['Straße und Hausnummer', 'text', [], 'address'],
+      ['Postleitzahl', 'text', [], 'postal_code'],
+      ['Wohnort', 'text', [], 'city'],
+      ['Land', 'text', [], 'country'],
+      ['Gehaltsvorstellung', 'text', [], 'salary_expectation'],
+      ['Frühester Eintrittstermin', 'text', [], 'start_date'],
+      ['Kündigungsfrist', 'text', [], 'notice_period'],
+      ['Hochschule', 'text', [], 'school'],
+      ['Studienabschluss', 'text', [], 'degree'],
+      ['Studienfach', 'text', [], 'major'],
+      ['Staatsangehörigkeit', 'text', [], 'citizenship'],
+      ['Sprachkenntnisse', 'text', [], 'languages'],
+      ['Wie haben Sie von uns erfahren?', 'text', [], 'how_heard'],
+      ['Ich stimme der Datenschutzerklärung zu', 'checkbox', [], 'consent'],
+    ] as [string, Kind, string[], FieldPurpose][]) {
+      expect(at(label, kind, options), label).toBe(want);
+    }
+    document.body.innerHTML = '<label for="cv">Lebenslauf</label><input id="cv" type="file"><label for="cl">Anschreiben</label><input id="cl" type="file">';
+    expect(collectFields(document).map(classify)).toEqual(['resume', 'cover_letter']);
+    expect(proposed('Umzugsbereit?', 'radio', ['Ja', 'Nein'])).toBe('Ja');
+  });
+
+  it('recognizes French application labels and Oui/Non options', () => {
+    for (const [label, kind, options, want] of [
+      ['Prénom', 'text', [], 'first_name'],
+      ['Nom de famille', 'text', [], 'last_name'],
+      ['Courriel', 'text', [], 'email'],
+      ['Numéro de téléphone', 'text', [], 'phone'],
+      ['Adresse', 'text', [], 'address'],
+      ['Code postal', 'text', [], 'postal_code'],
+      ['Ville', 'text', [], 'city'],
+      ['Pays', 'text', [], 'country'],
+      ['Prétentions salariales', 'text', [], 'salary_expectation'],
+      ['Date de disponibilité', 'text', [], 'start_date'],
+      ['Délai de préavis', 'text', [], 'notice_period'],
+      ['Université', 'text', [], 'school'],
+      ['Diplôme', 'text', [], 'degree'],
+      ['Nationalité', 'text', [], 'citizenship'],
+      ['Langues', 'text', [], 'languages'],
+      ["J'accepte la politique de confidentialité", 'checkbox', [], 'consent'],
+    ] as [string, Kind, string[], FieldPurpose][]) {
+      expect(at(label, kind, options), label).toBe(want);
+    }
+    document.body.innerHTML = '<label for="lm">Lettre de motivation</label><input id="lm" type="file">';
+    expect(collectFields(document).map(classify)).toEqual(['cover_letter']);
+    expect(proposed('Prêt à déménager ?', 'radio', ['Oui', 'Non'])).toBe('Oui');
+  });
+
+  it('recognizes Spanish application labels and Si/No options', () => {
+    for (const [label, kind, options, want] of [
+      ['Nombre completo', 'text', [], 'full_name'],
+      ['Apellidos', 'text', [], 'last_name'],
+      ['Correo electrónico', 'text', [], 'email'],
+      ['Teléfono', 'text', [], 'phone'],
+      ['Dirección', 'text', [], 'address'],
+      ['Código postal', 'text', [], 'postal_code'],
+      ['Ciudad', 'text', [], 'city'],
+      ['País', 'text', [], 'country'],
+      ['Expectativa salarial', 'text', [], 'salary_expectation'],
+      ['Fecha de inicio', 'text', [], 'start_date'],
+      ['Universidad', 'text', [], 'school'],
+      ['Nivel de estudios', 'text', [], 'degree'],
+      ['Nacionalidad', 'text', [], 'citizenship'],
+      ['Idiomas', 'text', [], 'languages'],
+      ['Acepto la política de privacidad', 'checkbox', [], 'consent'],
+    ] as [string, Kind, string[], FieldPurpose][]) {
+      expect(at(label, kind, options), label).toBe(want);
+    }
+    document.body.innerHTML = '<label for="hv">Hoja de vida</label><input id="hv" type="file"><label for="cp">Carta de presentación</label><input id="cp" type="file">';
+    expect(collectFields(document).map(classify)).toEqual(['resume', 'cover_letter']);
+    expect(proposed('Dispuesto a reubicarse', 'radio', ['Sí', 'No'])).toBe('Sí');
+  });
+
+  it('recognizes Dutch application labels and Ja/Nee options', () => {
+    for (const [label, kind, options, want] of [
+      ['Voornaam', 'text', [], 'first_name'],
+      ['Achternaam', 'text', [], 'last_name'],
+      ['E-mailadres', 'text', [], 'email'],
+      ['Telefoonnummer', 'text', [], 'phone'],
+      ['Straat', 'text', [], 'address'],
+      ['Postcode', 'text', [], 'postal_code'],
+      ['Woonplaats', 'text', [], 'city'],
+      ['Land', 'text', [], 'country'],
+      ['Salarisindicatie', 'text', [], 'salary_expectation'],
+      ['Beschikbaarheid', 'text', [], 'start_date'],
+      ['Opzegtermijn', 'text', [], 'notice_period'],
+      ['Universiteit', 'text', [], 'school'],
+      ['Opleidingsniveau', 'text', [], 'degree'],
+      ['Nationaliteit', 'text', [], 'citizenship'],
+      ['Talen', 'text', [], 'languages'],
+      ['Ik ga akkoord met de privacyverklaring', 'checkbox', [], 'consent'],
+    ] as [string, Kind, string[], FieldPurpose][]) {
+      expect(at(label, kind, options), label).toBe(want);
+    }
+    document.body.innerHTML = '<label for="mb">Motivatiebrief</label><input id="mb" type="file">';
+    expect(collectFields(document).map(classify)).toEqual(['cover_letter']);
+    expect(proposed('Bereid te verhuizen?', 'radio', ['Ja', 'Nee'])).toBe('Ja');
+  });
+});

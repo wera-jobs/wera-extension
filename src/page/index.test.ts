@@ -400,6 +400,16 @@ describe('on a page', () => {
     expect(sent.filter((m) => m.type === 'wera:panel-ensure').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('tells Wera when a known ATS submit request succeeds (wera:submit-request)', async () => {
+    const sent = fakeChrome({ state: 'marked', job: { id: 4, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved' });
+    document.body.innerHTML = fixture('greenhouse.html');
+    run(document, 5);
+    await vi.waitFor(() => expect(sent.some((m) => m.type === 'wera:job-seen')).toBe(true));
+    document.dispatchEvent(new CustomEvent('wera:submit-request', { detail: { url: 'https://job-boards.greenhouse.io/acme/jobs/123', system: 'Greenhouse' } }));
+    await vi.waitFor(() => expect(window.__weraPage?.submitted?.state).toBe('marked'));
+    expect(sent.filter((m) => m.type === 'wera:job-submitted')).toHaveLength(1);
+  });
+
   it('remembers the answers the user gave when they submit the form themselves', async () => {
     const sent = fakeChrome();
     at('/careers/apply');
@@ -486,6 +496,24 @@ describe('a job title without its company', () => {
       url: 'https://www.acme.com/careers/sre',
     }).window.document;
     expect(hasApplicationForm(embedded)).toBe(true);
+  });
+
+  it('keeps the panel on pre-form consent and account gates on applicant systems, never on non-job sites', () => {
+    const jobviteConsent = `
+      <div class="jv-consent">
+        <h2>Data Consent</h2>
+        <label for="c">Country</label><select id="c"><option>United States</option></select>
+        <label for="l">Preferred Language</label><select id="l"><option>English</option></select>
+        <label><input type="checkbox"> I consent to the Data Privacy Notice</label>
+        <button>Accept</button>
+      </div>`;
+    expect(kindAt('https://jobs.jobvite.com/nutanix/job/o1234/apply', jobviteConsent)).toBe('form');
+    const accountPage = `<h2>Sign In</h2><label for="e">Email</label><input id="e" type="email"><label for="p">Password</label><input id="p" type="password"><button>Sign In</button>`;
+    expect(kindAt('https://acme.wd5.myworkdayjobs.com/en-US/Careers/login', accountPage)).toBe('form');
+    expect(kindAt('https://jobs.dayforcehcm.com/en-US/acme/CANDIDATEPORTAL/login', `<h2>Already Have an Account?</h2><button>Sign In</button><a href="#">Create Account</a>`)).toBe('form');
+    // Non-job sites with login or privacy/cookie banners must never trigger Wera.
+    expect(kindAt('https://www.bank.example/login', accountPage)).toBeNull();
+    expect(kindAt('https://www.shop.example/privacy', jobviteConsent)).toBeNull();
   });
 
   it('does not mutate DOM attributes (data-wera-id) during passive form detection', async () => {

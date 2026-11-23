@@ -258,6 +258,10 @@ export function planField(f: Field, a: Applicant | Profile, opts: PlanOptions = 
     if (purpose === 'city' && raw && a.state && (f.kind === 'combobox' || f.kind === 'listbox')) raw = `${raw}, ${a.state}`;
     // A state list may want the name ("Texas") where the details have the code.
     if (purpose === 'state' && raw && CHOICE.has(f.kind)) raw = [raw, stateName(raw)].join(' || ');
+    // A single-choice language picker wants one language where the details may list several ("English, Spanish").
+    if (purpose === 'languages' && raw && (CHOICE.has(f.kind) || f.kind === 'combobox' || f.kind === 'listbox') && f.kind !== 'checkboxes') {
+      raw = raw.split(/\s*[|,;]\s*/).filter(Boolean).join(OR);
+    }
     // Typed into a box, a yes/no answer reads as a person writes it.
     const v = (f.kind === 'text' || f.kind === 'textarea') && /^(yes|no)$/.test(raw) ? raw[0]!.toUpperCase() + raw.slice(1) : raw;
     if (v) {
@@ -332,7 +336,7 @@ const MAX_BLOCKS: Record<Section, number> = { experience: 3, education: 2 };
 
 /** Sections that could take more of the resume's jobs or schools through their Add button. */
 function adders(root: ParentNode, fields: FieldPlan[], p: Profile): NonNullable<PagePlan['adders']> {
-  const doc = root instanceof Document ? root : (root as Node).ownerDocument;
+  const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   if (doc && siteFor(doc)?.noBlocks) return [];
   const out: NonNullable<PagePlan['adders']> = [];
   for (const section of ['experience', 'education'] as Section[]) {
@@ -375,7 +379,7 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   const placed = placeFields(all);
   const fields = all.map((f) => planField(f, a, opts, placed.get(f.id))).filter((p) => p.purpose !== null || p.label !== '' || p.required);
   wholeAddress(fields, a);
-  const doc = root instanceof Document ? root : (root as Node).ownerDocument;
+  const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   const site = doc ? siteFor(doc) : null;
   const traps = uniqueTraps([...found, ...all.flatMap((f) => [...(f.said ?? []), ...(f.trap ? [f.trap] : [])])]);
   return {
@@ -387,6 +391,13 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
 
 // The user pressed Stop: fills under way in this frame end after the field they are on.
 let halted = false;
+let applyingNow = false;
+
+/** Whether Wera is currently applying values to this frame (so watchPage ignores synthetic change events). */
+export function isApplying(): boolean {
+  return applyingNow;
+}
+
 export function stopFilling() {
   halted = true;
 }
@@ -408,12 +419,13 @@ export interface ApplyOptions {
  */
 export async function applyItems(root: ParentNode, items: FillItem[], opts: ApplyOptions = {}): Promise<FillResult[]> {
   const fields = new Map(collectFields(root).map((f) => [f.id, f]));
-  const doc = root instanceof Document ? root : (root as Node).ownerDocument;
+  const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   // Some sites need time between fields to keep up (Workday re-renders after each one).
   const pace = Math.max(opts.pace ?? 0, (doc && siteFor(doc)?.pace) || 0);
   const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
   halted = false;
+  applyingNow = true;
   try {
     for (const item of items) {
       // Stopped: what is left is reported as not filled, and nothing more is touched.
@@ -513,6 +525,7 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
       if (pace) await wait(pace);
     }
   } finally {
+    applyingNow = false;
     user?.stop();
   }
   // Filling moves the focus from box to box: none is left in the last one, where Wera's button would show.

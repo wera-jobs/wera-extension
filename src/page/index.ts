@@ -42,7 +42,7 @@ declare global {
 const ask = <T>(msg: JobRequest) => sendSafe<T>(msg);
 
 // The buttons that move an application on: what the user entered on the page is final then.
-const MOVES_ON = /^(submit|submit application|send|send application|apply|apply now|next|continue|save and continue|save & continue|review|review application|finish)\b/i;
+const MOVES_ON = /^(submit|submit application|send|send application|apply|apply now|next|continue|save and continue|save & continue|review|review application|finish|accept|i accept|agree|i agree|accept (and|&) continue|agree (and|&) continue)\b/i;
 // The buttons that send it: a confirmation that follows is the answer to this click.
 const SENDS = /^(submit|submit (my |your )?application|send|send application|apply|apply now|finish|complete application)\b/i;
 /**
@@ -193,8 +193,19 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
   const onSubmit = () => {
     if (sawForm) void ask({ type: 'wera:job-sending' });
   };
+  // The ATS's own submit request succeeded (2xx), reported by submitWatch in the main world.
+  const onSubmitRequest = () => {
+    const key = doc.location.href;
+    if (!sawForm || submittedFor === key || isNotJobSite(key)) return;
+    submittedFor = key;
+    void ask({ type: 'wera:job-sending' });
+    void ask<SubmitReply>({ type: 'wera:job-submitted', url: key }).then((r) => {
+      if (top && r && r.state !== 'off') confirmed(r);
+    });
+  };
   doc.addEventListener('click', onClick, true);
   doc.addEventListener('submit', onSubmit, true);
+  doc.addEventListener('wera:submit-request', onSubmitRequest);
   if (top) chrome.runtime.onMessage?.addListener(onConfirmed);
   // Watched from the document itself: a page that swaps its body or <html> is still seen.
   const obs = new MutationObserver(schedule);
@@ -204,6 +215,7 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
   function stop() {
     doc.removeEventListener('click', onClick, true);
     doc.removeEventListener('submit', onSubmit, true);
+    doc.removeEventListener('wera:submit-request', onSubmitRequest);
     if (top) chrome.runtime.onMessage?.removeListener(onConfirmed);
     obs.disconnect();
     doc.removeEventListener('visibilitychange', schedule);

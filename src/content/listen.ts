@@ -10,7 +10,7 @@ import { log } from '../shared/log';
 import { scrub, uniqueTraps } from '../shared/traps';
 import { postingTraps, readJobPosting } from './jsonld';
 import { formFrameOrigins } from './frames';
-import { findApply, ownApplicationForm, pageDocument, pageKind } from './detect';
+import { findApply, hasPreFormGate, ownApplicationForm, pageDocument, pageKind } from './detect';
 import { siteFor } from './sites';
 import { pressNext } from './next';
 import { addEntries, applyItems, highlight, planForm, snapshot, stopFilling } from './plan';
@@ -36,8 +36,8 @@ function readPage(): PageInfo {
     text,
     draft: readJobPosting(shown, url),
     traps: uniqueTraps([...traps, ...scrub(hidden.join('\n')).traps, ...postingTraps(shown)]),
-    // This frame's own form: a careers page around an embedded one leaves it to that frame.
-    hasForm: ownApplicationForm(document),
+    // This frame's own form or pre-form gate (account, consent, location): a careers page around an embedded one leaves it to that frame.
+    hasForm: ownApplicationForm(document) || hasPreFormGate(document),
     submitted: looksSubmitted(bodyText(document)),
     frameOrigins: formFrameOrigins(document),
     jobLike: pageKind(document) !== null,

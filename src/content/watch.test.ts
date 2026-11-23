@@ -81,4 +81,26 @@ describe('bodyText', () => {
     vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(0);
     expect(bodyText(document)).toBe('');
   });
+
+  it('emits wera:field-changed when the user edits a marked field', () => {
+    document.body.innerHTML = '<form><label for="p">Phone</label><input id="p" data-wera-id="f1" value="512 555 0100"></form>';
+    const events: unknown[] = [];
+    const stop = watchPage(document, (e) => events.push(e), 50);
+    const input = document.querySelector<HTMLInputElement>('#p')!;
+    input.value = '512 555 9999';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    stop();
+    expect(events).toContainEqual({ type: 'wera:field-changed', id: 'f1', value: '512 555 9999' });
+  });
+
+  it('recognizes submission confirmations in German, French, Spanish, and Dutch', () => {
+    for (const msg of [
+      'Vielen Dank für Ihre Bewerbung!',
+      'Merci pour votre candidature.',
+      'Gracias por postularte a este puesto.',
+      'Bedankt voor je sollicitatie!',
+    ]) {
+      expect(looksSubmitted(msg), msg).toBe(true);
+    }
+  });
 });
