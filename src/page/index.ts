@@ -42,7 +42,7 @@ declare global {
 const ask = <T>(msg: JobRequest) => sendSafe<T>(msg);
 
 // The buttons that move an application on: what the user entered on the page is final then.
-const MOVES_ON = /^(submit|submit application|send|send application|apply|apply now|next|continue|save and continue|save & continue|review|review application|finish)\b/i;
+const MOVES_ON = /^(submit|submit application|send|send application|apply|apply now|next|continue|save and continue|save & continue|review|review application|finish|accept|i accept|agree|i agree|accept (and|&) continue|agree (and|&) continue)\b/i;
 // The buttons that send it: a confirmation that follows is the answer to this click.
 const SENDS = /^(submit|submit (my |your )?application|send|send application|apply|apply now|finish|complete application)\b/i;
 /**

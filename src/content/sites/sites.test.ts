@@ -1,5 +1,8 @@
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { collectFields } from '../fields';
+import { planForm } from '../plan';
+import type { Profile } from '../../shared/types';
 import { ashby } from './ashby';
 import { greenhouse } from './greenhouse';
 import { lever } from './lever';
@@ -35,6 +38,26 @@ describe('site rules', () => {
       <div role="dialog" aria-label="Attachment Options" class="ng-hide"><div><input id="file-input-0" type="file"></div></div>
       <div role="dialog" aria-label="Attachment Options" class="ng-hide"><div><input id="file-input-1" type="file"></div></div>`;
     expect(collectFields(document).map((f) => jobvite.purpose?.(f))).toEqual(['resume', 'cover_letter']);
+  });
+
+  it('Jobvite: Data Consent gate shows a clear next step, fills country and language, and leaves consent to the person', () => {
+    const dom = new JSDOM(`<!doctype html>
+      <div class="jv-consent">
+        <h2>Data Consent</h2>
+        <label for="loc">Country</label><select id="loc"><option value="">Select</option><option>United States</option><option>Canada</option></select>
+        <label for="lang">Preferred Language</label><select id="lang"><option value="">Select</option><option>English</option><option>French</option></select>
+        <label><input type="checkbox"> I agree to the Data Privacy Notice</label>
+        <button type="button">Continue</button>
+      </div>`, { url: 'https://jobs.jobvite.com/nutanix/job/o1234/apply' });
+    const doc = dom.window.document;
+    expect(jobvite.gate?.(doc)).toMatch(/Jobvite asks for your location, language and data consent/);
+    const profile = { country: 'United States', languages: 'English, Spanish' } as Profile;
+    const plan = planForm(doc, profile);
+    expect(plan.gate).toMatch(/Jobvite asks for your location, language and data consent/);
+    expect(plan.fields.find((f) => f.purpose === 'country')?.value).toBe('United States');
+    expect(plan.fields.find((f) => f.purpose === 'languages')?.value).toBe('English');
+    expect(plan.fields.find((f) => f.purpose === 'consent')?.value).toBe('');
+    expect(plan.fields.find((f) => f.purpose === 'consent')?.source).toBeNull();
   });
 
   it('Greenhouse job boards: its own field names, its education blocks, and the phone box\'s country picker left alone', () => {

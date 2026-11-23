@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResumeFile, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
 import { bestAnswer, type SavedAnswer } from '../shared/answers';
 import { describeError } from '../shared/errors';
-import { loadFlow, saveFlow, takeApplying, type Flow } from '../shared/flow';
+import { loadFlow, markApplying, saveFlow, takeApplying, type Flow } from '../shared/flow';
 import { clearProfileCache, loadProfileCache, saveProfileCache } from '../shared/profileCache';
 import { log } from '../shared/log';
 import { frames } from '../shared/rpc';
@@ -602,9 +602,13 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       // "Apply with Wera" on the posting: this is the application it asked for.
       const applying = await takeApplying(tabId).catch(() => false);
       if (f?.continuing) await saveFlow(tabId, { ...f, continuing: false }).catch(() => {});
-      if (applying || (f?.continuing && settings.autoContinue)) await autofill();
+      if (applying || (f?.continuing && settings.autoContinue)) {
+        // On a pre-form gate (consent, location, account), keep the wish alive so the form after it fills too.
+        if (applying && page.info?.gate) await markApplying(tabId).catch(() => {});
+        await autofill();
+      }
     })();
-  }, [tabId, page.loading, page.info?.hasForm, host, settings.autoContinue, autofill]);
+  }, [tabId, page.loading, page.info?.hasForm, page.info?.gate, host, settings.autoContinue, autofill]);
   // A new step: after Continue, or the site's own Next once Wera has filled this application.
   const started2 = phase === 'continuing' || ((phase === 'filled' || phase === 'final') && !!plan);
   useEffect(() => {
