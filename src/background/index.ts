@@ -72,6 +72,12 @@ chrome.commands.onCommand.addListener((command, tab) => {
 chrome.runtime.onMessage.addListener((msg: unknown, sender, reply) => {
   if (sender.id !== chrome.runtime.id || sender.tab?.id == null) return false;
   const tabId = sender.tab.id;
+  // The lightweight detector found a candidate job page: load the full page engine in that frame.
+  if (msg && typeof msg === 'object' && (msg as { type?: unknown }).type === 'wera:wake') {
+    const frameId = sender.frameId ?? 0;
+    void chrome.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: ['page.js'] }).catch(() => {});
+    return false;
+  }
   if (isPanelRequest(msg)) {
     handlePanel(msg, tabId, sender.frameId ?? 0).then(reply, (e: unknown) => {
       log.error('background', `${msg.type} failed`, e);

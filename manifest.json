@@ -29,7 +29,7 @@
         "http://*/*"
       ],
       "js": [
-        "page.js"
+        "detector.js"
       ],
       "run_at": "document_end",
       "all_frames": true
