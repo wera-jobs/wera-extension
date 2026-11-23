@@ -6,7 +6,7 @@
 // Anything that fails along the way is said in the panel (warnings), and
 // written to the log (Settings > Debug log, Copy diagnostics).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ResumeFile, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
+import type { ResumeFile, ResumeSummary, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
 import { answerKey, bestAnswer, type SavedAnswer } from '../shared/answers';
 import { detailCorrection } from '../shared/details';
 import { describeError } from '../shared/errors';
@@ -62,6 +62,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const [warnings, setWarnings] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
   const [resume, setResume] = useState<ResumeFile | null>(null);
+  const [resumes, setResumes] = useState<ResumeSummary[]>([]);
+  const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [letter, setLetter] = useState('');
   const [flow, setFlow] = useState<Flow | null>(null);
   const [thinking, setThinking] = useState(0);
@@ -143,6 +145,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       sources.current = view.sources;
       files.current = { resume: file, letter: cover?.body ?? '' };
       setResume(file);
+      if (file?.id != null) setSelectedResumeId(file.id);
       setLetter(cover?.body ?? '');
       const profile: Profile = { ...view.applicant, experience: view.experience, education: view.education, skills: view.skills };
       const req: ScanRequest = {
@@ -709,6 +712,45 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     }
   }, [api, ensureJob]);
 
+  // Load the user's resumes so they can pick which one to attach.
+  useEffect(() => {
+    let live = true;
+    void api.listResumes().then((list) => {
+      if (!live) return;
+      setResumes(list);
+      setSelectedResumeId((cur) => cur ?? ((jobId != null ? list.find((r) => r.job_id === jobId) : null) ?? list.find((r) => r.job_id == null))?.id ?? null);
+    }).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [api, jobId]);
+
+  /** Switches the resume to attach, re-attaching immediately if a resume field is already filled. */
+  const selectResume = useCallback(async (id: number): Promise<boolean> => {
+    const doc = resumes.find((r) => r.id === id);
+    if (!doc) return false;
+    setError('');
+    try {
+      const file = await api.resumeFileById(doc.id, doc.job_id == null ? 'base' : 'tailored');
+      if (!file) {
+        setError("Couldn't download that resume.");
+        return false;
+      }
+      files.current = { ...files.current, resume: file };
+      setResume(file);
+      setSelectedResumeId(doc.id);
+      const attached = latest.current.find((r) => r.value === RESUME && (r.status === 'filled' || r.status === 'already'));
+      if (attached) {
+        await fill([{ ...attached, checked: true }]);
+        setNotice(`Attached ${doc.title || file.name}.`);
+      }
+      return true;
+    } catch (e) {
+      setError(describeError(e, "Couldn't switch resumes"));
+      return false;
+    }
+  }, [api, fill, resumes]);
+
   /** Writes a resume for this job, and puts it in the form if Wera already attached the other. */
   const tailor = useCallback(async (): Promise<boolean> => {
     setError('');
@@ -719,9 +761,11 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     }
     try {
       await api.tailorResume(forJob);
-      const file = await api.resumeFile(forJob);
+      const [file, list] = await Promise.all([api.resumeFile(forJob), api.listResumes().catch(() => resumes)]);
       files.current = { ...files.current, resume: file };
       setResume(file);
+      setResumes(list);
+      if (file?.id != null) setSelectedResumeId(file.id);
       const attached = latest.current.find((r) => r.value === RESUME && r.status === 'filled');
       if (attached) await fill([{ ...attached, checked: true }]);
       return true;
@@ -729,10 +773,10 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       setError(describeError(e, "Couldn't tailor your resume"));
       return false;
     }
-  }, [api, ensureJob, fill]);
+  }, [api, ensureJob, fill, resumes]);
 
   const busy = phase === 'reading' || phase === 'filling' || phase === 'thinking' || phase === 'stopping' || phase === 'continuing';
   /** A fill the user can stop. */
   const stoppable = phase === 'reading' || phase === 'filling' || phase === 'thinking';
-  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, corrections, acceptCorrection, dismissCorrection, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
+  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, resumes, selectedResumeId, selectResume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, corrections, acceptCorrection, dismissCorrection, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
 }

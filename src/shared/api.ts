@@ -174,10 +174,19 @@ export interface JobKeywords {
 
 /** A file to attach to an application form. */
 export interface ResumeFile {
+  id?: number;
   name: string;
   base64: string;
   /** Which resume it is: tailored to this job, the main one, or the uploaded file. */
   kind: 'tailored' | 'base' | 'upload';
+}
+
+/** One saved resume in the user's Wera account, for choosing which one to attach. */
+export interface ResumeSummary {
+  id: number;
+  title: string;
+  job_id: number | null;
+  fit_score?: { before: number; after: number } | null;
 }
 
 /** What went into an application's file fields on a page: the resume (which one) and a cover letter. */
@@ -506,6 +515,18 @@ export class WeraApi {
     return this.download(`/api/resumes/${id}/pdf?download=1`);
   }
 
+  /** Lists the user's resumes (base and tailored copies) for choosing which one to attach. */
+  async listResumes(): Promise<ResumeSummary[]> {
+    const { resumes } = await this.call<{ resumes: ResumeSummary[] }>('/api/resumes').catch(() => ({ resumes: [] }));
+    return resumes ?? [];
+  }
+
+  /** Downloads one chosen resume document as a PDF ready to attach. */
+  async resumeFileById(id: number, kind: ResumeFile['kind'] = 'base'): Promise<ResumeFile | null> {
+    const f = await this.resumeDocPdf(id).catch(() => null);
+    return f ? { ...f, id, kind } : null;
+  }
+
   /**
    * The best resume to attach for a job: the copy tailored to it, else
    * the main resume, else the uploaded file; null if there is none.
@@ -515,7 +536,7 @@ export class WeraApi {
     const doc = (jobId != null && resumes.find((r) => r.job_id === jobId)) || resumes.find((r) => r.job_id == null);
     if (doc) {
       const f = await this.resumeDocPdf(doc.id).catch(() => null);
-      if (f) return { ...f, kind: doc.job_id == null ? 'base' : 'tailored' };
+      if (f) return { ...f, id: doc.id, kind: doc.job_id == null ? 'base' : 'tailored' };
     }
     const up = await this.download('/api/profile/resume/file?download=1');
     return up && { ...up, kind: 'upload' };
