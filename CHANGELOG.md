@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.20.0...wera-extension-v0.20.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* **panel:** keep the site's Apply button clear of the panel on custom career sites ([7ae4b79](https://github.com/wera-jobs/wera-extension/commit/7ae4b79267d2ef1b4269cb24d6263c2f47506668))
+* **panel:** keep the site's Apply button clear of the panel on custom career sites ([2f795f9](https://github.com/wera-jobs/wera-extension/commit/2f795f9d45b59c4c01c0916709c6c4d3279b246b)), closes [#135](https://github.com/wera-jobs/wera-extension/issues/135)
+
 ## [0.20.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.19.3...wera-extension-v0.20.0) (2026-11-22)
 
 
