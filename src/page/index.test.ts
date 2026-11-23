@@ -400,6 +400,16 @@ describe('on a page', () => {
     expect(sent.filter((m) => m.type === 'wera:panel-ensure').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('tells Wera when a known ATS submit request succeeds (wera:submit-request)', async () => {
+    const sent = fakeChrome({ state: 'marked', job: { id: 4, title: 'SRE', company: 'Acme', status: 'applied' }, previous: 'saved' });
+    document.body.innerHTML = fixture('greenhouse.html');
+    run(document, 5);
+    await vi.waitFor(() => expect(sent.some((m) => m.type === 'wera:job-seen')).toBe(true));
+    document.dispatchEvent(new CustomEvent('wera:submit-request', { detail: { url: 'https://job-boards.greenhouse.io/acme/jobs/123', system: 'Greenhouse' } }));
+    await vi.waitFor(() => expect(window.__weraPage?.submitted?.state).toBe('marked'));
+    expect(sent.filter((m) => m.type === 'wera:job-submitted')).toHaveLength(1);
+  });
+
   it('remembers the answers the user gave when they submit the form themselves', async () => {
     const sent = fakeChrome();
     at('/careers/apply');
