@@ -250,28 +250,51 @@ function NeedRow({ r, onUse }: { r: Row; onUse: (value: string) => void }) {
 function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnType<typeof useAutofill> }) {
   const [writing, setWriting] = useState(false);
   const [tailoring, setTailoring] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [tailored, setTailored] = useState(0);
   const job = page.job;
   const score = useTailoredScore(api, job?.id, tailored);
-  const resumeText = !a.resume ? 'none yet' : a.resume.kind === 'tailored' ? `tailored for ${job?.company ?? 'this job'}` : a.resume.kind === 'base' ? 'your main resume' : 'your uploaded file';
+  const chosen = a.resumes.find((r) => r.id === a.selectedResumeId) ?? null;
+  const resumeText = !a.resume ? 'none yet' : a.resume.kind === 'tailored' ? (chosen?.title || `tailored for ${job?.company ?? 'this job'}`) : a.resume.kind === 'base' ? (chosen?.title || 'your main resume') : 'your uploaded file';
+  const showTailoredScore = !chosen || chosen.job_id === job?.id;
   return (
     <div className="divide-y divide-border rounded-card border border-border bg-surface">
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
-        <FileText className="size-4 shrink-0 text-muted" />
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium">Resume</p>
-          <p className="truncate text-[11px] text-muted">{a.plan ? resumeText : 'attached when Wera fills the form'}</p>
-          <TailoredLine score={score} />
+      <div className="space-y-1.5 px-3 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <FileText className="size-4 shrink-0 text-muted" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium">Resume</p>
+            <p className="truncate text-[11px] text-muted">{a.plan ? resumeText : 'attached when Wera fills the form'}</p>
+            {showTailoredScore ? <TailoredLine score={score} /> : chosen?.fit_score && (
+              <p className="mt-0.5 text-[11px] text-muted">Fit <span className="font-mono font-semibold text-text">{chosen.fit_score.after}</span></p>
+            )}
+          </div>
+          {a.resume?.kind === 'tailored' ? (
+            <a href={api.dashboardUrl(job ? `/jobs/${job.id}` : '/profile/resume')} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
+          ) : (
+            <Button className="px-2 py-1" busy={tailoring} title="Write a copy of your resume for this job" onClick={() => {
+              setTailoring(true);
+              void a.tailor().then((ok) => ok && setTailored((n) => n + 1)).finally(() => setTailoring(false));
+            }}>
+              {!tailoring && <Sparkles className="size-3.5" />} Tailor
+            </Button>
+          )}
         </div>
-        {a.resume?.kind === 'tailored' ? (
-          <a href={api.dashboardUrl(job ? `/jobs/${job.id}` : '/profile/resume')} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
-        ) : (
-          <Button className="px-2 py-1" busy={tailoring} title="Write a copy of your resume for this job" onClick={() => {
-            setTailoring(true);
-            void a.tailor().then((ok) => ok && setTailored((n) => n + 1)).finally(() => setTailoring(false));
-          }}>
-            {!tailoring && <Sparkles className="size-3.5" />} Tailor
-          </Button>
+        {a.resumes.length > 1 && (
+          <select aria-label="Choose resume" disabled={switching || a.busy} value={a.selectedResumeId ?? ''}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              if (!id) return;
+              setSwitching(true);
+              void a.selectResume(id).finally(() => setSwitching(false));
+            }}
+            className="w-full rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-text focus:border-accent/60 focus:outline-none">
+            {a.resumes.map((r) => {
+              const tag = r.job_id == null ? 'Main' : r.job_id === job?.id ? 'Tailored for this job' : 'Tailored';
+              const fit = r.fit_score ? ` · Fit ${r.fit_score.after}` : r.job_id == null && job?.fit_score != null ? ` · Fit ${job.fit_score}` : '';
+              return <option key={r.id} value={r.id}>{r.title || tag} ({tag}{fit})</option>;
+            })}
+          </select>
         )}
       </div>
       <div className="flex items-center gap-2.5 px-3 py-2.5">
