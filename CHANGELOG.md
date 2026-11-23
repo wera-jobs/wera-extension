@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.21.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.20.1...wera-extension-v0.21.0) (2026-11-23)
+
+
+### Features
+
+* **autofill:** learn from user corrections to filled fields ([5bb351b](https://github.com/wera-jobs/wera-extension/commit/5bb351b459b424d5ca12e45a9795c6046585ff3f))
+* **autofill:** learn from user corrections to filled fields ([1cca3d2](https://github.com/wera-jobs/wera-extension/commit/1cca3d27a96dde90499bdab62e3b2b2e7131e7b0)), closes [#144](https://github.com/wera-jobs/wera-extension/issues/144)
+* **autofill:** stay open through pre-form consent, location, and account steps ([9364b45](https://github.com/wera-jobs/wera-extension/commit/9364b45f8f96bd88e2d777d53ca1b94d6a07f140))
+* **autofill:** stay open through pre-form consent, location, and account steps ([9e1c0f3](https://github.com/wera-jobs/wera-extension/commit/9e1c0f3c030c7a50bb130233599ace4fca8531a6)), closes [#136](https://github.com/wera-jobs/wera-extension/issues/136)
+* **boards:** show Wera fit badges on LinkedIn, Indeed, and Glassdoor search lists ([a97707f](https://github.com/wera-jobs/wera-extension/commit/a97707f92640ad4d66753f29043f6ee942971425))
+* **boards:** show Wera fit badges on LinkedIn, Indeed, and Glassdoor search lists ([ddcd376](https://github.com/wera-jobs/wera-extension/commit/ddcd37603ed285010b6a2b1a6c0540aa86524e93)), closes [#146](https://github.com/wera-jobs/wera-extension/issues/146)
+* **classify:** recognize German, French, Spanish, and Dutch application forms ([3784b4d](https://github.com/wera-jobs/wera-extension/commit/3784b4d0aeb759258d2f20cfccf3d0686e687547))
+* **classify:** recognize German, French, Spanish, and Dutch application forms ([8b2e998](https://github.com/wera-jobs/wera-extension/commit/8b2e998f1e3ad3acd9efd8fafcbea27220d771de)), closes [#152](https://github.com/wera-jobs/wera-extension/issues/152)
+* **extension:** 13 ATS site rules, search-list fit badges, and resume picker ([4978341](https://github.com/wera-jobs/wera-extension/commit/4978341fa4564af098b24743478996e9ca46b9dd))
+* **extension:** pre-form gates, correction learning, submit tracking, lighter page detector, and EU languages ([a7a236b](https://github.com/wera-jobs/wera-extension/commit/a7a236b621cf049c6cf2436eea205165566f4ee6))
+* **panel:** choose which resume to attach on an application ([f2576a9](https://github.com/wera-jobs/wera-extension/commit/f2576a9070021d5cfa737f859f1695e1530e9514))
+* **panel:** choose which resume to attach on an application ([9b87c78](https://github.com/wera-jobs/wera-extension/commit/9b87c78db41e4b09b0ea7a140a2a906bf3291e1e)), closes [#147](https://github.com/wera-jobs/wera-extension/issues/147)
+* **sites:** add site rules for 13 additional applicant systems ([705efc2](https://github.com/wera-jobs/wera-extension/commit/705efc2f77d118e1881e4605a19827619fc97def))
+* **sites:** add site rules for 13 additional applicant systems ([a29d3d2](https://github.com/wera-jobs/wera-extension/commit/a29d3d2c0aad681de1b6616e588aae79122ada34)), closes [#142](https://github.com/wera-jobs/wera-extension/issues/142)
+* **watch:** detect submissions from ATS submit requests ([c3fafe6](https://github.com/wera-jobs/wera-extension/commit/c3fafe6e25173fa2ba20c7c095212c51b8ad1c4a))
+* **watch:** detect submissions from ATS submit requests ([3cbf76e](https://github.com/wera-jobs/wera-extension/commit/3cbf76e601dda7b8438e0c074c4c8b96ed747297)), closes [#145](https://github.com/wera-jobs/wera-extension/issues/145)
+
+
+### Performance
+
+* **page:** split lightweight detector from form engine ([508b188](https://github.com/wera-jobs/wera-extension/commit/508b18879d06d72fedc246aba80d40a9e06985d1))
+* **page:** split lightweight detector from form engine ([3511ea8](https://github.com/wera-jobs/wera-extension/commit/3511ea809f517a101f3a173716038d4bb178f6f2)), closes [#148](https://github.com/wera-jobs/wera-extension/issues/148)
+
 ## [0.20.1](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.20.0...wera-extension-v0.20.1) (2026-11-23)
 
 
