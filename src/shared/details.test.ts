@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { learnedDetails } from './details';
+import { detailCorrection, learnedDetails } from './details';
 import type { Applicant } from './types';
 
 const blank = { phone: '', willing_to_travel: '', gender: '', race: '', first_name: 'Ada', start_date: '', veteran: '' } as unknown as Applicant;
@@ -25,5 +25,22 @@ describe('learnedDetails', () => {
     expect(learnedDetails(blank, [
       { purpose: 'start_date', value: '2026-11-01' }, { purpose: 'question', value: 'Because robots.' }, { purpose: null, value: 'x' },
     ])).toEqual({});
+  });
+});
+
+describe('detailCorrection', () => {
+  it('returns a diff when the person changes a stored detail', () => {
+    const cur = { ...blank, phone: '512 555 0100', willing_to_travel: 'no', gender: 'Female' };
+    expect(detailCorrection(cur, 'phone', '512 555 9999')).toEqual({ key: 'phone', from: '512 555 0100', to: '512 555 9999' });
+    expect(detailCorrection(cur, 'willing_to_travel', 'Yes, up to 25%')).toEqual({ key: 'willing_to_travel', from: 'no', to: 'yes' });
+    expect(detailCorrection(cur, 'gender', 'Decline to self-identify')).toEqual({ key: 'gender', from: 'Female', to: 'decline' });
+  });
+
+  it('returns null when unchanged, empty, or not a stored detail', () => {
+    const cur = { ...blank, phone: '512 555 0100' };
+    expect(detailCorrection(cur, 'phone', '512 555 0100')).toBeNull();
+    expect(detailCorrection(cur, 'phone', '   ')).toBeNull();
+    expect(detailCorrection(cur, 'start_date', '2027-01-01')).toBeNull();
+    expect(detailCorrection(cur, 'question', 'Because robots')).toBeNull();
   });
 });
