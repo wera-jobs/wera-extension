@@ -13,6 +13,10 @@ const SUBMITTED = [
   /we('ve| have) received your application/i,
   /your application is (complete|in)/i,
   /successfully applied/i,
+  /vielen dank f[uü]r ihre bewerbung|bewerbung (erfolgreich )?(gesendet|eingegangen|abgeschickt)/i,
+  /merci pour votre candidature|votre candidature a (bien )?[eé]t[eé] (envoy[eé]e|re[cç]ue)/i,
+  /gracias por (postularte|tu solicitud|tu candidatura)|tu solicitud ha sido enviada/i,
+  /bedankt voor je sollicitatie|uw sollicitatie is ontvangen/i,
 ];
 
 // Where ATSs send the browser once an application went through.

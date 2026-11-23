@@ -92,4 +92,15 @@ describe('bodyText', () => {
     stop();
     expect(events).toContainEqual({ type: 'wera:field-changed', id: 'f1', value: '512 555 9999' });
   });
+
+  it('recognizes submission confirmations in German, French, Spanish, and Dutch', () => {
+    for (const msg of [
+      'Vielen Dank für Ihre Bewerbung!',
+      'Merci pour votre candidature.',
+      'Gracias por postularte a este puesto.',
+      'Bedankt voor je sollicitatie!',
+    ]) {
+      expect(looksSubmitted(msg), msg).toBe(true);
+    }
+  });
 });
