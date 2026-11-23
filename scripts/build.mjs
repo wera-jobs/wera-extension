@@ -7,7 +7,7 @@ const watch = process.argv.includes('--watch');
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist', { recursive: true });
 
-for (const target of ['background', 'page', 'panel', 'bridge']) {
+for (const target of ['background', 'page', 'panel', 'bridge', 'submitWatch']) {
   process.env.WERA_TARGET = target;
   await build({ configFile: 'vite.config.ts', mode: watch ? 'development' : 'production', build: { watch: watch ? {} : null } });
 }
