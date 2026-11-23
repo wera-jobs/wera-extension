@@ -140,6 +140,18 @@ export function insideNotJobSite(doc: Document): boolean {
   return !!ancestors?.length && isNotJobSite(ancestors[ancestors.length - 1]!);
 }
 
+const JOB_SEARCH_LISTS: RegExp[] = [
+  /(^|\.)linkedin\.com\/jobs\/(search|collections|recommended)/i,
+  /(^|\.)indeed\.[a-z.]+\/(jobs|q-)/i,
+  /(^|\.)glassdoor\.[a-z.]+\/job(s)?\//i,
+];
+
+/** Whether the address is a job-board search results list (LinkedIn, Indeed, Glassdoor). */
+export function isJobSearchUrl(url: string): boolean {
+  const address = addressOf(url);
+  return !!address && JOB_SEARCH_LISTS.some((re) => re.test(address));
+}
+
 /** Whether the address is one job's page, or its application, on a system or board Wera knows. */
 export function isJobUrl(url: string): boolean {
   const address = addressOf(url);

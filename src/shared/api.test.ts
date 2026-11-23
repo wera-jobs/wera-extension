@@ -45,7 +45,7 @@ describe('WeraApi', () => {
       return json(404, {});
     });
     const api = new WeraApi('https://w', 't', fetcher as typeof fetch);
-    await expect(api.resumeFile(9)).resolves.toEqual({ name: 'Ada_Acme.pdf', base64: btoa('%PDF-1.4'), kind: 'tailored' });
+    await expect(api.resumeFile(9)).resolves.toEqual({ id: 2, name: 'Ada_Acme.pdf', base64: btoa('%PDF-1.4'), kind: 'tailored' });
     await expect(api.resumeFile(5)).resolves.toMatchObject({ name: 'Ada_Resume.pdf', kind: 'base' });
     resumes.length = 0;
     await expect(api.resumeFile(9)).resolves.toMatchObject({ name: 'upload.pdf', kind: 'upload' });

@@ -4,6 +4,8 @@
 // then says "thank you for applying", it tells the background, which
 // marks the job applied. Nothing leaves the page unless Wera is on it.
 import { findApply, isNotJobSite, jobSummary, pageDocument, pageKind, type PageKind } from '../content/detect';
+import { watchBoardBadges } from '../content/boardBadges';
+import { isJobSearchUrl } from '../content/urls';
 import { readJobPosting } from '../content/jsonld';
 import { ENTRY_PURPOSES } from '../content/entries';
 import { listen } from '../content/listen';
@@ -228,4 +230,5 @@ if (typeof window !== 'undefined' && !window.__weraPage && typeof chrome !== 'un
   listen();
   watchForJobs(document);
   startAssist(document);
+  if (window === window.top && isJobSearchUrl(location.href)) watchBoardBadges(document);
 }

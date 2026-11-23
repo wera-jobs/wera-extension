@@ -810,6 +810,47 @@ describe('the Wera panel', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Update$/ }));
     await waitFor(() => expect(savedApplicant).toContainEqual(expect.objectContaining({ phone: '512 555 9999' })));
   });
+
+  it('lets the user switch between resumes and re-attaches the chosen file', async () => {
+    const attachedFiles: string[] = [];
+    const applied = new Map<string, string>();
+    fakeBackground({
+      job,
+      api: {
+        listResumes: () => [
+          { id: 1, title: 'Main Resume', job_id: null },
+          { id: 2, title: 'Backend Resume', job_id: 42, fit_score: { before: 75, after: 88 } },
+        ],
+        resumeFile: () => ({ id: 1, name: 'main.pdf', base64: 'QQ==', kind: 'base' }),
+        resumeFileById: (id: number) => ({ id, name: id === 2 ? 'backend.pdf' : 'main.pdf', base64: 'Qg==', kind: id === 2 ? 'tailored' : 'base' }),
+      },
+      frames: {
+        scan: () => ({
+          fields: [
+            { id: 'r1', label: 'Resume', purpose: 'resume', group: 'documents', kind: 'file', required: true, options: [], current: applied.get('r1') ?? '', value: '__resume__', source: 'resume', note: 'main.pdf' },
+          ],
+          next: null,
+          errors: 0,
+        }),
+        apply: ({ items, resume }: ApplyRequest) => {
+          if (resume) attachedFiles.push(resume.name);
+          return items.map((i): FillResult => {
+            applied.set(i.id, resume?.name ?? i.value);
+            return { id: i.id, label: 'Resume', purpose: 'resume', status: 'filled', value: resume?.name ?? '', required: true };
+          });
+        },
+      },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await screen.findByRole('button', { name: /^Fill again$/ }, { timeout: 3000 });
+    expect(attachedFiles).toEqual(['main.pdf']);
+
+    const picker = await screen.findByLabelText('Choose resume');
+    await userEvent.selectOptions(picker, '2');
+    await waitFor(() => expect(attachedFiles).toEqual(['main.pdf', 'backend.pdf']));
+    expect(await screen.findByText('88')).toBeInTheDocument();
+  });
 });
 
 describe('AI answers that cannot be right', () => {

@@ -5,7 +5,7 @@
 // background service worker and steps aside.
 import { isApplicantHost } from '../content/frames';
 import { looksSubmitted, submittedAddress } from '../content/submitted';
-import { applyAddress, careerAddress, EMBEDDED_FORM, insideNotJobSite, isJobUrl, isNotJobSite } from '../content/urls';
+import { applyAddress, careerAddress, EMBEDDED_FORM, insideNotJobSite, isJobSearchUrl, isJobUrl, isNotJobSite } from '../content/urls';
 import { extensionAlive, sendSafe } from '../shared/alive';
 
 declare global {
@@ -19,7 +19,7 @@ export function couldBeJobPage(doc: Document): boolean {
   if (doc.documentElement?.dataset?.weraExtension) return false;
   const url = doc.location?.href ?? '';
   if (!url || isNotJobSite(url) || insideNotJobSite(doc)) return false;
-  if (isJobUrl(url) || isApplicantHost(doc.location.hostname) || careerAddress(url) || applyAddress(url) || submittedAddress(url)) return true;
+  if (isJobUrl(url) || isJobSearchUrl(url) || isApplicantHost(doc.location.hostname) || careerAddress(url) || applyAddress(url) || submittedAddress(url)) return true;
   if (doc.querySelector('input[type="file"], iframe#icims_content_iframe, [data-automation-id="applyFlowPage"], [data-automation-id^="formField-"]')) return true;
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
     if (/JobPosting/i.test(s.textContent ?? '')) return true;
