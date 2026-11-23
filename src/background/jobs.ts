@@ -6,14 +6,15 @@ import { notifyDashboard, sameRole, tabHandoff } from '../shared/bridge';
 import { answerKey } from '../shared/answers';
 import { learnedDetails } from '../shared/details';
 import type { LearnedAnswer } from '../shared/learn';
-import { briefOf, PAST_APPLIED, type JobConfirmed, type JobRequest, type JobContext, type SubmitReply } from '../shared/jobs';
+import { briefOf, PAST_APPLIED, type BadgeQuery, type BadgeResult, type JobConfirmed, type JobRequest, type JobContext, type SubmitReply } from '../shared/jobs';
 import { log } from '../shared/log';
 import { loadFlow, saveFlow } from '../shared/flow';
-import { clearProfileCache } from '../shared/profileCache';
+import { clearProfileCache, loadProfileCache } from '../shared/profileCache';
 import { loadSettings } from '../shared/settings';
 import { loadSession, notePage, recentTabJob, rememberTabJob, tabJob, tabPages as pages } from '../shared/storage';
 import { hostOf, originOf, siteOf } from '../shared/url';
 import type { FieldPurpose } from '../shared/types';
+import { quickSkillScore } from '../content/boardBadges';
 
 const FORM_TTL = 3 * 3600_000;
 /** How soon after Submit the site's confirmation counts as the answer to it (closing the tab). */
@@ -135,6 +136,8 @@ export async function handleJobRequest(msg: JobRequest, tabId: number, tabUrl: s
       const posting = draft ? { company: draft.company, title: draft.title, description: draft.description } : null;
       return { jobId: job?.id ?? null, posting: job ? { company: job.company, title: job.title, description: '' } : posting } satisfies JobContext;
     }
+    case 'wera:job-badges':
+      return api ? scoreBoardCards(api, msg.items) : [];
     default:
       return null;
   }
@@ -154,6 +157,42 @@ export async function learnDetails(api: WeraApi, entries: { purpose: FieldPurpos
   }
   log.info('jobs', keys.length ? `learned ${keys.join(', ')} from the form` : 'nothing new to learn from the form');
   return keys;
+}
+
+const BOARD_HOST = /(^|\.)(linkedin\.com|indeed\.[a-z.]+|glassdoor\.[a-z.]+)$/i;
+const badgeCache = new Map<string, { at: number; res: BadgeResult }>();
+const BADGE_TTL = 10 * 60_000;
+
+/** Looks up Wera's fit score (or falls back to quick resume-skill match) for search-list cards. */
+async function scoreBoardCards(api: WeraApi, items: BadgeQuery[]): Promise<BadgeResult[]> {
+  const cached = await loadProfileCache(api.dashboardUrl('')).catch(() => null);
+  const skills = cached?.view.skills ?? (await api.applicant().then((v) => v.skills).catch(() => [] as string[]));
+  const out: BadgeResult[] = [];
+  const concurrency = 6;
+  const queue = items.slice(0, 30);
+  const worker = async () => {
+    while (queue.length) {
+      const item = queue.shift()!;
+      const hit = badgeCache.get(item.url);
+      if (hit && Date.now() - hit.at < BADGE_TTL) {
+        out.push({ ...hit.res, key: item.key });
+        continue;
+      }
+      const found = await api.lookup(item.url).then((r) => r.job).catch(() => null);
+      let res: BadgeResult;
+      if (found && (found.fit_score != null || found.estimated_score != null)) {
+        const direct = found.url && !BOARD_HOST.test(hostOf(found.url)) ? found.url : undefined;
+        res = { key: item.key, score: found.fit_score ?? found.estimated_score, source: 'wera', ...(direct ? { applyUrl: direct } : {}) };
+      } else {
+        const quick = quickSkillScore(`${item.title} ${item.text}`, skills);
+        res = { key: item.key, score: quick, source: quick != null ? 'keywords' : null };
+      }
+      badgeCache.set(item.url, { at: Date.now(), res });
+      out.push(res);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return out;
 }
 
 /** Whether a confirmation on this page answers the form the tab showed: on the form's own site (or in a frame of it). */

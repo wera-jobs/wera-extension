@@ -35,6 +35,24 @@ export type SubmitReply =
   | { state: 'unknown'; draft: { title: string; company: string } | null; close?: boolean }
   | { state: 'off' };
 
+/** One job card on a job-board search list (LinkedIn, Indeed, Glassdoor). */
+export interface BadgeQuery {
+  key: string;
+  url: string;
+  title: string;
+  company: string;
+  text: string;
+}
+
+/** Wera's fit badge for one search-list card. */
+export interface BadgeResult {
+  key: string;
+  score: number | null;
+  source: 'wera' | 'keywords' | null;
+  /** Direct company application URL when Wera knows a non-board link for this job. */
+  applyUrl?: string;
+}
+
 export type JobRequest =
   /** The page script found a job page: the tab showed a form now, or this posting. */
   | { type: 'wera:job-seen'; kind: 'form' | 'posting'; draft: JobDraft | null }
@@ -50,7 +68,9 @@ export type JobRequest =
   /** The panel saved or found the tab's job: remember it for the tab's next pages (the application after its posting). */
   | { type: 'wera:job-remember'; jobId: number }
   /** What the user left in a form when moving it on (Next, Submit): its details, and its answers to remember. */
-  | { type: 'wera:job-learn'; entries: { purpose: FieldPurpose; value: string }[]; answers?: LearnedAnswer[] };
+  | { type: 'wera:job-learn'; entries: { purpose: FieldPurpose; value: string }[]; answers?: LearnedAnswer[] }
+  /** Batch fit lookup for cards on a job-board search list. */
+  | { type: 'wera:job-badges'; items: BadgeQuery[] };
 
 export const isJobRequest = (m: unknown): m is JobRequest =>
   !!m && typeof m === 'object' && typeof (m as { type?: unknown }).type === 'string' && (m as { type: string }).type.startsWith('wera:job-')
