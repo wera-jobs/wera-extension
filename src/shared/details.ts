@@ -24,15 +24,32 @@ function isDetail(purpose: FieldPurpose | null, applicant: Applicant): purpose i
   return detailPurpose(purpose) && purpose in applicant;
 }
 
+/** Normalizes a form value for one application detail; null when the purpose is not a stored detail or the value doesn't fit. */
+export function normalizeDetailValue(purpose: FieldPurpose | null, applicant: Applicant, value: string): { key: ApplicantKey; value: string } | null {
+  if (!isDetail(purpose, applicant)) return null;
+  let v = value.trim();
+  if (SELF_ID.has(purpose)) v = selfIdValue(purpose, v);
+  else if (YES_NO.has(purpose)) v = /^yes\b/i.test(v) ? 'yes' : /^no\b/i.test(v) ? 'no' : '';
+  if (!v || v.length > 300) return null;
+  return { key: purpose, value: v };
+}
+
+/** A correction the person made to a detail Wera filled, when it differs from their saved details. */
+export function detailCorrection(applicant: Applicant, purpose: FieldPurpose | null, value: string): { key: ApplicantKey; from: string; to: string } | null {
+  const norm = normalizeDetailValue(purpose, applicant, value);
+  if (!norm) return null;
+  const from = (applicant[norm.key] ?? '').trim();
+  if (from.toLowerCase() === norm.value.toLowerCase()) return null;
+  return { key: norm.key, from, to: norm.value };
+}
+
 /** The details worth saving from what a form held: only blanks, each as Wera stores it. */
 export function learnedDetails(applicant: Applicant, entries: { purpose: FieldPurpose | null; value: string }[]): Partial<Applicant> {
   const out: Partial<Record<ApplicantKey, string>> = {};
   for (const { purpose, value } of entries.slice(0, 120)) {
-    if (!isDetail(purpose, applicant) || (applicant[purpose] ?? '').trim() || out[purpose]) continue;
-    let v = value.trim();
-    if (SELF_ID.has(purpose)) v = selfIdValue(purpose, v);
-    else if (YES_NO.has(purpose)) v = /^yes\b/i.test(v) ? 'yes' : /^no\b/i.test(v) ? 'no' : '';
-    if (v && v.length <= 300) out[purpose] = v;
+    const norm = normalizeDetailValue(purpose, applicant, value);
+    if (!norm || (applicant[norm.key] ?? '').trim() || out[norm.key]) continue;
+    out[norm.key] = norm.value;
   }
   return out;
 }

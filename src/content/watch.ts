@@ -5,6 +5,7 @@
 import type { ContentEvent } from '../shared/types';
 import { classify } from './classify';
 import { collectFields } from './fields';
+import { currentValue, isApplying } from './plan';
 
 const SUBMITTED = [
   /thank(s| you) for (applying|your application|submitting)/i,
@@ -103,11 +104,25 @@ export function watchPage(doc: Document, notify: (e: ContentEvent) => void, dela
   const schedule = () => {
     if (!timer) timer = window.setTimeout(check, delay);
   };
+  const onChange = (e: Event) => {
+    if (isApplying()) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const marked = target.closest?.('[data-wera-id]');
+    const id = marked?.getAttribute('data-wera-id') ?? '';
+    const field = id
+      ? collectFields(doc, undefined, true).find((f) => f.id === id)
+      : collectFields(doc, undefined, true).find((f) => f.el === target || f.options.some((o) => o.el === target));
+    if (!field?.id) return;
+    notify({ type: 'wera:field-changed', id: field.id, value: currentValue(field) });
+  };
   const obs = new MutationObserver(schedule);
   obs.observe(doc.body, { childList: true, subtree: true });
+  doc.addEventListener('change', onChange, true);
   window.addEventListener('popstate', schedule);
   return () => {
     obs.disconnect();
+    doc.removeEventListener('change', onChange, true);
     window.removeEventListener('popstate', schedule);
     window.clearTimeout(timer);
   };

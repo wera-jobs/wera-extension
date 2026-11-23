@@ -88,9 +88,13 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, reply) => {
   }
   // What a frame's page script noticed (a new form step, a field filled, a confirmation): the panel hears it.
   const e = msg as ContentEvent | null;
-  if (e?.type === 'wera:form-changed' || e?.type === 'wera:fill-progress' || e?.type === 'wera:submitted' || e?.type === 'wera:navigated') {
+  if (e?.type === 'wera:form-changed' || e?.type === 'wera:fill-progress' || e?.type === 'wera:field-changed' || e?.type === 'wera:submitted' || e?.type === 'wera:navigated') {
     const frameId = sender.frameId ?? 0;
-    const event = e.type === 'wera:fill-progress' ? { ...e, result: { ...e.result, id: frameField(frameId, e.result.id) } } : e;
+    const event = e.type === 'wera:fill-progress'
+      ? { ...e, result: { ...e.result, id: frameField(frameId, e.result.id) } }
+      : e.type === 'wera:field-changed'
+        ? { ...e, id: frameField(frameId, e.id) }
+        : e;
     void chrome.tabs.sendMessage(tabId, { type: 'wera:frame-event', frameId, event }, { frameId: 0 }).catch(() => {});
   }
   return false;

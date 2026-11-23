@@ -316,5 +316,7 @@ export type ContentEvent =
   /** step: most of the form is new (another step), not a few fields a choice revealed. */
   | { type: 'wera:form-changed'; fields: number; step: boolean }
   | { type: 'wera:fill-progress'; result: FillResult }
+  /** The person edited a field on the page after Wera read or filled it. */
+  | { type: 'wera:field-changed'; id: string; value: string }
   | { type: 'wera:submitted' }
   | { type: 'wera:navigated'; url: string };

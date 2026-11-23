@@ -7,23 +7,33 @@
 // written to the log (Settings > Debug log, Copy diagnostics).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ResumeFile, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
-import { bestAnswer, type SavedAnswer } from '../shared/answers';
+import { answerKey, bestAnswer, type SavedAnswer } from '../shared/answers';
+import { detailCorrection } from '../shared/details';
 import { describeError } from '../shared/errors';
 import { loadFlow, saveFlow, takeApplying, type Flow } from '../shared/flow';
 import { clearProfileCache, loadProfileCache, saveProfileCache } from '../shared/profileCache';
 import { log } from '../shared/log';
 import { frames } from '../shared/rpc';
 import type { Settings } from '../shared/settings';
-import type { Applicant, FillResult, JobDraft, PagePlan, Profile, ScanRequest } from '../shared/types';
+import type { Applicant, ApplicantKey, FillResult, JobDraft, PagePlan, Profile, ScanRequest } from '../shared/types';
 import { answersToLearn } from '../shared/learn';
 import { payFromText } from '../content/facts';
-import { asSalaryOffer, chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, isSalary, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowsFor, type Row } from './rows';
+import { asSalaryOffer, chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, isSalary, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowLabel, rowsFor, type Row } from './rows';
 import type { PanelEvent, PanelPageState } from './usePanelPage';
 
 export { needsYou, type Row } from './rows';
 export { LETTER, RESUME } from './rows';
 
 export type Phase = 'idle' | 'reading' | 'filling' | 'thinking' | 'stopping' | 'filled' | 'continuing' | 'final';
+
+/** A stored detail the person changed on the form after Wera filled it. */
+export interface DetailCorrection {
+  id: string;
+  key: ApplicantKey;
+  label: string;
+  from: string;
+  to: string;
+}
 
 // AI answers given in this page's life, by field, so reading the page again does not ask again.
 const suggested = new Map<string, Suggestion | null>();
@@ -55,6 +65,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const [letter, setLetter] = useState('');
   const [flow, setFlow] = useState<Flow | null>(null);
   const [thinking, setThinking] = useState(0);
+  const [corrections, setCorrections] = useState<DetailCorrection[]>([]);
   // The employer asks for no AI, and the user chose to have Wera draft anyway.
   const [draftAnyway, setDraftAnyway] = useState(false);
   const noAiHere = useMemo(() => [...(page.info?.traps ?? []), ...(plan?.traps ?? [])].some((t) => t.kind === 'ai_policy'), [page.info?.traps, plan?.traps]);
@@ -580,15 +591,64 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     }
   }, [plan, page, learn, rows, tabId, host, flow, jobId]);
 
-  // Each field a frame fills is reported as it lands.
+  // Each field a frame fills is reported as it lands; edits the person makes afterwards teach Wera.
   useEffect(() => {
     const onMessage = (msg: PanelEvent) => {
-      if (msg?.type !== 'wera:frame-event' || msg.event.type !== 'wera:fill-progress') return;
-      const res = msg.event.result;
-      setRows((rs) => rs.map((r) => (r.id === res.id ? { ...r, status: res.status, result: res.note ?? res.value } : r)));
+      if (msg?.type !== 'wera:frame-event') return;
+      if (msg.event.type === 'wera:fill-progress') {
+        const res = msg.event.result;
+        setRows((rs) => rs.map((r) => (r.id === res.id ? { ...r, status: res.status, result: res.note ?? res.value } : r)));
+        return;
+      }
+      if (msg.event.type !== 'wera:field-changed') return;
+      const { id, value } = msg.event;
+      const row = latest.current.find((r) => r.id === id);
+      if (!row || row.status !== 'filled') return;
+      const nextVal = value.trim();
+      const prevVal = (row.result || row.value).trim();
+      if (!nextVal || nextVal === prevVal) return;
+      if (row.group === 'questions' || row.group === 'other') {
+        if (!settings.learn) return;
+        const learned = answersToLearn([row], [{ id: row.id, label: row.label, purpose: row.purpose, kind: row.kind, value: nextVal }], [], posting.company);
+        if (!learned.length) return;
+        const item = learned[0]!;
+        setRows((rs) => rs.map((r) => (r.id === id ? { ...r, result: nextVal } : r)));
+        const k = answerKey(item.question);
+        bank.current = [...bank.current.filter((a) => answerKey(a.question) !== k), { question: item.question, answer: item.answer, company: item.company, at: Date.now() }];
+        void api.saveAnswers(learned).then(() => {
+          void clearProfileCache();
+          log.info('autofill', `remembered correction for "${item.question}"`);
+        }).catch((e: unknown) => log.warn('autofill', 'saving corrected answer failed', e));
+        return;
+      }
+      if ((row.group === 'details' || row.group === 'self_id') && applicant.current) {
+        const diff = detailCorrection(applicant.current, row.purpose, nextVal);
+        if (!diff) return;
+        setCorrections((prev) => [...prev.filter((c) => c.key !== diff.key), { id, key: diff.key, label: rowLabel(row), from: diff.from, to: diff.to }]);
+      }
     };
     chrome.runtime.onMessage.addListener(onMessage);
     return () => chrome.runtime.onMessage.removeListener(onMessage);
+  }, [api, posting.company, settings.learn]);
+
+  /** Saves a corrected detail to the person's Wera profile. */
+  const acceptCorrection = useCallback(async (c: DetailCorrection) => {
+    if (!applicant.current) return;
+    const updated = { ...applicant.current, [c.key]: c.to };
+    try {
+      await api.saveApplicant(updated);
+      applicant.current = updated;
+      void clearProfileCache();
+      setCorrections((prev) => prev.filter((x) => x.key !== c.key));
+      setNotice(`Updated ${c.label} in your Wera details.`);
+    } catch (e) {
+      setError(describeError(e, `Couldn't update ${c.label}`));
+    }
+  }, [api]);
+
+  /** Dismisses an offered detail update for this page. */
+  const dismissCorrection = useCallback((key: ApplicantKey) => {
+    setCorrections((prev) => prev.filter((x) => x.key !== key));
   }, []);
 
   // After Continue: a page that loaded anew fills itself (when the user asked for that); a step shown in place too.
@@ -670,5 +730,5 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const busy = phase === 'reading' || phase === 'filling' || phase === 'thinking' || phase === 'stopping' || phase === 'continuing';
   /** A fill the user can stop. */
   const stoppable = phase === 'reading' || phase === 'filling' || phase === 'thinking';
-  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
+  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, corrections, acceptCorrection, dismissCorrection, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
 }

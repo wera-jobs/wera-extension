@@ -387,6 +387,13 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
 
 // The user pressed Stop: fills under way in this frame end after the field they are on.
 let halted = false;
+let applyingNow = false;
+
+/** Whether Wera is currently applying values to this frame (so watchPage ignores synthetic change events). */
+export function isApplying(): boolean {
+  return applyingNow;
+}
+
 export function stopFilling() {
   halted = true;
 }
@@ -414,6 +421,7 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
   const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
   halted = false;
+  applyingNow = true;
   try {
     for (const item of items) {
       // Stopped: what is left is reported as not filled, and nothing more is touched.
@@ -513,6 +521,7 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
       if (pace) await wait(pace);
     }
   } finally {
+    applyingNow = false;
     user?.stop();
   }
   // Filling moves the focus from box to box: none is left in the last one, where Wera's button would show.

@@ -763,6 +763,53 @@ describe('the Wera panel', () => {
     emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:navigated', url: `${draft.url}/step-2` } });
     await waitFor(() => expect(applied).toContain('f2'), { timeout: 3000 });
   });
+
+  it('remembers corrected question answers and offers to update changed details', async () => {
+    const savedAnswers: unknown[] = [];
+    const savedApplicant: unknown[] = [];
+    const applied = new Map<string, string>();
+    const { emit } = fakeBackground({
+      job,
+      api: {
+        applicant: () => ({ applicant: { first_name: 'Ada', phone: '512 555 0100' }, saved: true, sources: {}, experience: [], education: [], skills: [] }),
+        saveAnswers: (list: unknown) => {
+          savedAnswers.push(list);
+          return { saved: 1 };
+        },
+        saveApplicant: (a: unknown) => {
+          savedApplicant.push(a);
+          return { applicant: a, saved: true };
+        },
+      },
+      frames: {
+        scan: () => ({
+          fields: [
+            { id: 'f1', label: 'Phone', purpose: 'phone', group: 'details', kind: 'text', required: true, options: [], current: applied.get('f1') ?? '', value: '512 555 0100', source: 'details', note: '' },
+            { id: 'f2', label: 'Favorite tool', purpose: 'question', group: 'questions', kind: 'text', required: false, options: [], current: applied.get('f2') ?? '', value: 'Docker', source: 'saved', note: '' },
+          ],
+          next: null,
+          errors: 0,
+        }),
+        apply: ({ items }: ApplyRequest) => items.map((i): FillResult => {
+          applied.set(i.id, i.value);
+          return { id: i.id, label: i.label ?? '', purpose: null, status: 'filled', value: i.value, required: false };
+        }),
+      },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await screen.findByRole('button', { name: /^Fill again$/ }, { timeout: 3000 });
+
+    // Correct a question answer: saved automatically for next time.
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:field-changed', id: 'f2', value: 'Terraform' } });
+    await waitFor(() => expect(savedAnswers).toContainEqual([expect.objectContaining({ question: 'Favorite tool', answer: 'Terraform' })]));
+
+    // Correct a detail: offers to update Wera details, and updates when the user agrees.
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:field-changed', id: 'f1', value: '512 555 9999' } });
+    expect(await screen.findByText(/Update your Wera details\?/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+    await waitFor(() => expect(savedApplicant).toContainEqual(expect.objectContaining({ phone: '512 555 9999' })));
+  });
 });
 
 describe('AI answers that cannot be right', () => {
