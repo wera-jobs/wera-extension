@@ -66,7 +66,7 @@ const RULES: [FieldPurpose, RegExp][] = [
   ['start_date', /^(?!.*\b(school|college|university|degree|program|current (job|role|position|employer|company))\b).*(start date|available to (start|begin)|availab(le|ility) (for|to) (full|part|work)|earliest (possible |available )?(start|availability)|earliest .{0,30}\b(start|begin)\b|soonest available|when can you start|date available|availability date|when (are|would) you (be )?available)/],
   ['lgbtq', /lgbt|queer community/],
   ['skills', /^(technical |key |relevant |your )?skills\b|^skill set|list (your )?skills/],
-  ['languages', /language skill|^languages?\b|^(?!.*programming).*(languages? (do you )?(speak|spoken|fluent)|which languages|language proficiency|fluent in|languages you speak)/],
+  ['languages', /language skill|^languages?\b|^(?!.*programming).*(languages? (do you )?(speak|spoken|fluent)|which languages|language proficiency|fluent in|languages you speak|(preferred|select|choose|application|communication|your|consent) language\b)/],
   ['pronouns', /pronoun/],
   ['transgender', /transgender|identify as trans\b|gender identity (is )?(the same|different)/],
   ['sexual_orientation', /sexual orientation/],

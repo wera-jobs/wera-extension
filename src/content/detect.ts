@@ -10,6 +10,7 @@ import type { FieldPurpose } from '../shared/types';
 import { classify } from './classify';
 import { ENTRY_PURPOSES } from './entries';
 import { collectFields } from './fields';
+import { gateOf } from './gate';
 import { outOfSight } from './hidden';
 import { isApplicantHost } from './frames';
 import { readJobPosting } from './jsonld';
@@ -327,6 +328,19 @@ export function pageDocument(doc: Document): Document {
   }
 }
 
+/** Whether this document lives on a known applicant system, site rule, or job URL. */
+export function isApplicantPage(doc: Document): boolean {
+  return !!siteFor(doc) || isApplicantHost(doc.location.hostname) || isJobUrl(doc.location.href);
+}
+
+/** Whether the page is a pre-form step (account, consent, or location/language gate) on an applicant system. */
+export function hasPreFormGate(doc: Document): boolean {
+  if (siteFor(doc)?.gate?.(doc)) return true;
+  if (!isApplicantPage(doc)) return false;
+  if (readJobPosting(doc, doc.location.href) && findApply(doc)) return false;
+  return !!gateOf(doc);
+}
+
 export function pageKind(doc: Document): PageKind {
   // The bridge marks the user's own Wera dashboard: its forms are not applications.
   if (doc.documentElement.dataset.weraExtension) return null;
@@ -334,7 +348,7 @@ export function pageKind(doc: Document): PageKind {
   if (isNotJobSite(url) || insideNotJobSite(doc)) return null;
   const shown = pageDocument(doc);
   if (shown !== doc) return pageKind(shown);
-  if (hasApplicationForm(doc)) return 'form';
+  if (hasApplicationForm(doc) || hasPreFormGate(doc)) return 'form';
   if (readJobPosting(doc, url)) return 'posting';
   // A job's address: its title as the heading, or (a site that heads it otherwise, Jobvite) a way to
   // apply and a posting's sections. A closed job's page has neither, or says it is gone.
