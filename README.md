@@ -6,7 +6,7 @@
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4285F4?logo=googlechrome&logoColor=white)](manifest.json)
 [![Tested with Playwright](https://img.shields.io/badge/e2e-Playwright-2EAD33?logo=playwright&logoColor=white)](e2e)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
-[![License](https://img.shields.io/github/license/wera-jobs/wera-extension)](LICENSE)
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](LICENSE)
 
 Chrome extension for [Wera](https://github.com/wera-jobs/Wera). Save jobs from any page, see fit scores and H-1B data, tailor your resume, draft answers, and fill applications. **Wera never clicks Submit.** You review and submit yourself.
 
@@ -70,3 +70,7 @@ npm run package     # Build zip for release / Web Store
 Enable **Debug log** in panel Settings to trace `[wera:*]` logs in the page and service-worker consoles, or use **Report a problem** after a fill to send diagnostics to Wera Admin.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org); [release-please](https://github.com/googleapis/release-please) cuts releases and attaches `wera-extension-<version>.zip`.
+
+## License
+
+Copyright (c) 2026 Wera. All rights reserved. This code is proprietary: it is visible here, but that grants no right to use, copy, modify or distribute it (see [LICENSE](LICENSE)). The Wera name and logo are trademarks of Wera. Third-party packages keep their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); regenerate it with `node scripts/third-party-notices.mjs` after changing dependencies.
