@@ -73,6 +73,20 @@ describe('widgets newer forms use (#245)', () => {
     vi.stubGlobal('chrome', { dom: { openOrClosedShadowRoot: (el: HTMLElement) => (el === host ? root : null) } });
     expect(collectFields(document).map((f) => f.label)).toEqual(['Email']);
   });
+
+  it('pages with icons still read: Chrome throws for an element that cannot host a root', () => {
+    const host = document.createElement('x-form');
+    const root = host.attachShadow({ mode: 'closed' });
+    root.innerHTML = '<label for="e">Email</label><input id="e" type="email">';
+    document.body.innerHTML = '<svg><path d="M0 0"></path></svg><input type="text" aria-label="Phone">';
+    document.body.append(host);
+    // Chrome's chrome.dom.openOrClosedShadowRoot rejects an SVG element or an <input> outright.
+    vi.stubGlobal('chrome', { dom: { openOrClosedShadowRoot: (el: Element) => {
+      if (!(el instanceof HTMLElement) || el.localName === 'input') throw new TypeError('Error in invocation of dom.openOrClosedShadowRoot');
+      return el === host ? root : null;
+    } } });
+    expect(collectFields(document).map((f) => f.label)).toEqual(['Phone', 'Email']);
+  });
 });
 
 describe('banners', () => {

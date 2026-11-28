@@ -48,16 +48,29 @@ function idFor(el: Element, readonly = false): string {
 }
 
 /** The root and every open shadow root inside it (web-component forms such as SmartRecruiters'). */
+/**
+ * A closed shadow root (Oracle Redwood, enterprise web components), which the extension may open:
+ * chrome.dom.openOrClosedShadowRoot in Chrome, the element's own openOrClosedShadowRoot in Firefox.
+ * Only custom elements and the few built-ins that can host one; Chrome throws for the rest (an SVG icon).
+ */
+function closedRoot(el: Element): ShadowRoot | null {
+  if (!(el instanceof HTMLElement) || !(el.localName.includes('-') || SHADOW_HOSTS.has(el.localName))) return null;
+  try {
+    return (globalThis as { chrome?: { dom?: { openOrClosedShadowRoot?: (e: HTMLElement) => ShadowRoot | null } } }).chrome?.dom?.openOrClosedShadowRoot?.(el)
+      ?? (el as HTMLElement & { openOrClosedShadowRoot?: ShadowRoot | null }).openOrClosedShadowRoot ?? null;
+  } catch {
+    return null;
+  }
+}
+const SHADOW_HOSTS = new Set(['article', 'aside', 'blockquote', 'body', 'div', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'main', 'nav', 'p', 'section', 'span']);
+
 export function allRoots(root: ParentNode): ParentNode[] {
   const out: ParentNode[] = [root];
   for (let i = 0; i < out.length; i++) {
     for (const el of out[i]!.querySelectorAll('*')) {
       // Wera's own panel and button are no part of the page (their roots are open in test builds).
       if (el.localName.startsWith('wera-')) continue;
-      // Closed roots too (Oracle Redwood, enterprise web components): the extension may open them.
-      // Chrome: chrome.dom.openOrClosedShadowRoot; Firefox: the element's own openOrClosedShadowRoot.
-      const sr = el.shadowRoot ?? (globalThis as { chrome?: { dom?: { openOrClosedShadowRoot?: (e: HTMLElement) => ShadowRoot | null } } }).chrome?.dom?.openOrClosedShadowRoot?.(el as HTMLElement)
-        ?? (el as HTMLElement & { openOrClosedShadowRoot?: ShadowRoot | null }).openOrClosedShadowRoot ?? null;
+      const sr = el.shadowRoot ?? closedRoot(el);
       if (sr) out.push(sr);
     }
   }
