@@ -13,10 +13,13 @@ import { followTheme } from '../shared/theme';
 import css from './styles.css?inline';
 import { AppliedAlert } from './AppliedAlert';
 import { Panel } from './Panel';
+import { HiddenToast } from './HiddenToast';
+import type { HideChoice } from './Launcher';
 import { usePanelPage } from './usePanelPage';
 import { makeRoom } from './pageRoom';
 import { useSettings } from './useSettings';
 import { whenSettled } from '../shared/settled';
+import { setSiteHidden, siteKey } from '../shared/settings';
 
 declare global {
   interface Window {
@@ -143,17 +146,29 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
   // on to another job brings it back.
   const [gone, setGone] = useState(false);
   const [goneAt, setGoneAt] = useState('');
+  // Just hidden from the tab's ×: a short note with Undo and the longer ways to hide.
+  const [justHidden, setJustHidden] = useState(false);
   if (goneAt && location.href !== goneAt && handle.kind) {
     setGoneAt('');
     setGone(false);
   }
   if (seen !== show) {
     setSeen(show);
+    // Only the user brings a hidden Wera back (toolbar icon, shortcut, right-click menu):
+    // a frame announcing its form again never does.
+    const asked = show.opens > seen.opens || show.fills > seen.fills || show.toggles > seen.toggles;
     if (gone) {
-      setGone(false);
-      setOpen(true);
+      if (asked) {
+        setGone(false);
+        setJustHidden(false);
+        setOpen(true);
+      }
     } else if (show.opens > seen.opens || show.fills > seen.fills) setOpen(true);
-    else if (show.toggles > seen.toggles) setOpen((o) => !o);
+    // The toolbar icon closes an open panel all the way (not to the side tab), and opens a collapsed one.
+    else if (show.toggles > seen.toggles) {
+      if (open) setGone(true);
+      else setOpen(true);
+    }
   }
   // An application that loads after the page (Ashby, a form embedded from an ATS) opens the panel once.
   const isForm = page.info?.hasForm || page.handle.kind === 'form';
@@ -162,6 +177,10 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
     setFormSeen(true);
     if (!show.collapsedHere) setOpen(true);
   }
+  const hideMore = (how: HideChoice) => {
+    if (how === 'site') void setSiteHidden(siteKey(document), true).catch(() => {});
+    if (how === 'everywhere') setSettings({ launcher: false });
+  };
   const tabId = show.tabId;
   const onOpen = useCallback((v: boolean) => {
     setOpen(v);
@@ -180,13 +199,17 @@ export function App({ handle, show }: { handle: PageHandle; show: Show }) {
   const confirmed = page.submitted && page.submitted.state !== 'off' && page.submitted !== seenReply ? page.submitted : null;
   const wide = useWide();
   usePageRoom(shown && open && !confirmed && wide);
+  if (gone && justHidden && server !== undefined) {
+    return <HiddenToast onUndo={() => { setGone(false); setJustHidden(false); }} onDone={() => setJustHidden(false)}
+      onHide={(how) => { setJustHidden(false); hideMore(how); }} />;
+  }
   if (!shown) return null;
   const marked = confirmed?.state === 'marked' ? confirmed : null;
   return (
     <>
       {!confirmed && (
         <Panel api={api} page={page} settings={settings} setSettings={setSettings} tabId={show.tabId} open={open} onOpen={onOpen} docked={wide}
-          fillRequest={show.fills} onSignedIn={reload} onSignedOut={reload} onHideSite={() => setGone(true)} />
+          fillRequest={show.fills} onSignedIn={reload} onSignedOut={reload} onHideSite={(how?: HideChoice) => { setGone(true); setJustHidden(how === 'visit'); }} />
       )}
       {confirmed && (
         <AppliedAlert api={api} reply={confirmed}

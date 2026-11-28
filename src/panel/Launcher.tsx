@@ -2,7 +2,8 @@
 // edge, so it shows on any page. Click it to open the panel; drag it up or
 // down (or move it with the arrow keys) to keep it clear of the site's own
 // buttons. Where it sits is kept for every site, as a share of the
-// window's height. Its × puts it away: for now, on this site, or everywhere.
+// window's height. Its × hides Wera from this page at once (the note that
+// follows offers Undo, or hiding it on this site or everywhere).
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { X } from 'lucide-react';
 import { LogoMark } from './Logo';
@@ -48,17 +49,10 @@ function useLauncherShare(): [number, (share: number) => void] {
   return [share, save];
 }
 
-/** How the user put the tab away from its × menu. */
+/** How the user put Wera away: the tab's × hides it from this page; the note after offers the rest. */
 export type HideChoice = 'visit' | 'site' | 'everywhere';
 
-const HIDE_CHOICES: [HideChoice, string][] = [
-  ['visit', 'Hide until next visit'],
-  ['site', 'Hide on this site'],
-  ['everywhere', 'Hide on all sites'],
-];
-
 export function Launcher({ onOpen, onHide }: { onOpen: () => void; onHide?: (how: HideChoice) => void }) {
-  const [menu, setMenu] = useState(false);
   const [share, setShare] = useLauncherShare();
   const [height, setHeight] = useState(() => window.innerHeight);
   // While dragging: the tab's top in pixels, and where the press started.
@@ -70,18 +64,6 @@ export function Launcher({ onOpen, onHide }: { onOpen: () => void; onHide?: (how
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  // The menu stays until a choice, Escape, or a press anywhere else (not on
-  // the pointer leaving: the way from the × to the menu crosses a gap).
-  const wrap = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const onDown = (e: Event) => {
-      if (wrap.current && !e.composedPath().includes(wrap.current)) setMenu(false);
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    return () => window.removeEventListener('pointerdown', onDown, true);
-  }, [menu]);
 
   const top = dragTop ?? launcherTop(share, height);
 
@@ -114,10 +96,9 @@ export function Launcher({ onOpen, onHide }: { onOpen: () => void; onHide?: (how
     setShare(launcherShare(launcherTop(share + step, height), height));
   };
 
-  const shown = menu ? 'opacity-100' : 'pointer-events-none opacity-0 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100';
+  const shown = 'pointer-events-none opacity-0 group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 group-focus-within/tab:pointer-events-auto group-focus-within/tab:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100';
   return (
-    <div ref={wrap} style={{ top }} className="group/tab fixed right-0 z-[2147483646]"
-      onKeyDown={(e) => { if (e.key === 'Escape' && menu) { e.stopPropagation(); setMenu(false); } }}>
+    <div style={{ top }} className="group/tab fixed right-0 z-[2147483646]">
       <button type="button" aria-label="Show the Wera panel" title="Wera (Alt+Shift+W). Drag to move it up or down."
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
         onPointerCancel={() => { press.current = null; setDragTop(null); }}
@@ -138,22 +119,11 @@ export function Launcher({ onOpen, onHide }: { onOpen: () => void; onHide?: (how
         </span>
       </button>
       {onHide && dragTop == null && (
-        <button type="button" aria-label="Hide Wera" aria-haspopup="menu" aria-expanded={menu} title="Hide Wera"
-          onClick={() => setMenu((m) => !m)}
+        <button type="button" aria-label="Hide Wera" title="Hide Wera from this page"
+          onClick={() => onHide('visit')}
           className={`absolute -top-2.5 -left-2.5 grid size-6 place-items-center rounded-full bg-text text-bg shadow-[0_0_0_2px_var(--color-bg),0_2px_6px_rgb(0_0_0/0.3)] transition-opacity duration-150 hover:bg-bad hover:text-white ${shown}`}>
           <X className="size-3.5" strokeWidth={2.75} />
         </button>
-      )}
-      {menu && onHide && (
-        <div role="menu" aria-label="Hide Wera" className="anim-rise panel-shadow absolute top-5 right-[calc(100%+8px)] w-48 overflow-hidden rounded-xl border border-border bg-surface py-1 text-xs">
-          {HIDE_CHOICES.map(([how, label]) => (
-            <button key={how} type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-text hover:bg-surface-2 focus-visible:bg-surface-2"
-              onClick={() => { setMenu(false); onHide(how); }}>
-              {label}
-            </button>
-          ))}
-          <p className="border-t border-border px-3 pt-1.5 pb-1 text-[10px] leading-snug text-faint">Bring it back any time from the toolbar icon (Alt+Shift+W).</p>
-        </div>
       )}
     </div>
   );

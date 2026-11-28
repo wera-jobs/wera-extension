@@ -79,39 +79,13 @@ describe('the launcher tab', () => {
   });
 });
 
-describe('hiding the launcher', () => {
-  it('offers to hide it until the next visit, on this site, or everywhere', async () => {
+describe('putting the tab away', () => {
+  it('hides Wera from the page with one click on the ×, no menu first', async () => {
     fakeStorage();
     const onHide = vi.fn();
     render(<Launcher onOpen={() => {}} onHide={onHide} />);
     await userEvent.click(screen.getByRole('button', { name: 'Hide Wera' }));
-    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
-    expect(items).toEqual(['Hide until next visit', 'Hide on this site', 'Hide on all sites']);
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide on this site' }));
-    expect(onHide).toHaveBeenCalledWith('site');
-    expect(screen.queryByRole('menu')).toBeNull();
-  });
-});
-
-describe('putting the tab away', () => {
-  it('keeps its menu open when the pointer leaves, and closes it on Escape or a press elsewhere', async () => {
-    fakeStorage();
-    const onHide = vi.fn();
-    render(<div><Launcher onOpen={() => {}} onHide={onHide} /><p>the page</p></div>);
-    const hide = screen.getByRole('button', { name: 'Hide Wera' });
-    await userEvent.click(hide);
-    expect(screen.getByRole('menu')).toBeTruthy();
-    // On the way from the × to the menu the pointer crosses a gap: the menu must not go.
-    fireEvent.mouseLeave(hide.parentElement!);
-    expect(screen.getByRole('menu')).toBeTruthy();
-    fireEvent.keyDown(hide, { key: 'Escape' });
-    expect(screen.queryByRole('menu')).toBeNull();
-    await userEvent.click(hide);
-    fireEvent.pointerDown(screen.getByText('the page'));
-    expect(screen.queryByRole('menu')).toBeNull();
-    await userEvent.click(hide);
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Hide on this site' }));
-    expect(onHide).toHaveBeenCalledWith('site');
+    expect(onHide).toHaveBeenCalledWith('visit');
     expect(screen.queryByRole('menu')).toBeNull();
   });
 

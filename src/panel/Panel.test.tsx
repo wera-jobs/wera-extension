@@ -172,6 +172,43 @@ describe('the Wera panel', () => {
     await screen.findByRole('button', { name: /^Autofill$/ });
   });
 
+  it('goes with one click on the tab\'s ×, stays gone when a frame announces its form, and comes back from the toolbar', async () => {
+    const { store } = fakeBackground({ job });
+    const { rerender } = render(<App handle={handle('posting')} show={show({ initial: false })} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Hide Wera' }));
+    expect(screen.queryByRole('button', { name: 'Show the Wera panel' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Wera is hidden on this page.');
+    // An embedded form re-announcing itself is not the user asking for Wera.
+    rerender(<App handle={handle('posting')} show={show({ initial: false, formFrames: 3 })} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show the Wera panel' })).toBeNull();
+    // The note's longer way: hidden on this site, remembered.
+    await userEvent.click(screen.getByRole('button', { name: 'Hide on this site' }));
+    expect(screen.queryByRole('status')).toBeNull();
+    await waitFor(() => expect(store['wera.hiddenSites']).toHaveProperty(location.hostname));
+    rerender(<App handle={handle('posting')} show={show({ initial: false, formFrames: 3, toggles: 1 })} />);
+    expect(await screen.findByRole('dialog', { name: 'Wera' })).toBeInTheDocument();
+  });
+
+  it('undoes a hide from the note', async () => {
+    fakeBackground({ job });
+    render(<App handle={handle('posting')} show={show({ initial: false })} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Hide Wera' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByRole('button', { name: 'Show the Wera panel' })).toBeInTheDocument();
+  });
+
+  it('closes all the way from the toolbar icon when open, and opens again from it', async () => {
+    fakeBackground({ job });
+    const { rerender } = render(<App handle={handle('posting')} show={show()} />);
+    await screen.findByRole('dialog', { name: 'Wera' });
+    rerender(<App handle={handle('posting')} show={show({ toggles: 1 })} />);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Show the Wera panel' })).toBeNull();
+    rerender(<App handle={handle('posting')} show={show({ toggles: 2 })} />);
+    expect(await screen.findByRole('dialog', { name: 'Wera' })).toBeInTheDocument();
+  });
+
   it('goes at once when the user turns Wera off on this site, and comes back from the toolbar', async () => {
     const { store } = fakeBackground({ job });
     const { rerender } = render(<App handle={handle('posting')} show={show()} />);
