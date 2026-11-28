@@ -22,11 +22,40 @@ export function Badge({ className, children }: { className: string; children: Re
 }
 
 /** A job's words as chips: what the user has, then what they lack. */
-function Chips({ have, lack }: { have: string[]; lack: string[] }) {
+function Chips({ have, lack, onAdd }: { have: string[]; lack: string[]; onAdd?: (skill: string) => Promise<void> }) {
+  const [adding, setAdding] = useState('');
   return (
     <div className="flex flex-wrap gap-1">
       {have.slice(0, 8).map((k) => <Badge key={k} className="border-good/25 bg-good/10 text-good">{k}</Badge>)}
-      {lack.slice(0, 8).map((k) => <Badge key={k} className="border-border bg-surface-2 text-muted">{k}</Badge>)}
+      {lack.slice(0, 8).map((k) => onAdd ? (
+        <button key={k} type="button" disabled={!!adding} title={`I have ${k}: add it to my profile and score this job again`}
+          onClick={() => {
+            setAdding(k);
+            void onAdd(k).finally(() => setAdding(''));
+          }}
+          className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted hover:border-accent/50 hover:text-text disabled:opacity-60">
+          + {k}{adding === k ? '…' : ''}
+        </button>
+      ) : <Badge key={k} className="border-border bg-surface-2 text-muted">{k}</Badge>)}
+    </div>
+  );
+}
+
+const PARTS: [keyof NonNullable<WeraJob['fit_parts']>, string][] = [['role', 'Role'], ['seniority', 'Level'], ['skills', 'Skills'], ['domain', 'Domain'], ['location', 'Location']];
+
+/** The ratings a fit score rests on, as small bars. */
+function FitParts({ parts }: { parts: NonNullable<WeraJob['fit_parts']> }) {
+  return (
+    <div className="grid grid-cols-[4.5rem_1fr_1.5rem] items-center gap-x-2 gap-y-1">
+      {PARTS.map(([k, label]) => {
+        const v = Number(parts[k]);
+        return [
+          <span key={`${k}l`} className="text-[11px] text-muted">{label}</span>,
+          <span key={`${k}b`} className="h-1.5 overflow-hidden rounded-full bg-surface-2"><span className={clsx('block h-full rounded-full', v >= 7 ? 'bg-good' : v >= 4 ? 'bg-warn' : 'bg-bad')} style={{ width: `${v * 10}%` }} /></span>,
+          <span key={`${k}n`} className="text-right font-mono text-[11px] text-text">{v}</span>,
+        ];
+      })}
+      {parts.blocker && <span className="col-span-3 text-[11px] text-bad">Something in the posting rules you out (a clearance, citizenship or license).</span>}
     </div>
   );
 }
@@ -153,8 +182,21 @@ export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
         {open && (
           <div className="space-y-2 border-t border-border px-3 py-2">
             {job.reason && <p className="text-muted">{job.reason}</p>}
-            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
+            {job.fit_parts && <FitParts parts={job.fit_parts} />}
+            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} onAdd={async (skill) => {
+              try {
+                const r = await api.addSkill(skill, job.id);
+                if (r.job) page.setJob(r.job);
+                setKeywords(null);
+                api.jobKeywords(job.id).then(setKeywords, () => {});
+              } catch (e) {
+                log.warn('fit', 'adding the skill failed', e);
+              }
+            }} />}
+            {lack.length > 0 && <p className="text-[11px] text-faint">Have one of these? Tap it to add it to your profile, and Wera scores this job again.</p>}
             {sponsor && <p className="text-muted">{sponsor}</p>}
+            {job.early && <p className="text-good">Posted in the last three days: you would be an early applicant.</p>}
+            {!!job.also_in?.length && <p className="text-muted">Also posted in {job.also_in.slice(0, 4).join(', ')}{job.also_in.length > 4 ? ` and ${job.also_in.length - 4} more` : ''}.</p>}
             {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
           </div>
         )}

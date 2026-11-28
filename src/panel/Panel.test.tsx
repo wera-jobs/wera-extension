@@ -530,20 +530,38 @@ describe('the Wera panel', () => {
   });
 
   it('shows why a job fits: the reason, the resume\'s keywords, sponsorship and H-1B filings', async () => {
-    const scored = { ...job, reason: 'Strong SRE match, light on Terraform.', sponsorship: 'yes' as const };
-    fakeBackground({
+    const scored = { ...job, reason: 'Strong SRE match, light on Terraform.', sponsorship: 'yes' as const, early: true, also_in: ['Austin, TX'],
+      fit_parts: { role: 9, seniority: 7, skills: 6, domain: 8, location: 10, blocker: false } };
+    const { calls } = fakeBackground({
       job: scored,
       api: {
         jobKeywords: () => ({ keywords: ['Go', 'Kubernetes', 'Terraform'], coverage: { matched: ['Go', 'Kubernetes'], missing: ['Terraform'], percent: 67 }, resume_id: 3 }),
         h1b: () => ({ matched: true, filings: 12, new_hires: 3, wage_median: null, similar: [], similar_low: null, similar_high: null, level: '' }),
+        addSkill: () => ({ job: { ...scored, fit_score: 91 } }),
       },
     });
     render(<App handle={handle('posting')} show={show()} />);
     await userEvent.click(await screen.findByRole('button', { name: /has 2 of this job's 3 keywords/ }));
     expect(screen.getByText('Strong SRE match, light on Terraform.')).toBeInTheDocument();
-    expect(screen.getByText('Terraform')).toBeInTheDocument();
     expect(screen.getByText(/offers visa sponsorship/)).toBeInTheDocument();
+    expect(screen.getByText(/early applicant/)).toBeInTheDocument();
+    expect(screen.getByText('Also posted in Austin, TX.')).toBeInTheDocument();
+    expect(screen.getByText('Skills').nextElementSibling).toBeTruthy();
     expect(await screen.findByText(/filed 12 H-1B petitions/)).toBeInTheDocument();
+    // "I have it": the skill goes on the profile and the job is scored again.
+    await userEvent.click(screen.getByRole('button', { name: '+ Terraform' }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'addSkill')?.args).toEqual(['Terraform', scored.id]));
+  });
+
+  it('changes the tracker status and follows the company from the job card', async () => {
+    const tracked = { ...job, application_status: 'saved', company_id: 4, company_followed: false };
+    const { calls } = fakeBackground({ job: tracked, api: { setStatus: () => ({ ...tracked, application_status: 'applied' }), followCompany: () => undefined } });
+    render(<App handle={handle('posting')} show={show()} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Tracker status'), 'applied');
+    await waitFor(() => expect(calls.find((c) => c.name === 'setStatus')?.args).toEqual([tracked.id, 'applied']));
+    await userEvent.click(screen.getByRole('button', { name: 'Follow' }));
+    expect(await screen.findByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'true');
+    expect(calls.find((c) => c.name === 'followCompany')?.args).toEqual([4, true]);
   });
 
   it("says why a job has no fit score when the user's own rules rule it out", async () => {

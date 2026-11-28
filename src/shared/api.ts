@@ -47,6 +47,19 @@ export interface WeraJob {
   closed_at?: string | null;
   /** Where Wera serves the company's logo (e.g. "/api/companies/7/logo?v=1"); absent when it has none. */
   logo_url?: string | null;
+  company_id?: number;
+  /** The user follows the company: its new roles show up as a notice. */
+  company_followed?: boolean;
+  /** Other places the same role is posted. */
+  also_in?: string[];
+  /** Posted in the last three days and found by Wera: an early applicant. */
+  early?: boolean;
+  /** The ratings the fit score was computed from, 0-10 each. */
+  fit_parts?: { role: number; seniority: number; skills: number; domain: number; location: number; blocker: boolean } | null;
+  pay_min?: number | null;
+  pay_max?: number | null;
+  pay_currency?: string | null;
+  pay_period?: string | null;
 }
 
 export interface CoverLetter {
@@ -364,6 +377,16 @@ export class WeraApi {
 
   addContact(jobId: number, c: Pick<JobContact, 'name'> & Partial<Pick<JobContact, 'role' | 'linkedin_url' | 'notes' | 'follow_up_at' | 'last_contacted_at'>>) {
     return this.call<JobContact>(`/api/jobs/${jobId}/contacts`, { method: 'POST', body: JSON.stringify(c) });
+  }
+
+  /** Adds a skill to the profile; with a job, that job is scored again and returned. */
+  addSkill(skill: string, jobId?: number) {
+    return this.call<{ job?: WeraJob }>('/api/profile/skills', { method: 'POST', body: JSON.stringify({ skill, ...(jobId != null ? { job_id: jobId } : {}) }) });
+  }
+
+  /** Follows a company (its new roles show up as a notice), or stops. */
+  followCompany(companyId: number, follow: boolean) {
+    return this.call<void>(`/api/companies/${companyId}/follow`, { method: follow ? 'PUT' : 'DELETE' });
   }
 
   setStatus(jobId: number, status: ApplicationStatus) {
