@@ -41,13 +41,13 @@ Dedicated site rules for **Workday**, **Greenhouse** (including embedded boards)
 
 ## Privacy & permissions
 
-- **Permissions:** `storage`, `activeTab`, `scripting`, `contextMenus`, and site access (needed to detect job pages and fill embedded forms). Non-job pages are checked locally and nothing is sent.
+- **Permissions:** `storage`, `scripting`, `contextMenus`, and site access (needed to detect job pages and fill embedded forms). Non-job pages are checked locally and nothing is sent.
 - **Auth:** Connects from the dashboard or signs in once to store a revocable bearer token in `chrome.storage.local`.
 - **Isolation:** Panel UI lives in a closed shadow root; page text sent to the AI is scrubbed of traps and fenced as data; self-ID answers never reach the AI.
 
 ## Install
 
-Wera for Chrome is in private pilot (Chrome Web Store submission pending). Download and unzip the latest release from [Releases](https://github.com/wera-jobs/wera-extension/releases/latest), or build locally:
+Wera for Chrome is in private pilot (Chrome Web Store submission pending; the listing text is in [docs/store-listing.md](docs/store-listing.md)). Download and unzip the latest release from [Releases](https://github.com/wera-jobs/wera-extension/releases/latest), or build locally:
 
 ```sh
 npm install
