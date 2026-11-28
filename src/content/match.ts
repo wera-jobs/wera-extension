@@ -32,10 +32,6 @@ const MEANINGS: Partial<Record<FieldPurpose, [RegExp, RegExp][]>> = {
     [/two or more|multi/, /two or more|multi.?racial|multiple races|mixed/],
     [/hispanic|latin/, /hispanic|latin[oaxe]/],
   ],
-  veteran: [
-    [/not a protected veteran|not a veteran|^no$/, /not a (protected )?veteran|i am not|^no\b|not protected/],
-    [/protected veteran|^yes$/, /^(i identify as|i am a|yes)\b.*veteran|^yes\b|identify as one or more|protected veteran(?!.*not)/],
-  ],
   disability: [
     [/^no\b|do not have|don.?t have/, /^no\b|do not have|don.?t have|not have a disab/],
     [/^yes\b|have a disab/, /^yes\b|i have a disab|have (or have )?had a disab/],
@@ -237,6 +233,44 @@ export function isPlaceholderOption(label: string): boolean {
   return /^(-{2,}.*|(please )?(select|choose|pick)( one| an? (option|answer|item)| your answer| from the list)?\s*(\.{3}|…|:)?\s*(-{2,})?|bitte w[aä]hlen|ausw[aä]hlen|veuillez s[eé]lectionner|s[eé]lectionner|seleccionar|seleccione|selecteer|kies|month|year|day)$/i.test(label.trim());
 }
 
+// Veteran status in three states (see shared/selfId.ts). An option that says the person is a
+// veteran ("I am a veteran, but not a protected veteran") is never "not a veteran": Workday
+// tenants often list it first.
+const SAYS_VETERAN = /\bi am a veteran|\bveteran,? but\b|\bnon.?protected veteran|\bidentify as a (non.?)?protected veteran|\bactive duty\b|\bdisabled veteran|\brecently separated|\bservice medal|\bwartime/;
+const NOT_VETERAN = /\bnot a veteran\b|\bi am not a veteran|\bnever served|\bhave not served|\bno military service|^no\b|^none\b/;
+const PROTECTED = /\bidentify as (one or more|a protected)|^(i am a )?protected veteran\b|\bclassifications of protected veteran|^yes\b|disabled veteran|recently separated|active duty wartime|service medal/;
+
+/** The veteran option for a stored status, or null when no option means it. */
+export function veteranOption(options: Option[], status: string): Option | null {
+  const labelOf = (o: Option) => norm(o.label);
+  const answers = options.filter((o) => !DECLINE.test(o.label));
+  const s = norm(status);
+  // An option's own words (a value already matched once, then filled).
+  const same = options.find((o) => labelOf(o) === s || norm(o.value) === s);
+  if (same) return same;
+  if (s === 'decline' || DECLINE.test(status)) return options.find((o) => DECLINE.test(o.label)) ?? null;
+  if (/^(i am )?not a (protected )?veteran$|^no$/.test(s)) {
+    // Not a veteran at all: an option saying so, else the one that only denies being a protected
+    // veteran (true of anyone who never served), else a bare "No". Never one that says "I am a veteran".
+    return answers.find((o) => NOT_VETERAN.test(labelOf(o)) && !SAYS_VETERAN.test(labelOf(o)))
+      ?? answers.find((o) => /\bnot a protected veteran\b/.test(labelOf(o)) && !SAYS_VETERAN.test(labelOf(o)))
+      ?? null;
+  }
+  const yes = answers.length === 2 ? answers.find((o) => /^yes\b/.test(labelOf(o))) : undefined;
+  if (/veteran,? but|not protected|non.?protected/.test(s)) {
+    // "Are you a veteran?" Yes / No: a veteran is one, protected or not.
+    if (yes) return yes;
+    return answers.find((o) => /\bveteran,? (but|not protected)\b|\bnon.?protected veteran|\bidentify as a non.?protected/.test(labelOf(o)))
+      ?? answers.find((o) => /\bnot a protected veteran\b/.test(labelOf(o)) && !NOT_VETERAN.test(labelOf(o).replace(/not a protected veteran/, '')))
+      ?? null;
+  }
+  if (/protected veteran|^yes$/.test(s)) {
+    if (yes) return yes;
+    return answers.find((o) => PROTECTED.test(labelOf(o)) && !/\bnot\b|\bnon.?protected|veteran,? but/.test(labelOf(o))) ?? null;
+  }
+  return null;
+}
+
 /** Picks the option that means value (or its first alternative that fits), or null. */
 export function matchOption(options: Option[], value: string, purpose: FieldPurpose | null): Option | null {
   const alts = alternatives(value);
@@ -249,6 +283,7 @@ export function matchOption(options: Option[], value: string, purpose: FieldPurp
   }
   const real = options.filter((o) => norm(o.label) !== '' && !isPlaceholderOption(o.label));
   if (!value) return null;
+  if (purpose === 'veteran') return veteranOption(real, value);
   const v = norm(value);
   if (v === 'decline') return real.find((o) => DECLINE.test(o.label)) ?? null;
   if (v === 'yes' || v === 'no') {
