@@ -122,4 +122,5 @@ export const workday: Site = {
   applyChoice: (doc) => doc.querySelector<HTMLElement>('[data-automation-id="applyManually"]'),
   // Workday re-renders after each choice and loses input typed too soon.
   pace: 120,
+  blockAware: true,
 };

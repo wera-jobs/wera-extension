@@ -23,7 +23,7 @@ export interface Field {
   el: HTMLElement;
   options: Option[];
   /** The repeating section it sits in (a job or school block), if any. */
-  section?: Section | null;
+  section?: Block | null;
   /** The field is itself a trap: Wera leaves it to the user. */
   trap?: Trap;
   /** What its label said to AI tools, taken out of the label above. */
@@ -31,7 +31,7 @@ export interface Field {
 }
 
 import { labelTrap, decoyName, scrub, type Trap } from '../shared/traps';
-import { sectionOf, type Section } from './entries';
+import { sectionOf, type Block } from './entries';
 import { boxConcealed, boxOutOfReach, outOfSight, textConcealed } from './hidden';
 
 const ID_ATTR = 'data-wera-id';

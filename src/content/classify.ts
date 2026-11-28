@@ -1,6 +1,6 @@
 import { SELF_ID } from '../shared/selfId';
 import type { FieldPurpose } from '../shared/types';
-import { entryPurpose } from './entries';
+import { ENTRY_PURPOSES, entryPurpose } from './entries';
 import type { Field } from './fields';
 import { siteFor } from './sites';
 
@@ -117,17 +117,27 @@ const ACCEPTS = /^(i (hereby )?(have read|understand|acknowledge|confirm|certify
 
 // Contact details asked inside a job or school block are that job's or school's, not the applicant's.
 const CONTACT = new Set<FieldPurpose>(['city', 'state', 'country', 'location', 'postal_code', 'address', 'address_line2', 'phone', 'email']);
+// What a site rule may name that is about the applicant, never about a block they list.
+const ABOUT_APPLICANT = new Set<FieldPurpose>([...CONTACT, 'first_name', 'last_name', 'full_name', 'start_date', 'cover_letter', 'resume', 'linkedin', 'salary_expectation']);
 
 /** What a field asks for, or null when Wera cannot tell. */
 export function classify(f: Field): FieldPurpose | null {
   // The site's own name for the field says it best (Workday's "legalNameSection_firstName").
-  const named = siteFor(f.el.ownerDocument)?.purpose?.(f);
-  if (named !== undefined) return named;
+  const site = siteFor(f.el.ownerDocument);
+  const named = site?.purpose?.(f);
+  // A site's name for a personal detail ("phone", "startdate", "summary") inside a job, school or
+  // reference block is that block's: the supervisor's phone, the job's start, the role's summary.
+  const blockOwn = !site?.blockAware && f.section && named && ABOUT_APPLICANT.has(named) && !ENTRY_PURPOSES.has(named);
+  // Another document named like the resume ("document", "attachment"): a transcript is no resume.
+  const otherFile = named === 'resume' && /transcript|portfolio|cover|certificat|reference|zeugnis|anschreiben|writing sample/i.test(`${f.label} ${f.hints}`);
+  if (named !== undefined && !blockOwn && !otherFile) return named;
+  if (otherFile && !f.section) return generic(f);
   if (f.section) {
-    const e = entryPurpose(f, f.section);
+    const e = f.section === 'reference' ? null : entryPurpose(f, f.section);
     if (e) return e;
     const p = generic(f);
-    return p && CONTACT.has(p) ? null : p;
+    // A reference's name and email, a supervisor's phone: never the applicant's own.
+    return p && ABOUT_APPLICANT.has(p) ? null : p;
   }
   return generic(f);
 }

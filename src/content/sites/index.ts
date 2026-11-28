@@ -42,6 +42,8 @@ export interface Site {
   readsResume?: number;
   /** Its job and school blocks are not Wera's to open: each needs saving by hand, and opening several breaks the page. */
   noBlocks?: boolean;
+  /** Its rules already tell a block's fields from the applicant's (Workday's ids): classify trusts them inside blocks. */
+  blockAware?: boolean;
 }
 
 const SITES: Site[] = [workday, greenhouse, lever, ashby, jobvite, workable, linkedin, indeed, ...EXTRA_SITES];
