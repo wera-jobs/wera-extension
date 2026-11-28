@@ -402,7 +402,7 @@ test('the dashboard tells the extension which job a tab is for', async () => {
   await open(tab);
   // The job, as Wera has it (marked applied by the test before).
   await expect(panelOf(tab).getByText('Open in Wera')).toBeVisible();
-  await expect(panelOf(tab).getByText('Applied', { exact: true })).toBeVisible();
+  await expect(panelOf(tab).getByLabel('Tracker status')).toHaveValue('applied');
   await shot(tab, 'from-dashboard');
 });
 

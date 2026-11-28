@@ -113,3 +113,22 @@ describe('extra ATS site rules (#142)', () => {
     expect(br.fields).toEqual({ name: 'full_name', email_address: 'email', phone_number: 'phone', resume: 'resume' });
   });
 });
+
+describe('ten more systems (#239)', () => {
+  it('knows each by its host or markup, and says when a form wants a sign-in first', () => {
+    const at = (url: string, html = '') => siteFor(new JSDOM(`<!doctype html><body>${html}`, { url }).window.document)?.name ?? null;
+    expect(at('https://miaplaza.recruitee.com/o/sre/c/new')).toBe('Recruitee');
+    expect(at('https://acme.pinpointhq.com/en/postings/1/applications/new')).toBe('Pinpoint');
+    expect(at('https://jobs.dover.com/acme/1')).toBe('Dover');
+    expect(at('https://jobs.gem.com/acme/1')).toBe('Gem');
+    expect(at('https://jobs.dayforcehcm.com/en-US/acme/candidateportal/jobs/1/apply')).toBe('Dayforce');
+    expect(at('https://www.paycomonline.net/v4/ats/web.php/jobs/ViewJobDetails')).toBe('Paycom');
+    expect(at('https://sjobs.brassring.com/TGnewUI/Search/Home')).toBe('BrassRing');
+    expect(at('https://careers.acme.com/careers', '<div id="pcs-body-container"></div>')).toBe('Eightfold');
+    expect(at('https://careers.acme.com/job/1', '<div data-ph-at-id="apply-link"></div>')).toBe('Phenom');
+    expect(at('https://acme.avature.net/careers')).toBe('Avature');
+    expect(at('https://example.com/about')).toBeNull();
+    const doc = new JSDOM('<!doctype html><body><p>Sign in to apply for this job, or create an account to continue.</p><input type="email"></body>', { url: 'https://jobs.dayforcehcm.com/en-US/acme/candidateportal/jobs/1/apply' }).window.document;
+    expect(siteFor(doc)?.gate?.(doc)).toMatch(/Sign in or create an account/);
+  });
+});

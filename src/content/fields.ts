@@ -23,7 +23,7 @@ export interface Field {
   el: HTMLElement;
   options: Option[];
   /** The repeating section it sits in (a job or school block), if any. */
-  section?: Section | null;
+  section?: Block | null;
   /** The field is itself a trap: Wera leaves it to the user. */
   trap?: Trap;
   /** What its label said to AI tools, taken out of the label above. */
@@ -31,7 +31,7 @@ export interface Field {
 }
 
 import { labelTrap, decoyName, scrub, type Trap } from '../shared/traps';
-import { sectionOf, type Section } from './entries';
+import { sectionOf, type Block } from './entries';
 import { boxConcealed, boxOutOfReach, outOfSight, textConcealed } from './hidden';
 
 const ID_ATTR = 'data-wera-id';
@@ -48,12 +48,30 @@ function idFor(el: Element, readonly = false): string {
 }
 
 /** The root and every open shadow root inside it (web-component forms such as SmartRecruiters'). */
+/**
+ * A closed shadow root (Oracle Redwood, enterprise web components), which the extension may open:
+ * chrome.dom.openOrClosedShadowRoot in Chrome, the element's own openOrClosedShadowRoot in Firefox.
+ * Only custom elements and the few built-ins that can host one; Chrome throws for the rest (an SVG icon).
+ */
+function closedRoot(el: Element): ShadowRoot | null {
+  if (!(el instanceof HTMLElement) || !(el.localName.includes('-') || SHADOW_HOSTS.has(el.localName))) return null;
+  try {
+    return (globalThis as { chrome?: { dom?: { openOrClosedShadowRoot?: (e: HTMLElement) => ShadowRoot | null } } }).chrome?.dom?.openOrClosedShadowRoot?.(el)
+      ?? (el as HTMLElement & { openOrClosedShadowRoot?: ShadowRoot | null }).openOrClosedShadowRoot ?? null;
+  } catch {
+    return null;
+  }
+}
+const SHADOW_HOSTS = new Set(['article', 'aside', 'blockquote', 'body', 'div', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'main', 'nav', 'p', 'section', 'span']);
+
 export function allRoots(root: ParentNode): ParentNode[] {
   const out: ParentNode[] = [root];
   for (let i = 0; i < out.length; i++) {
     for (const el of out[i]!.querySelectorAll('*')) {
       // Wera's own panel and button are no part of the page (their roots are open in test builds).
-      if (el.shadowRoot && !el.localName.startsWith('wera-')) out.push(el.shadowRoot);
+      if (el.localName.startsWith('wera-')) continue;
+      const sr = el.shadowRoot ?? closedRoot(el);
+      if (sr) out.push(sr);
     }
   }
   return out;
@@ -297,18 +315,55 @@ export function isPressed(b: HTMLElement): boolean {
   return ['aria-pressed', 'aria-checked', 'aria-selected'].some((a) => b.getAttribute(a) === 'true') || PRESSED.test(b.className);
 }
 
-/** A Yes/No button pair (Ashby asks yes/no questions this way), starting at its Yes button. */
+/** Whether an element is a rich-text editor (a contenteditable box or an ARIA textbox that is no input). */
+export function isRichText(el: Element): boolean {
+  return el instanceof HTMLElement && !(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)
+    && (el.isContentEditable || el.getAttribute('contenteditable') === 'true' || el.getAttribute('contenteditable') === '' || el.getAttribute('role') === 'textbox');
+}
+
+/** Whether an ARIA checkbox or switch (Radix, MUI, Headless UI) is on. */
+export function ariaChecked(el: Element): boolean {
+  return el.getAttribute('aria-checked') === 'true' || el.getAttribute('data-state') === 'checked';
+}
+
+/** A segmented or pill choice group's look ("Remote / Hybrid / On-site"): not a toolbar of actions. */
+const CHOICE_GROUP = /segment|toggle|choice|option|pill|radio|yesno|button-?group|btn-?group/i;
+
+/**
+ * Choice buttons in a row (Ashby's Yes/No, "Remote / Hybrid / On-site",
+ * "Yes / No / Prefer not to say"), starting at the row's first button.
+ */
 function yesNoButtons(button: HTMLElement, readonly = false): Field | null {
-  if (!/^yes$/i.test(clean(button.textContent))) return null;
   const parent = button.parentElement;
   if (!parent) return null;
-  const buttons = [...parent.children].filter((c): c is HTMLElement => c.tagName === 'BUTTON');
-  if (buttons.length !== 2 || buttons[0] !== button || !/^no$/i.test(clean(buttons[1]!.textContent))) return null;
-  let raw = '';
-  for (let n: Element | null = parent.parentElement, i = 0; n && i < 4 && !raw; n = n.parentElement, i++) raw = textOf(n).slice(0, 300);
+  // A button wrapped one level (each in its own span or div) still counts as the row's.
+  const row = (p: HTMLElement) => [...p.children].map((c) => (c.tagName === 'BUTTON' ? c : c.children.length === 1 && c.firstElementChild?.tagName === 'BUTTON' ? c.firstElementChild : null));
+  let box: HTMLElement = parent;
+  let cells = row(box);
+  if (cells.some((c) => !c) && parent.parentElement && parent.children.length === 1) {
+    box = parent.parentElement;
+    cells = row(box);
+  }
+  if (cells.some((c) => !c)) return null;
+  const buttons = cells as HTMLElement[];
+  if (buttons[0] !== button || buttons.length < 2 || buttons.length > 6) return null;
+  // Checkboxes, switches and radios drawn as buttons are read as what they are.
+  if (buttons.some((b) => /^(checkbox|switch|radio|menuitem|tab)$/.test(b.getAttribute('role') ?? ''))) return null;
+  const words = buttons.map((b) => clean(b.textContent));
+  if (words.some((w) => !w || w.length > 40)) return null;
+  const yesNo = buttons.length === 2 && /^yes$/i.test(words[0]!) && /^no$/i.test(words[1]!);
+  const looksLikeChoices = box.getAttribute('role') === 'group' || CHOICE_GROUP.test(`${box.className} ${box.getAttribute('data-testid') ?? ''}`)
+    || buttons.some((b) => b.hasAttribute('aria-pressed'));
+  if (!yesNo && !looksLikeChoices) return null;
+  // A cookie or consent banner's buttons are no question of the application.
+  if (box.closest('[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [id*="onetrust" i], [class*="onetrust" i], [aria-label*="cookie" i], [id*="gdpr" i], [class*="gdpr" i]')
+    || /\bcookies?\b/i.test(textOf(box.parentElement ?? box).slice(0, 300))) return null;
+  const parent2 = box;
+  let raw = box.getAttribute('aria-label') ?? '';
+  for (let n: Element | null = parent2.parentElement, i = 0; n && i < 4 && !raw; n = n.parentElement, i++) raw = textOf(n).slice(0, 300);
   if (!raw) return null;
   return {
-    id: idFor(parent, readonly), kind: 'buttons', ...named(parent, raw), hints: '', autocomplete: '', inputType: 'buttons', el: parent,
+    id: idFor(parent2, readonly), kind: 'buttons', ...named(parent2, raw), hints: '', autocomplete: '', inputType: 'buttons', el: parent2,
     options: buttons.map((b) => ({ label: clean(b.textContent), value: clean(b.textContent), el: b })),
   };
 }
@@ -432,7 +487,9 @@ export function collectFields(page: ParentNode, found?: Trap[], readonly = false
     }
     const input = node as HTMLInputElement;
     const type = (input.type || 'text').toLowerCase();
-    if (['hidden', 'submit', 'button', 'reset', 'image', 'search', 'password'].includes(type)) continue;
+    if (['hidden', 'submit', 'button', 'reset', 'image', 'password'].includes(type)) continue;
+    // A search box is a field only when it is a dropdown's search (role="combobox", a list it fills).
+    if (type === 'search' && node.getAttribute('role') !== 'combobox' && node.getAttribute('aria-autocomplete') !== 'list') continue;
     if (input.disabled || input.readOnly) continue;
     if (type !== 'file' && isHidden(node)) continue;
     const hints = clean(`${input.name} ${node.id} ${node.getAttribute('autocomplete') ?? ''} ${node.getAttribute('data-testid') ?? ''} ${node.getAttribute('data-test') ?? ''} ${node.getAttribute('data-qa') ?? ''}`).toLowerCase();
@@ -489,6 +546,41 @@ export function collectFields(page: ParentNode, found?: Trap[], readonly = false
       id: idFor(group, readonly), kind: 'buttons', ...named(group, groupTitle(group) || rawLabel(group)), hints: clean(`${group.getAttribute('name') ?? ''} ${group.id}`).toLowerCase(), autocomplete: '', inputType: 'radiogroup',
       el: group,
       options: radios.map((r) => ({ label: clean(r.getAttribute('aria-label') || r.textContent), value: clean(r.getAttribute('aria-label') || r.textContent), el: r })),
+    });
+  }
+  // Rich-text editors (Quill, ProseMirror, Draft.js): open questions and cover letters on newer forms.
+  for (const node of deepQueryAll<HTMLElement>(root, '[contenteditable="true"], [contenteditable=""], [role="textbox"]:not(input):not(textarea)')) {
+    if (!isRichText(node) || isHidden(node) || node.parentElement?.closest('[contenteditable="true"], [contenteditable=""], [role="textbox"]')) continue;
+    if (node.closest('wera-panel, wera-assist')) continue;
+    fields.push({
+      id: idFor(node, readonly), kind: 'textarea', ...named(node, rawLabel(node)), hints: clean(`${node.getAttribute('name') ?? ''} ${node.id} ${node.getAttribute('data-testid') ?? ''}`).toLowerCase(),
+      autocomplete: '', inputType: 'richtext', el: node, options: [],
+    });
+  }
+  // ARIA checkboxes and switches (Radix, MUI, Chakra, Headless UI): several in one group are one
+  // question; a lone one is a lone box.
+  const ariaBoxes = deepQueryAll<HTMLElement>(root, '[role="checkbox"]:not(input), [role="switch"]:not(input)')
+    .filter((b) => !isHidden(b) && b.getAttribute('aria-disabled') !== 'true' && !b.closest('[role="radiogroup"]') && !b.querySelector('input[type="checkbox"]'));
+  const byGroup = new Map<HTMLElement, HTMLElement[]>();
+  for (const b of ariaBoxes) {
+    const g = b.closest<HTMLElement>('[role="group"], fieldset');
+    if (g) byGroup.set(g, [...(byGroup.get(g) ?? []), b]);
+    else {
+      fields.push({
+        id: idFor(b, readonly), kind: 'checkbox', ...named(b, b.getAttribute('aria-label') || rawLabel(b)), hints: clean(`${b.getAttribute('name') ?? ''} ${b.id}`).toLowerCase(),
+        autocomplete: '', inputType: 'ariacheckbox', el: b, options: [],
+      });
+    }
+  }
+  for (const [g, boxes] of byGroup) {
+    if (boxes.length === 1) {
+      const b = boxes[0]!;
+      fields.push({ id: idFor(b, readonly), kind: 'checkbox', ...named(b, b.getAttribute('aria-label') || rawLabel(b)), hints: '', autocomplete: '', inputType: 'ariacheckbox', el: b, options: [] });
+      continue;
+    }
+    fields.push({
+      id: idFor(g, readonly), kind: 'checkboxes', ...named(g, groupTitle(g) || rawLabel(g)), hints: clean(`${g.getAttribute('name') ?? ''} ${g.id}`).toLowerCase(), autocomplete: '', inputType: 'ariacheckbox',
+      el: g, options: boxes.map((b) => { const t = clean(b.getAttribute('aria-label') || b.textContent || (b.id ? scopeOf(b).querySelector(`label[for="${CSS.escape(b.id)}"]`)?.textContent : '') || ''); return { label: t, value: t, el: b }; }),
     });
   }
   const out = mergeTickGroups(fields).filter((f) => {

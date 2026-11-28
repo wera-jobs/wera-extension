@@ -9,9 +9,13 @@ import type { Field } from './fields';
 import { OR } from './values';
 
 export type Section = 'experience' | 'education';
+/** Any block a field may sit in: a job, a school, or a reference / emergency contact (whose details are never the applicant's). */
+export type Block = Section | 'reference';
 
 const EXP_ATTR = /work.?experience|workhistory|employment|experience|jobhistory|previous.?employ/i;
 const EDU_ATTR = /education|school|academic/i;
+const REF_ATTR = /reference|referee|emergency.?contact/i;
+const REF_HEAD = /^(professional |personal )?references?\b|^referees?\b|^emergency contact/i;
 const EXP_HEAD = /^(my )?(work|professional|employment|job|relevant)? ?(experience|history|employment)s?\b|^employment|^work history|^previous employ|^employer/i;
 const EDU_HEAD = /^(my )?education|^schools?\b|^academic|^degrees?\b|^educational background/i;
 const HEADINGS = 'h1, h2, h3, h4, h5, h6, legend, [role="heading"]';
@@ -21,10 +25,11 @@ function headingText(el: Element): string {
 }
 
 /** The section a field sits in, from its blocks' ids (Workday's "workExperience-3") or the nearest heading above it. */
-export function sectionOf(el: HTMLElement): Section | null {
+export function sectionOf(el: HTMLElement): Block | null {
   let n: Element | null = el.parentElement;
   for (let depth = 0; n && depth < 18; depth++, n = n.parentElement) {
     const attrs = `${n.id} ${n.getAttribute('data-automation-id') ?? ''} ${n.getAttribute('data-section') ?? ''} ${n.getAttribute('name') ?? ''}`;
+    if (REF_ATTR.test(attrs)) return 'reference';
     if (EDU_ATTR.test(attrs)) return 'education';
     if (EXP_ATTR.test(attrs) && !/years/i.test(attrs)) return 'experience';
     // The nearest heading decides: one that opens this block, or one just before it.
@@ -33,6 +38,7 @@ export function sectionOf(el: HTMLElement): Section | null {
     const h = own ?? siblingsBefore(n)[0];
     if (h) {
       const t = headingText(h);
+      if (REF_HEAD.test(t)) return 'reference';
       if (EDU_HEAD.test(t)) return 'education';
       if (EXP_HEAD.test(t)) return 'experience';
       if (h.tagName !== 'LEGEND') return null;

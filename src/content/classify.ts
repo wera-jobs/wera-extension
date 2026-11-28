@@ -1,8 +1,9 @@
 import { SELF_ID } from '../shared/selfId';
 import type { FieldPurpose } from '../shared/types';
-import { entryPurpose } from './entries';
+import { ENTRY_PURPOSES, entryPurpose } from './entries';
 import type { Field } from './fields';
 import { siteFor } from './sites';
+import { pattern, remoteRules } from '../shared/remoteRules';
 
 // Browser autocomplete tokens say exactly what a field is.
 const AUTOCOMPLETE: Record<string, FieldPurpose> = {
@@ -73,7 +74,7 @@ const RULES: [FieldPurpose, RegExp][] = [
   ['hispanic', /hispanic|latin[oaxe]/],
   ['race', /\brace\b|ethnic/],
   ['gender', /gender|\bsex\b|geschlecht|\bgenre\b|\bsexe\b|\bgenero\b|geslacht/],
-  ['veteran', /veteran|served in the (u\.?s\.? )?(military|armed forces)|military service|active duty/],
+  ['veteran', /veteran|served in the (u\.?s\.? )?(military|armed forces)|military (service|status)|active duty/],
   ['disability', /disabilit/],
   // High school is not the degree the details hold.
   ['graduation_year', /^(?!.*\b(high school|secondary)\b).*\bgraduat|abschlussjahr|annee d.?obtention|ano de graduacion|afstudeerjaar/],
@@ -111,23 +112,33 @@ export { SELF_ID };
 /** Kinds whose answer is one of their options. */
 const CHOICE_KINDS = new Set(['select', 'radio', 'buttons', 'listbox']);
 
-const CONSENT = /\b(i agree|agree|consent|acknowledge|certify|privacy|terms|confirm that|i understand|datenschutz\w*|einverstandnis\w*|ich stimme|politique de confidentialite|j.?accepte|consentement|politica de privacidad|acepto|consentimiento|privacyverklaring|ik ga akkoord|toestemming)\b/;
+const CONSENT = /\b(i agree|agree|consent|acknowledge|certify|privacy|terms|confirm that|i understand|process(ing)? (of )?(my|your) personal (data|information)|personal (data|information) (processing|policy)|datenschutz\w*|einverstandnis\w*|ich stimme|politique de confidentialite|j.?accepte|consentement|politica de privacidad|acepto|consentimiento|privacyverklaring|ik ga akkoord|toestemming)\b/;
 // A statement to accept, whatever the widget ("I have read and understand...", "By selecting I agree..."): the user's to give.
 const ACCEPTS = /^(i (hereby )?(have read|understand|acknowledge|confirm|certify|agree|consent|attest|authorize|accept)\b|i understand$|by (checking|selecting|clicking|ticking|submitting|providing|signing)\b|please (read and )?(acknowledge|confirm|certify)\b|do you (consent|agree|acknowledge|authorize)\b)/;
 
 // Contact details asked inside a job or school block are that job's or school's, not the applicant's.
 const CONTACT = new Set<FieldPurpose>(['city', 'state', 'country', 'location', 'postal_code', 'address', 'address_line2', 'phone', 'email']);
+// What a site rule may name that is about the applicant, never about a block they list.
+const ABOUT_APPLICANT = new Set<FieldPurpose>([...CONTACT, 'first_name', 'last_name', 'full_name', 'start_date', 'cover_letter', 'resume', 'linkedin', 'salary_expectation']);
 
 /** What a field asks for, or null when Wera cannot tell. */
 export function classify(f: Field): FieldPurpose | null {
   // The site's own name for the field says it best (Workday's "legalNameSection_firstName").
-  const named = siteFor(f.el.ownerDocument)?.purpose?.(f);
-  if (named !== undefined) return named;
+  const site = siteFor(f.el.ownerDocument);
+  const named = site?.purpose?.(f);
+  // A site's name for a personal detail ("phone", "startdate", "summary") inside a job, school or
+  // reference block is that block's: the supervisor's phone, the job's start, the role's summary.
+  const blockOwn = !site?.blockAware && f.section && named && ABOUT_APPLICANT.has(named) && !ENTRY_PURPOSES.has(named);
+  // Another document named like the resume ("document", "attachment"): a transcript is no resume.
+  const otherFile = named === 'resume' && /transcript|portfolio|cover|certificat|reference|zeugnis|anschreiben|writing sample/i.test(`${f.label} ${f.hints}`);
+  if (named !== undefined && !blockOwn && !otherFile) return named;
+  if (otherFile && !f.section) return generic(f);
   if (f.section) {
-    const e = entryPurpose(f, f.section);
+    const e = f.section === 'reference' ? null : entryPurpose(f, f.section);
     if (e) return e;
     const p = generic(f);
-    return p && CONTACT.has(p) ? null : p;
+    // A reference's name and email, a supervisor's phone: never the applicant's own.
+    return p && ABOUT_APPLICANT.has(p) ? null : p;
   }
   return generic(f);
 }
@@ -157,6 +168,10 @@ const SHORT_ANSWERS = new Set<FieldPurpose>(['start_date', 'salary_expectation',
 const SELF_ID_LONG = new Set<FieldPurpose>(['hispanic', 'race', 'gender', 'veteran', 'disability', 'transgender', 'sexual_orientation', 'lgbtq', 'needs_sponsorship', 'authorized_to_work', 'authorized_no_sponsorship', 'over_18', 'consent', 'previously_employed', 'cover_letter', 'resume', 'work_preference', 'willing_to_travel']);
 
 function generic(f: Field): FieldPurpose | null {
+  // Aliases from the remote rules (#143): a label the built-in rules misread, fixed without a release.
+  for (const [src, p] of remoteRules()?.aliases ?? []) {
+    if (pattern(src)?.test(f.label)) return p;
+  }
   if (f.autocomplete) {
     for (const tok of f.autocomplete.split(/\s+/)) {
       const p = AUTOCOMPLETE[tok];

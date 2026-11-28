@@ -81,6 +81,25 @@ describe('the Wera button', () => {
     expect(shadow()!.querySelector('.pop')).toBeNull();
   });
 
+  it('puts an earlier answer to the same question first, and drafts only when asked', async () => {
+    const saved = 'At Globex I traced a stalled payments queue to a lock and shipped the fix within the hour.';
+    const send = chrome.runtime.sendMessage as unknown as { mockImplementation: (f: (m: { type: string; method?: string; args?: unknown[] }) => Promise<unknown>) => void };
+    send.mockImplementation((m: { type: string; method?: string; args?: unknown[] }) => {
+      if (m.type === 'wera:job-context') return Promise.resolve({ jobId: 7, posting: null });
+      if (m.type !== 'wera:api') return Promise.resolve(null);
+      calls.push({ method: m.method!, args: m.args! });
+      if (m.method === 'answers') return Promise.resolve({ ok: true, value: [{ id: 1, question: 'Tell us about a time you fixed something under pressure.', answer: saved, company: '', at: Date.now() }] });
+      return Promise.resolve({ ok: true, value: { answer: 'A fresh draft about the outage.' } });
+    });
+    document.querySelector<HTMLTextAreaElement>('#why')!.focus();
+    await vi.waitFor(() => expect(button('Draft this answer with Wera')).toBeTruthy());
+    button('Draft this answer with Wera')!.click();
+    await vi.waitFor(() => expect(shadow()!.querySelector('.draft')!.textContent).toBe(saved));
+    expect(calls.some((c) => c.method === 'answer')).toBe(false);
+    button('Draft a new one')!.click();
+    await vi.waitFor(() => expect(shadow()!.querySelector('.draft')!.textContent).toBe('A fresh draft about the outage.'));
+  });
+
   it('still shows when the box was focused a moment before (as Autofill does)', async () => {
     const why = document.querySelector<HTMLTextAreaElement>('#why')!;
     const fn = document.querySelector<HTMLInputElement>('#fn')!;

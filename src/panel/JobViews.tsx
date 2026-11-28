@@ -1,13 +1,14 @@
 // The job the panel is on: its card (fit, title, company, tracker
 // status), Save for a posting, and what Wera did when the site confirmed
 // an application.
-import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X, Zap } from 'lucide-react';
-import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
+import type { ApplicationStatus, JobH1B, JobKeywords, ResumeSummary, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { applyingSince, markApplying } from '../shared/flow';
+import { queuedTab } from '../shared/queue';
 import { prettyReason } from '../shared/jobs';
 import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
@@ -22,11 +23,40 @@ export function Badge({ className, children }: { className: string; children: Re
 }
 
 /** A job's words as chips: what the user has, then what they lack. */
-function Chips({ have, lack }: { have: string[]; lack: string[] }) {
+function Chips({ have, lack, onAdd }: { have: string[]; lack: string[]; onAdd?: (skill: string) => Promise<void> }) {
+  const [adding, setAdding] = useState('');
   return (
     <div className="flex flex-wrap gap-1">
       {have.slice(0, 8).map((k) => <Badge key={k} className="border-good/25 bg-good/10 text-good">{k}</Badge>)}
-      {lack.slice(0, 8).map((k) => <Badge key={k} className="border-border bg-surface-2 text-muted">{k}</Badge>)}
+      {lack.slice(0, 8).map((k) => onAdd ? (
+        <button key={k} type="button" disabled={!!adding} title={`I have ${k}: add it to my profile and score this job again`}
+          onClick={() => {
+            setAdding(k);
+            void onAdd(k).finally(() => setAdding(''));
+          }}
+          className="inline-flex items-center gap-0.5 rounded-md border border-dashed border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted hover:border-accent/50 hover:text-text disabled:opacity-60">
+          + {k}{adding === k ? '…' : ''}
+        </button>
+      ) : <Badge key={k} className="border-border bg-surface-2 text-muted">{k}</Badge>)}
+    </div>
+  );
+}
+
+const PARTS: [keyof NonNullable<WeraJob['fit_parts']>, string][] = [['role', 'Role'], ['seniority', 'Level'], ['skills', 'Skills'], ['domain', 'Domain'], ['location', 'Location']];
+
+/** The ratings a fit score rests on, as small bars. */
+function FitParts({ parts }: { parts: NonNullable<WeraJob['fit_parts']> }) {
+  return (
+    <div className="grid grid-cols-[4.5rem_1fr_1.5rem] items-center gap-x-2 gap-y-1">
+      {PARTS.map(([k, label]) => {
+        const v = Number(parts[k]);
+        return [
+          <span key={`${k}l`} className="text-[11px] text-muted">{label}</span>,
+          <span key={`${k}b`} className="h-1.5 overflow-hidden rounded-full bg-surface-2"><span className={clsx('block h-full rounded-full', v >= 7 ? 'bg-good' : v >= 4 ? 'bg-warn' : 'bg-bad')} style={{ width: `${v * 10}%` }} /></span>,
+          <span key={`${k}n`} className="text-right font-mono text-[11px] text-text">{v}</span>,
+        ];
+      })}
+      {parts.blocker && <span className="col-span-3 text-[11px] text-bad">Something in the posting rules you out (a clearance, citizenship or license).</span>}
     </div>
   );
 }
@@ -153,8 +183,21 @@ export function Fit({ api, page }: { api: WeraApi; page: PanelPageState }) {
         {open && (
           <div className="space-y-2 border-t border-border px-3 py-2">
             {job.reason && <p className="text-muted">{job.reason}</p>}
-            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} />}
+            {job.fit_parts && <FitParts parts={job.fit_parts} />}
+            {(have.length > 0 || lack.length > 0) && <Chips have={have} lack={lack} onAdd={async (skill) => {
+              try {
+                const r = await api.addSkill(skill, job.id);
+                if (r.job) page.setJob(r.job);
+                setKeywords(null);
+                api.jobKeywords(job.id).then(setKeywords, () => {});
+              } catch (e) {
+                log.warn('fit', 'adding the skill failed', e);
+              }
+            }} />}
+            {lack.length > 0 && <p className="text-[11px] text-faint">Have one of these? Tap it to add it to your profile, and Wera scores this job again.</p>}
             {sponsor && <p className="text-muted">{sponsor}</p>}
+            {job.early && <p className="text-good">Posted in the last three days: you would be an early applicant.</p>}
+            {!!job.also_in?.length && <p className="text-muted">Also posted in {job.also_in.slice(0, 4).join(', ')}{job.also_in.length > 4 ? ` and ${job.also_in.length - 4} more` : ''}.</p>}
             {h1b?.matched && h1b.filings > 0 && <p className="text-muted">{job.company} filed {h1b.filings} H-1B petition{h1b.filings === 1 ? '' : 's'}.</p>}
           </div>
         )}
@@ -204,6 +247,15 @@ export function Posting({ api, page, tabId, onUseForm }: { api: WeraApi; page: P
   const stuck = useApplyStuck(tabId, pressed);
   const [error, setError] = useState('');
   const [review, setReview] = useState<JobDraft | null>(null);
+  // A posting the application queue opened: press Apply, and the application fills itself.
+  const applyNow = useRef<(() => Promise<void>) | null>(null);
+  const queuedApply = useRef(false);
+  const canApply = page.handle.canApply || !!page.info?.apply;
+  useEffect(() => {
+    if (queuedApply.current || tabId == null || !canApply || page.loading) return;
+    queuedApply.current = true;
+    void queuedTab(tabId).then((q) => (q ? applyNow.current?.() : undefined)).catch(() => {});
+  }, [tabId, canApply, page.loading]);
   // Only the first read shows a placeholder: a re-read (the page moved on) keeps the buttons where they are.
   if (page.loading && !page.info) return <Skeleton className="h-11" />;
   /** The job as the page states it, or as the AI read it from the page. */
@@ -248,6 +300,8 @@ export function Posting({ api, page, tabId, onUseForm }: { api: WeraApi; page: P
     }
   };
   const apply = page.handle.canApply || !!page.info?.apply;
+  // eslint-disable-next-line react-hooks/refs -- the latest Apply, for the queue's effect above
+  applyNow.current = onApply;
   if (review) {
     return <ReviewJob draft={review} onCancel={() => setReview(null)} onSave={async (d) => {
       page.setJob(await api.addJob({ ...d, source: 'manual' }));
@@ -332,6 +386,21 @@ function ReviewJob({ draft, onSave, onCancel }: { draft: JobDraft; onSave: (d: J
 /** Tailor the resume to a saved job before applying, and see what it does to the fit. */
 function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
   const [version, setVersion] = useState(0);
+  // Several base resumes (ML, Backend...): the user picks the one to start from.
+  const [bases, setBases] = useState<ResumeSummary[]>([]);
+  const [base, setBase] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api.listResumes().then((list) => {
+      if (!live) return;
+      const b = list.filter((r) => r.job_id == null);
+      setBases(b);
+      setBase((b.find((r) => r.is_default) ?? b[0])?.id ?? null);
+    }, (e: unknown) => log.warn('tailor', 'listing your resumes failed', e));
+    return () => {
+      live = false;
+    };
+  }, [api]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const score = useTailoredScore(api, jobId, version);
@@ -339,7 +408,7 @@ function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
     setBusy(true);
     setError('');
     try {
-      await api.tailorResume(jobId);
+      await api.tailorResume(jobId, '', bases.length > 1 ? base : null);
       setVersion((n) => n + 1);
     } catch (e) {
       setError(describeError(e, "Couldn't tailor your resume"));
@@ -357,7 +426,15 @@ function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
       {score ? (
         <a href={api.dashboardUrl(`/jobs/${jobId}`)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
       ) : (
-        <Button className="px-2 py-1" busy={busy} onClick={() => void tailor()}>{!busy && <Sparkles className="size-3.5" />} Tailor</Button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Button className="px-2 py-1" busy={busy} onClick={() => void tailor()}>{!busy && <Sparkles className="size-3.5" />} Tailor</Button>
+          {bases.length > 1 && (
+            <select aria-label="Start from" value={base ?? ''} onChange={(e) => setBase(Number(e.target.value) || null)}
+              className="max-w-36 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-text">
+              {bases.map((r) => <option key={r.id} value={r.id}>{r.title || 'Resume'}{r.is_default ? ' (default)' : ''}</option>)}
+            </select>
+          )}
+        </div>
       )}
     </div>
   );

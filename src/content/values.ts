@@ -4,6 +4,7 @@
 // field that takes it (dates for a date box, digits for a number box).
 import type { Applicant, FieldPurpose, Profile } from '../shared/types';
 import { ENTRY_PURPOSES } from './entries';
+import { veteranStatus } from '../shared/selfId';
 import { norm, stateName, US_NAMES } from './places';
 
 /**
@@ -74,6 +75,8 @@ export function valueFor(p: FieldPurpose, a: Applicant | Profile, ctx: ValueCont
       return a.hispanic === 'yes' && a.race !== 'decline' ? ['Hispanic or Latino', a.race].filter(Boolean).join(OR) : a.race;
     case 'referral':
       return '';
+    case 'veteran':
+      return veteranStatus(a.veteran ?? '');
     case 'authorized_no_sponsorship':
       if (!a.authorized_to_work || !a.needs_sponsorship) return '';
       return a.authorized_to_work === 'yes' && a.needs_sponsorship === 'no' ? 'yes' : 'no';

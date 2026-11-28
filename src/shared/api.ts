@@ -47,6 +47,19 @@ export interface WeraJob {
   closed_at?: string | null;
   /** Where Wera serves the company's logo (e.g. "/api/companies/7/logo?v=1"); absent when it has none. */
   logo_url?: string | null;
+  company_id?: number;
+  /** The user follows the company: its new roles show up as a notice. */
+  company_followed?: boolean;
+  /** Other places the same role is posted. */
+  also_in?: string[];
+  /** Posted in the last three days and found by Wera: an early applicant. */
+  early?: boolean;
+  /** The ratings the fit score was computed from, 0-10 each. */
+  fit_parts?: { role: number; seniority: number; skills: number; domain: number; location: number; blocker: boolean } | null;
+  pay_min?: number | null;
+  pay_max?: number | null;
+  pay_currency?: string | null;
+  pay_period?: string | null;
 }
 
 export interface CoverLetter {
@@ -78,6 +91,19 @@ export interface ResumeEntry {
   link_label?: string;
   bullets?: ResumeBullet[];
   hidden?: boolean;
+}
+
+/** Someone the user logged for a job (see the dashboard's Contacts). */
+export interface JobContact {
+  id: number;
+  job_id: number;
+  name: string;
+  role: string;
+  email: string;
+  linkedin_url: string;
+  notes: string;
+  last_contacted_at: string | null;
+  follow_up_at: string | null;
 }
 
 export interface ResumeSection {
@@ -186,6 +212,10 @@ export interface ResumeSummary {
   id: number;
   title: string;
   job_id: number | null;
+  /** The base resume used unless another is chosen (a user may keep several: ML, Backend...). */
+  is_default?: boolean;
+  /** For a tailored copy: the base resume it was written from. */
+  base_id?: number | null;
   fit_score?: { before: number; after: number } | null;
 }
 
@@ -289,6 +319,17 @@ export class WeraApi {
     return this.call<{ job: WeraJob | null }>(`/api/ext/jobs/lookup?url=${encodeURIComponent(url)}`);
   }
 
+  /** The user's job for each address, in order (null where Wera has none): one request for a board's cards. */
+  async lookupMany(urls: string[]): Promise<(WeraJob | null)[]> {
+    try {
+      return (await this.call<{ jobs: (WeraJob | null)[] }>('/api/ext/jobs/lookup-batch', { method: 'POST', body: JSON.stringify({ urls }) })).jobs;
+    } catch (e) {
+      // An older server: one request each.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) return Promise.all(urls.map((u) => this.lookup(u).then((r) => r.job, () => null)));
+      throw e;
+    }
+  }
+
   job(id: number) {
     return this.call<WeraJob>(`/api/jobs/${id}`);
   }
@@ -340,6 +381,25 @@ export class WeraApi {
   }
 
   /** Sets the job's status in the tracker (notes stay as they are). */
+  /** The people the user logged for a job (recruiters, referrers). */
+  jobContacts(jobId: number) {
+    return this.call<{ contacts: JobContact[] }>(`/api/jobs/${jobId}/contacts`).then((r) => r.contacts);
+  }
+
+  addContact(jobId: number, c: Pick<JobContact, 'name'> & Partial<Pick<JobContact, 'role' | 'linkedin_url' | 'notes' | 'follow_up_at' | 'last_contacted_at'>>) {
+    return this.call<JobContact>(`/api/jobs/${jobId}/contacts`, { method: 'POST', body: JSON.stringify(c) });
+  }
+
+  /** Adds a skill to the profile; with a job, that job is scored again and returned. */
+  addSkill(skill: string, jobId?: number) {
+    return this.call<{ job?: WeraJob }>('/api/profile/skills', { method: 'POST', body: JSON.stringify({ skill, ...(jobId != null ? { job_id: jobId } : {}) }) });
+  }
+
+  /** Follows a company (its new roles show up as a notice), or stops. */
+  followCompany(companyId: number, follow: boolean) {
+    return this.call<void>(`/api/companies/${companyId}/follow`, { method: follow ? 'PUT' : 'DELETE' });
+  }
+
   setStatus(jobId: number, status: ApplicationStatus) {
     return this.call<WeraJob>(`/api/jobs/${jobId}/application`, { method: 'PUT', body: JSON.stringify({ status }) });
   }
@@ -367,10 +427,12 @@ export class WeraApi {
     }
   }
 
-  tailorResume(jobId: number, request = '') {
+  /** Writes a copy of a base resume (the default one unless baseId names another) toward the job. */
+  tailorResume(jobId: number, request = '', baseId?: number | null) {
+    const body = { ...(request.trim() ? { request: request.trim() } : {}), ...(baseId != null ? { base_resume_id: baseId } : {}) };
     return this.call<{ resume: ResumeDoc; coverage_before: Coverage }>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
-      body: request.trim() ? JSON.stringify({ request: request.trim() }) : undefined,
+      body: Object.keys(body).length ? JSON.stringify(body) : undefined,
     });
   }
 
@@ -425,7 +487,7 @@ export class WeraApi {
    * reworks that draft instead.
    */
   async answer(question: string, jobId: number | null, maxWords = 150, posting?: { company: string; title: string; description: string }, rework?: { draft?: string; instructions?: string }) {
-    const a = await this.call<{ answer?: string; needs_input?: string }>('/api/ext/answer', {
+    const a = await this.call<{ answer?: string; needs_input?: string; unsupported?: string[] }>('/api/ext/answer', {
       method: 'POST',
       body: JSON.stringify({
         question, job_id: jobId ?? 0, max_words: maxWords,
@@ -437,10 +499,17 @@ export class WeraApi {
     // An older server can leave the AI's request marker in the text: it never goes in a form.
     const [answer, asks] = splitNeedsInput(a.answer ?? '');
     const needs = [a.needs_input, asks].filter(Boolean).join('; ');
-    return { ...(answer ? { answer } : {}), ...(needs ? { needs_input: needs } : {}) };
+    // What the question asks about that the person's data never mentions (Terraform on a resume without it).
+    const unsupported = (a.unsupported ?? []).filter((t) => typeof t === 'string' && t).slice(0, 5);
+    return { ...(answer ? { answer } : {}), ...(needs ? { needs_input: needs } : {}), ...(unsupported.length ? { unsupported } : {}) };
   }
 
   /** Answers the user gave on forms (empty on a Wera too old to keep them). */
+  /** Forgets one saved answer. */
+  deleteAnswer(id: number) {
+    return this.call<void>(`/api/applicant/answers/${id}`, { method: 'DELETE' });
+  }
+
   async answers(): Promise<SavedAnswer[]> {
     try {
       const r = await this.call<{ answers: { id: number; question: string; answer: string; kind: SavedAnswer['kind']; company: string; updated_at: string }[] }>('/api/applicant/answers');
@@ -477,6 +546,11 @@ export class WeraApi {
 
   addRunPage(runId: number, filled: number, suggested: number, sent: RunAttachments = {}) {
     return this.call<AutofillRun>(`/api/ext/autofill-runs/${runId}/pages`, { method: 'POST', body: JSON.stringify({ filled, suggested, ...attachments(sent) }) });
+  }
+
+  /** How a page's fields fared (purposes only, never values), for autofill quality in the admin app. */
+  addRunFields(runId: number, system: string, fields: { purpose: string; kind: string; filled: boolean; changed: boolean }[]) {
+    return this.call<void>(`/api/ext/autofill-runs/${runId}/fields`, { method: 'POST', body: JSON.stringify({ system, fields }) });
   }
 
   /** "Report a problem": the person's note, the page and the diagnostics, for the Wera team. */
@@ -531,9 +605,12 @@ export class WeraApi {
    * The best resume to attach for a job: the copy tailored to it, else
    * the main resume, else the uploaded file; null if there is none.
    */
-  async resumeFile(jobId: number | null): Promise<ResumeFile | null> {
-    const { resumes } = await this.call<{ resumes: { id: number; job_id: number | null }[] }>('/api/resumes').catch(() => ({ resumes: [] }));
-    const doc = (jobId != null && resumes.find((r) => r.job_id === jobId)) || resumes.find((r) => r.job_id == null);
+  async resumeFile(jobId: number | null, preferId?: number | null): Promise<ResumeFile | null> {
+    const { resumes } = await this.call<{ resumes: ResumeSummary[] }>('/api/resumes').catch(() => ({ resumes: [] as ResumeSummary[] }));
+    // The one the user chose in the panel, else this job's tailored copy, else the default base resume.
+    const doc = (preferId != null && resumes.find((r) => r.id === preferId))
+      || (jobId != null && resumes.find((r) => r.job_id === jobId))
+      || resumes.find((r) => r.job_id == null && r.is_default) || resumes.find((r) => r.job_id == null);
     if (doc) {
       const f = await this.resumeDocPdf(doc.id).catch(() => null);
       if (f) return { ...f, id: doc.id, kind: doc.job_id == null ? 'base' : 'tailored' };
@@ -551,4 +628,11 @@ export class WeraApi {
 export function splitNeedsInput(text: string): [string, string] {
   const m = /\bneeds[_ ]input\s*:/i.exec(text);
   return m ? [text.slice(0, m.index).trim(), text.slice(m.index + m[0].length).trim()] : [text, ''];
+}
+
+/** The panel's note for a question that asks about what the person's data lacks. */
+export function unsupportedNote(terms: string[] | undefined): string {
+  if (!terms?.length) return '';
+  const list = terms.length === 1 ? terms[0]! : `${terms.slice(0, -1).join(', ')} and ${terms[terms.length - 1]}`;
+  return `this asks about ${list}, which your resume doesn't mention: check the draft claims nothing you haven't done`;
 }

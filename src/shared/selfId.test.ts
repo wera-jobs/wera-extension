@@ -11,7 +11,11 @@ describe('self-identification from a form', () => {
     expect(selfIdValue('race', 'Two or More Races (Not Hispanic or Latino)')).toBe('Two or more races');
     expect(selfIdValue('hispanic', 'Not Hispanic or Latino')).toBe('no');
     expect(selfIdValue('hispanic', 'Hispanic or Latino')).toBe('yes');
-    expect(selfIdValue('veteran', 'I identify as a non-protected veteran')).toBe('I am not a protected veteran');
+    expect(selfIdValue('veteran', 'I identify as a non-protected veteran')).toBe('I am a veteran, but not a protected veteran');
+    expect(selfIdValue('veteran', 'I am a veteran, but I am not a protected veteran')).toBe('I am a veteran, but not a protected veteran');
+    expect(selfIdValue('veteran', 'I have never served in the military')).toBe('I am not a veteran');
+    // Either of the first two: it teaches nothing.
+    expect(selfIdValue('veteran', 'I am not a protected veteran')).toBe('');
     expect(selfIdValue('veteran', 'I identify as one or more of the classifications of protected veteran')).toBe('I am a protected veteran');
     expect(selfIdValue('disability', "No, I don't have a disability and have not had one in the past")).toBe('No, I do not have a disability');
     expect(selfIdValue('disability', 'Yes, I have a disability (or previously had a disability)')).toBe('Yes, I have a disability');

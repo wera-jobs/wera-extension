@@ -5,7 +5,7 @@
 // background service worker and steps aside.
 import { isApplicantHost } from '../content/frames';
 import { looksSubmitted, submittedAddress } from '../content/submitted';
-import { applyAddress, careerAddress, EMBEDDED_FORM, insideNotJobSite, isJobSearchUrl, isJobUrl, isNotJobSite } from '../content/urls';
+import { applyAddress, careerAddress, EMBEDDED_FORM, insideNotJobSite, isJobSearchUrl, isJobUrl, isNotJobHost, isNotJobSite } from '../content/urls';
 import { extensionAlive, sendSafe } from '../shared/alive';
 
 declare global {
@@ -20,7 +20,12 @@ export function couldBeJobPage(doc: Document): boolean {
   const url = doc.location?.href ?? '';
   if (!url || isNotJobSite(url) || insideNotJobSite(doc)) return false;
   if (isJobUrl(url) || isJobSearchUrl(url) || isApplicantHost(doc.location.hostname) || careerAddress(url) || applyAddress(url) || submittedAddress(url)) return true;
-  if (doc.querySelector('input[type="file"], iframe#icims_content_iframe, [data-automation-id="applyFlowPage"], [data-automation-id^="formField-"]')) return true;
+  if (doc.querySelector('iframe#icims_content_iframe, [data-automation-id="applyFlowPage"], [data-automation-id^="formField-"]')) return true;
+  // A file box alone is everywhere (GitHub, Jira, banks, drives): only one asking for a resume or CV counts.
+  for (const input of doc.querySelectorAll<HTMLInputElement>('input[type="file"]')) {
+    const near = `${input.name} ${input.id} ${input.getAttribute('aria-label') ?? ''} ${input.closest('label, fieldset, div')?.textContent?.slice(0, 300) ?? ''}`;
+    if (/r[eé]sum[eé]|\bcv\b|curriculum|lebenslauf|cover.?letter/i.test(near)) return true;
+  }
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
     if (/JobPosting/i.test(s.textContent ?? '')) return true;
   }
@@ -41,6 +46,9 @@ export function couldBeJobPage(doc: Document): boolean {
 
 /** Watches the document cheaply and wakes page.js the moment it looks like a job page. */
 export function startDetector(doc: Document, delay = 800): () => void {
+  // Mail, chat, docs, video: never a job page, whatever they render later. No watching at all.
+  const url = doc.location?.href ?? '';
+  if (url && (isNotJobHost(url) || insideNotJobSite(doc))) return () => {};
   let timer = 0;
   let first = true;
   let idle = 0;

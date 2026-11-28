@@ -3,10 +3,10 @@
 // resume and cover letter Wera uses, and what it filled.
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, FileText, Flag, PenLine, Sparkles, Square, Zap } from 'lucide-react';
-import type { WeraApi } from '../shared/api';
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, Copy, FileText, Flag, PenLine, RefreshCw, Sparkles, Square, Zap } from 'lucide-react';
+import type { LetterSteer, WeraApi } from '../shared/api';
 import { PAST_APPLIED } from '../shared/jobs';
-import { frames } from '../shared/rpc';
+import { frames, rpc } from '../shared/rpc';
 import { diagnostics, reportPage, REPORT_DETAILS_MAX } from './diagnostics';
 import { describeError } from '../shared/errors';
 import type { PanelProps } from './Panel';
@@ -20,7 +20,6 @@ import { TailoredLine, useTailoredScore } from './Tailored';
 /** An application: Autofill, then what still needs the user, then Continue on multi-page forms. */
 export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & { api: WeraApi }) {
   const a = useAutofill(api, page, settings, tabId);
-  const [showFilled, setShowFilled] = useState(false);
   const [reporting, setReporting] = useState(false);
 
   // The toolbar shortcut or right-click menu asked to fill.
@@ -60,6 +59,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
         </Notice>
       )}
       {(a.plan?.gate ?? page.info?.gate) && <Notice tone="warn">{a.plan?.gate ?? page.info?.gate}</Notice>}
+      {/account|sign in/i.test(a.plan?.gate ?? page.info?.gate ?? '') && <AccountHelp api={api} />}
       {page.job?.application_status && PAST_APPLIED.has(page.job.application_status) && !page.submitted && (
         <Notice tone="warn">Your tracker says you already applied to this job.</Notice>
       )}
@@ -74,14 +74,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
           </button>
         )}
       </div>
-      {total > 0 && (
-        <div className="flex items-center gap-2 text-[11px] text-muted">
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-            <span className="block h-full rounded-full bg-good transition-all duration-300" style={{ width: `${(100 * filled.length) / total}%` }} />
-          </span>
-          <span className="font-mono">{filled.length}/{total}</span>
-        </div>
-      )}
+      {total > 0 && <Completion rows={a.rows} open={done} />}
       {a.phase === 'idle' && !a.plan && (
         <p className="text-center text-[11px] text-faint">Fills your details, attaches your resume and drafts the open questions. You review and submit.</p>
       )}
@@ -129,26 +122,6 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
 
       <Docs api={api} page={page} a={a} />
 
-      {filled.length > 0 && (
-        <div>
-          <button type="button" className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-text" onClick={() => setShowFilled((v) => !v)}>
-            <ChevronDown className={clsx('size-3 transition-transform', showFilled && 'rotate-180')} /> What Wera filled ({filled.length})
-          </button>
-          {showFilled && (
-            <ul className="mt-1.5 space-y-1">
-              {filled.map((r) => (
-                <li key={r.id}>
-                  <button type="button" onClick={() => void frames('highlight', r.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] hover:bg-surface-2">
-                    <CheckCircle2 className={clsx('size-3 shrink-0', r.status === 'filled' ? 'text-good' : 'text-faint')} />
-                    <span className="min-w-0 flex-1 truncate text-muted">{rowLabel(r)}</span>
-                    <span className="max-w-[45%] truncate text-text">{r.value === RESUME ? 'resume' : r.value === LETTER ? 'cover letter' : r.result || r.value}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
       <div className="flex items-center gap-3">
         <a href={api.dashboardUrl('/profile#application')} target="_blank" rel="noreferrer" className="text-[11px] text-faint hover:text-text hover:underline">
           Your details and saved answers
@@ -290,30 +263,226 @@ function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnT
             }}
             className="w-full rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-text focus:border-accent/60 focus:outline-none">
             {a.resumes.map((r) => {
-              const tag = r.job_id == null ? 'Main' : r.job_id === job?.id ? 'Tailored for this job' : 'Tailored';
+              const tag = r.job_id == null ? (r.is_default ? 'Default' : 'Base') : r.job_id === job?.id ? 'Tailored for this job' : 'Tailored';
               const fit = r.fit_score ? ` · Fit ${r.fit_score.after}` : r.job_id == null && job?.fit_score != null ? ` · Fit ${job.fit_score}` : '';
               return <option key={r.id} value={r.id}>{r.title || tag} ({tag}{fit})</option>;
             })}
           </select>
         )}
       </div>
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <LetterCard a={a} writing={writing} setWriting={setWriting} />
+    </div>
+  );
+}
+
+const TONES: [NonNullable<LetterSteer['tone']>, string][] = [['', 'Any tone'], ['warm', 'Warm'], ['formal', 'Formal'], ['confident', 'Confident'], ['enthusiastic', 'Enthusiastic'], ['concise', 'Concise']];
+const LENGTHS: [NonNullable<LetterSteer['length']>, string][] = [['', 'Any length'], ['short', 'Short'], ['standard', 'Standard'], ['long', 'Long']];
+
+/** The cover letter: write it (straight into the form), read it, copy it, edit it, or write it again in another tone or length. */
+function LetterCard({ a, writing, setWriting }: { a: ReturnType<typeof useAutofill>; writing: boolean; setWriting: (b: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const [tone, setTone] = useState<NonNullable<LetterSteer['tone']>>('');
+  const [length, setLength] = useState<NonNullable<LetterSteer['length']>>('');
+  const [copied, setCopied] = useState(false);
+  const write = (steer?: LetterSteer) => {
+    setWriting(true);
+    void a.writeLetter(steer).then((ok) => ok && setOpen(true)).finally(() => setWriting(false));
+  };
+  const select = 'rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-text';
+  return (
+    <div className="space-y-2 px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
         <PenLine className="size-4 shrink-0 text-muted" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">Cover letter</p>
           <p className="truncate text-[11px] text-muted">{a.letter ? 'written: Wera puts it in the form' : 'none for this job yet'}</p>
         </div>
         {a.letter ? (
-          job && <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
+          <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline">
+            {open ? 'Hide' : 'Read'} <ChevronDown className={clsx('size-3 transition-transform', open && 'rotate-180')} />
+          </button>
         ) : (
-          <Button className="px-2 py-1" busy={writing} onClick={() => {
-            setWriting(true);
-            void a.writeLetter().finally(() => setWriting(false));
-          }}>
-            {!writing && <Sparkles className="size-3.5" />} Write
-          </Button>
+          <Button className="px-2 py-1" busy={writing} onClick={() => write()}>{!writing && <Sparkles className="size-3.5" />} Write</Button>
         )}
       </div>
+      {a.letter && open && (
+        <div className="space-y-1.5">
+          {editing ? (
+            <textarea aria-label="Your cover letter" value={text} onChange={(e) => setText(e.target.value)} rows={10}
+              className="w-full resize-y rounded-lg border border-border bg-surface-2 p-2 text-xs text-text" />
+          ) : (
+            <p className="max-h-56 overflow-y-auto rounded-lg bg-surface-2 p-2 text-xs whitespace-pre-wrap text-text">{a.letter}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {editing ? (
+              <>
+                <Button className="px-2 py-1" busy={writing} onClick={() => {
+                  setWriting(true);
+                  void a.saveLetter(text).then((ok) => ok && setEditing(false)).finally(() => setWriting(false));
+                }}>Save</Button>
+                <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => setEditing(false)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <Button className="px-2 py-1" onClick={() => {
+                  void navigator.clipboard.writeText(a.letter).then(() => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1200);
+                  }, () => {});
+                }}>{copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />} {copied ? 'Copied' : 'Copy'}</Button>
+                <Button className="px-2 py-1" onClick={() => { setText(a.letter); setEditing(true); }}>Edit</Button>
+              </>
+            )}
+          </div>
+          {!editing && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select aria-label="Tone" value={tone} onChange={(e) => setTone(e.target.value as typeof tone)} className={select}>
+                {TONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <select aria-label="Length" value={length} onChange={(e) => setLength(e.target.value as typeof length)} className={select}>
+                {LENGTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <Button className="px-2 py-1" busy={writing} onClick={() => write({ tone, length })}>{!writing && <RefreshCw className="size-3.5" />} Write again</Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A field's state as the completion card shows it. */
+function stateOf(r: Row): 'done' | 'check' | 'todo' | 'filling' {
+  if (r.status === 'filling') return 'filling';
+  if (r.status === 'filled' && (r.drafted || r.chosen)) return 'check';
+  if (r.status === 'filled' || r.status === 'already') return 'done';
+  return 'todo';
+}
+
+function CompletionRow({ r }: { r: Row }) {
+  const st = stateOf(r);
+  const value = r.value === RESUME ? 'resume' : r.value === LETTER ? 'cover letter' : r.result || r.value;
+  return (
+    <li>
+      <button type="button" onClick={() => void frames('highlight', r.id)} title="Show it on the page"
+        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] hover:bg-surface-2">
+        {st === 'done' ? <CheckCircle2 className="size-3.5 shrink-0 text-good" aria-label="filled" />
+          : st === 'check' ? <CheckCircle2 className="size-3.5 shrink-0 text-accent-2" aria-label="filled, check it" />
+          : st === 'filling' ? <span className="size-3.5 shrink-0 animate-pulse rounded-full bg-accent/40" aria-label="filling" />
+          : <span className="grid size-3.5 shrink-0 place-items-center rounded-full border border-border text-faint" aria-label="not filled">–</span>}
+        <span className={clsx('min-w-0 flex-1 truncate', st === 'todo' ? 'text-text' : 'text-muted')}>{rowLabel(r)}</span>
+        {st !== 'todo' && value && <span className="max-w-[45%] truncate text-text">{value}</span>}
+      </button>
+    </li>
+  );
+}
+
+/**
+ * How complete the form is: the share of required fields filled, then
+ * each required field and (folded) each optional one, with its state.
+ * A row shows its field on the page.
+ */
+function Completion({ rows, open: start }: { rows: Row[]; open: boolean }) {
+  const [open, setOpen] = useState(start);
+  const [opened, setOpened] = useState(start);
+  if (start && !opened) {
+    setOpened(true);
+    setOpen(true);
+  }
+  const [showOptional, setShowOptional] = useState(false);
+  const required = rows.filter((r) => r.required);
+  const optional = rows.filter((r) => !r.required);
+  const doneOf = (list: Row[]) => list.filter((r) => stateOf(r) === 'done' || stateOf(r) === 'check').length;
+  const base = required.length ? required : rows;
+  const pct = base.length ? Math.round((100 * doneOf(base)) / base.length) : 0;
+  return (
+    <div className="rounded-card border border-border bg-surface text-xs">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+        <span className="font-medium">Completion</span>
+        <span className="font-mono text-muted">{pct}%</span>
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+          <span className="block h-full rounded-full bg-good transition-all duration-300" style={{ width: `${pct}%` }} />
+        </span>
+        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-border px-2 py-2">
+          {required.length > 0 && (
+            <section aria-label="Required fields">
+              <h4 className="px-1.5 text-[10px] font-semibold tracking-wide text-faint uppercase">Required ({doneOf(required)}/{required.length})</h4>
+              <ul>{required.map((r) => <CompletionRow key={r.id} r={r} />)}</ul>
+            </section>
+          )}
+          {optional.length > 0 && (
+            <section aria-label="Optional fields">
+              <button type="button" onClick={() => setShowOptional((v) => !v)} className="flex w-full items-center gap-1 px-1.5 text-[10px] font-semibold tracking-wide text-faint uppercase hover:text-text">
+                Optional ({doneOf(optional)}/{optional.length}) <ChevronDown className={clsx('size-3 transition-transform', showOptional && 'rotate-180')} />
+              </button>
+              {showOptional && <ul>{optional.map((r) => <CompletionRow key={r.id} r={r} />)}</ul>}
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A job site's account page (Workday asks for one per company): fill the email and the
+ * person's job-site password, kept only in this browser. Wera never presses the page's button.
+ */
+function AccountHelp({ api }: { api: WeraApi }) {
+  const [password, setPassword] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState('');
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    void rpc<string>({ type: 'wera:vault', op: 'get' }).then(setPassword, () => setPassword(''));
+  }, []);
+  const vault = async (op: 'set' | 'generate', value?: string) => setPassword(await rpc<string>({ type: 'wera:vault', op, password: value }));
+  const fill = async () => {
+    setBusy(true);
+    setDone('');
+    try {
+      const me = await api.applicant();
+      const r = await frames('account', me.applicant.email ?? '');
+      setDone(r.filled ? (r.page === 'create'
+        ? 'Filled. Agree to the site\'s terms if it asks, press Create Account, and open the email it sends to verify. Then sign in: Wera fills the same password.'
+        : 'Filled. Press Sign In, then Autofill on the application.') : 'No account form here that Wera can fill.');
+    } catch (e) {
+      setDone(describeError(e, "Couldn't fill the account form"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (password === null) return null;
+  return (
+    <div className="space-y-2 rounded-card border border-border bg-surface px-3 py-2.5 text-xs">
+      <p className="font-medium">Your job-site password</p>
+      <p className="text-muted">One password for the accounts job sites ask for (Workday wants one per company). It stays in this browser, encrypted; Wera's server never sees it.</p>
+      {password ? (
+        <>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded bg-surface-2 px-2 py-1 font-mono text-[11px]">{shown ? password : '•'.repeat(12)}</code>
+            <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => setShown((v) => !v)}>{shown ? 'Hide' : 'Show'}</button>
+            <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => void navigator.clipboard.writeText(password).catch(() => {})}>Copy</button>
+          </div>
+          <Button variant="primary" className="w-full" busy={busy} onClick={() => void fill()}>Fill my email and password</Button>
+        </>
+      ) : (
+        <div className="space-y-1.5">
+          <Button className="w-full" onClick={() => void vault('generate')}>Make a strong password for me</Button>
+          <div className="flex gap-1.5">
+            <input type="password" aria-label="Your job-site password" placeholder="Or type your own" value={typed} onChange={(e) => setTyped(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-text" />
+            <Button className="px-2 py-1" onClick={() => { if (typed.length >= 8) void vault('set', typed).then(() => setTyped('')); }}>Keep</Button>
+          </div>
+        </div>
+      )}
+      {done && <p className="text-muted">{done}</p>}
     </div>
   );
 }

@@ -7,6 +7,23 @@ import type { FieldPurpose } from './types';
 /** Voluntary self-identification: only the user's own choices fill these, and the AI never sees them. */
 export const SELF_ID = new Set<FieldPurpose>(['gender', 'pronouns', 'transgender', 'sexual_orientation', 'race', 'hispanic', 'veteran', 'disability', 'lgbtq']);
 
+/** Veteran status as Wera stores it (the dashboard's Application details offer the same). */
+export const VETERAN_NO = 'I am not a veteran';
+export const VETERAN_UNPROTECTED = 'I am a veteran, but not a protected veteran';
+export const VETERAN_PROTECTED = 'I am a protected veteran';
+
+/**
+ * A stored veteran status in today's words: before Nov 28 the dashboard offered only "I am
+ * not a protected veteran", which nearly everyone who never served chose, and some accounts
+ * hold a bare "no".
+ */
+export function veteranStatus(v: string): string {
+  const s = v.trim().toLowerCase();
+  if (s === 'i am not a protected veteran' || s === 'no') return VETERAN_NO;
+  if (s === 'yes') return '';
+  return v.trim();
+}
+
 /** An answer that declines to say ("Decline to self-identify", "I don't wish to answer"). */
 export const DECLINE = /decline|prefer not|don.?t wish|do not wish|do not want|don.?t want|wish not|not to (say|answer|disclose|identify|self.identify)|rather not|choose not|not declared|no answer|not specified|undisclosed/i;
 const NEGATED = /\b(not|no|never|non)\b|n['’]t\b|non-/i;
@@ -35,8 +52,11 @@ export function selfIdValue(purpose: FieldPurpose, chosen: string): string {
       if (/^no\b/i.test(v) || NEGATED.test(v)) return 'no';
       return '';
     case 'veteran':
-      if (/non-?protected|not a (protected )?veteran|never served|^no\b|i am not/i.test(v)) return 'I am not a protected veteran';
-      if (/protected veteran|identify as one or more|^yes\b/i.test(v) && !NEGATED.test(v)) return 'I am a protected veteran';
+      // Three states (VETERAN_*). "I am not a protected veteran" alone could be either of the
+      // first two, so a form answer worded that way teaches nothing.
+      if (/\bveteran,? but\b|non-?protected veteran/i.test(v)) return VETERAN_UNPROTECTED;
+      if (/\bnot a veteran\b|never served|have not served|^no\b/i.test(v)) return VETERAN_NO;
+      if (/protected veteran|identify as one or more|^yes\b/i.test(v) && !NEGATED.test(v)) return VETERAN_PROTECTED;
       return '';
     case 'disability':
       if (/^no\b|do not have|don['’]?t have/i.test(v)) return 'No, I do not have a disability';

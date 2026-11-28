@@ -6,3 +6,5 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 __pycache__/
+dist-firefox/
+live-test-out/

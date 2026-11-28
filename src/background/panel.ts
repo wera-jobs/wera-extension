@@ -2,12 +2,13 @@
 // it calls the user's Wera server and the page's frames on the panel's
 // behalf, signs in and out, and puts the panel on the page.
 import { ApiError, WeraApi } from '../shared/api';
-import { notifyDashboard } from '../shared/bridge';
+import { notifyDashboard, syncBridge } from '../shared/bridge';
 import { remoteCallable, settle, type PanelRequest, type RpcReply } from '../shared/rpc';
 import { clearProfileCache } from '../shared/profileCache';
-import { loadSession, normalizeServer, rememberTabJob, saveSession } from '../shared/storage';
+import { DEFAULT_SERVER, loadSession, normalizeServer, rememberTabJob, saveSession, setPendingServer } from '../shared/storage';
 import { signedInApi } from './jobs';
 import * as frames from './frames';
+import { jobSitePassword, setJobSitePassword, strongPassword } from './vault';
 
 /** Puts the panel on the tab's page (once) and tells it to show: open, and fill, when asked; formFrame: a frame holds the form. */
 export async function ensurePanel(tabId: number, opts: { open?: boolean; fill?: boolean; formFrame?: boolean } = {}): Promise<boolean> {
@@ -56,6 +57,22 @@ export async function handlePanel(msg: PanelRequest, tabId: number, frameId: num
     case 'wera:tab-close':
       if (frameId !== 0) return { ok: false, status: 403, error: 'only the Wera panel closes the tab' };
       return settle(() => closeTab(tabId));
+    case 'wera:vault':
+      // Only the panel (the top frame) reads the password, and only to show or copy it there.
+      if (frameId !== 0) return { ok: false, status: 403, error: 'only the Wera panel reads the password' };
+      return settle(async () => {
+        if (msg.op === 'set') await setJobSitePassword(msg.password ?? '');
+        if (msg.op === 'generate') await setJobSitePassword(strongPassword());
+        return jobSitePassword();
+      });
+    case 'wera:pending-server':
+      return settle(async () => {
+        const origin = normalizeServer(msg.server);
+        if (!origin) throw new Error('not a Wera address');
+        await setPendingServer(origin);
+        await syncBridge(DEFAULT_SERVER, origin);
+        return origin;
+      });
     case 'wera:open-next':
       if (frameId !== 0) return { ok: false, status: 403, error: 'only the Wera panel moves the tab on' };
       return settle(() => openNext(tabId, msg.jobId, msg.url));

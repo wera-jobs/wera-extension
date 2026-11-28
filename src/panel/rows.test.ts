@@ -44,6 +44,9 @@ describe('which rows Wera fills, asks the AI about, or drafts', () => {
   });
 
   it('never asks the AI about self-identification or who referred the user', () => {
+    // A checklist ("Which of these tools have you used?") is asked; a single consent box never is.
+    expect(needsSuggestion(row({ group: 'questions', kind: 'checkboxes', label: 'Which of these tools have you used?', options: ['Python', 'SQL', 'Go'] }))).toBe(true);
+    expect(needsSuggestion(row({ group: 'consent', kind: 'checkbox', label: 'I agree to the terms' }))).toBe(false);
     expect(needsSuggestion(row({ group: 'details', purpose: 'years_experience' }))).toBe(true);
     expect(needsSuggestion(row({ group: 'details', purpose: 'referral' }))).toBe(false);
     expect(needsSuggestion(row({ group: 'self_id', purpose: 'lgbtq', kind: 'select' }))).toBe(false);
@@ -165,5 +168,15 @@ describe('which inferred answers Wera may enter for the user to check', () => {
     expect(mayChoose({ ...heard, group: 'consent' }, 'LinkedIn')).toBe(false);
     expect(mayChoose({ ...heard, group: 'self_id' }, 'LinkedIn')).toBe(false);
     expect(mayChoose({ ...heard, trap: 'decoy_field' }, 'LinkedIn')).toBe(false);
+  });
+});
+
+describe('choosing from a checklist', () => {
+  const list = { kind: 'checkboxes' as const, options: ['Python', 'SQL', 'Go', 'None of these'], trap: undefined, group: 'questions' as const };
+  it('enters an inferred set of ticks when every one is on the list', () => {
+    expect(mayChoose(list, 'Python | SQL')).toBe(true);
+    expect(mayChoose(list, 'Python | Rust')).toBe(false);
+    expect(mayChoose(list, 'None of these')).toBe(false);
+    expect(mayChoose({ ...list, group: 'consent' }, 'Python')).toBe(false);
   });
 });
