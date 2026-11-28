@@ -33,3 +33,10 @@ describe('details inside a job, school or reference block are that block\'s', ()
     expect(got.map((g) => g[1])).toEqual(['resume', null]);
   });
 });
+
+describe('consents worded without "agree" or "privacy"', () => {
+  it('Pinpoint: "Allow us to process your personal information" is a consent', () => {
+    const doc = new JSDOM('<!doctype html><body><form><label><input type="checkbox" id="c" required> (Required) Allow us to process your personal information.</label></form>', { url: 'https://acme.pinpointhq.com/en/postings/1/applications/new' }).window.document;
+    expect(collectFields(doc).map((f) => classify(f))).toEqual(['consent']);
+  });
+});

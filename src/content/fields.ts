@@ -340,6 +340,9 @@ function yesNoButtons(button: HTMLElement, readonly = false): Field | null {
   const looksLikeChoices = box.getAttribute('role') === 'group' || CHOICE_GROUP.test(`${box.className} ${box.getAttribute('data-testid') ?? ''}`)
     || buttons.some((b) => b.hasAttribute('aria-pressed'));
   if (!yesNo && !looksLikeChoices) return null;
+  // A cookie or consent banner's buttons are no question of the application.
+  if (box.closest('[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [id*="onetrust" i], [class*="onetrust" i], [aria-label*="cookie" i], [id*="gdpr" i], [class*="gdpr" i]')
+    || /\bcookies?\b/i.test(textOf(box.parentElement ?? box).slice(0, 300))) return null;
   const parent2 = box;
   let raw = box.getAttribute('aria-label') ?? '';
   for (let n: Element | null = parent2.parentElement, i = 0; n && i < 4 && !raw; n = n.parentElement, i++) raw = textOf(n).slice(0, 300);

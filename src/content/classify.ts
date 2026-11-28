@@ -111,7 +111,7 @@ export { SELF_ID };
 /** Kinds whose answer is one of their options. */
 const CHOICE_KINDS = new Set(['select', 'radio', 'buttons', 'listbox']);
 
-const CONSENT = /\b(i agree|agree|consent|acknowledge|certify|privacy|terms|confirm that|i understand|datenschutz\w*|einverstandnis\w*|ich stimme|politique de confidentialite|j.?accepte|consentement|politica de privacidad|acepto|consentimiento|privacyverklaring|ik ga akkoord|toestemming)\b/;
+const CONSENT = /\b(i agree|agree|consent|acknowledge|certify|privacy|terms|confirm that|i understand|process(ing)? (of )?(my|your) personal (data|information)|personal (data|information) (processing|policy)|datenschutz\w*|einverstandnis\w*|ich stimme|politique de confidentialite|j.?accepte|consentement|politica de privacidad|acepto|consentimiento|privacyverklaring|ik ga akkoord|toestemming)\b/;
 // A statement to accept, whatever the widget ("I have read and understand...", "By selecting I agree..."): the user's to give.
 const ACCEPTS = /^(i (hereby )?(have read|understand|acknowledge|confirm|certify|agree|consent|attest|authorize|accept)\b|i understand$|by (checking|selecting|clicking|ticking|submitting|providing|signing)\b|please (read and )?(acknowledge|confirm|certify)\b|do you (consent|agree|acknowledge|authorize)\b)/;
 

@@ -74,3 +74,11 @@ describe('widgets newer forms use (#245)', () => {
     expect(collectFields(document).map((f) => f.label)).toEqual(['Email']);
   });
 });
+
+describe('banners', () => {
+  it('a cookie banner\'s buttons are no question', () => {
+    document.body.innerHTML = `<form><div class="banner"><p>Cookies: we use cookies to ensure you get the best experience.</p><div role="group">
+      <button type="button">Accept all</button><button type="button">Reject</button><button type="button">Settings</button></div></div></form>`;
+    expect(collectFields(document)).toEqual([]);
+  });
+});
