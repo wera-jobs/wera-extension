@@ -463,6 +463,11 @@ export class WeraApi {
   }
 
   /** Answers the user gave on forms (empty on a Wera too old to keep them). */
+  /** Forgets one saved answer. */
+  deleteAnswer(id: number) {
+    return this.call<void>(`/api/applicant/answers/${id}`, { method: 'DELETE' });
+  }
+
   async answers(): Promise<SavedAnswer[]> {
     try {
       const r = await this.call<{ answers: { id: number; question: string; answer: string; kind: SavedAnswer['kind']; company: string; updated_at: string }[] }>('/api/applicant/answers');

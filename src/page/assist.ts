@@ -8,7 +8,7 @@ import { pageKind } from '../content/detect';
 import { collectFields, type Field } from '../content/fields';
 import { insertText } from '../content/fill';
 import { firstChoice, valueFor } from '../content/values';
-import { bestAnswer, type SavedAnswer } from '../shared/answers';
+import { bestAnswer, matchAnswers, type SavedAnswer } from '../shared/answers';
 import type { ApplicantView } from '../shared/api';
 import { extensionAlive, sendSafe } from '../shared/alive';
 import { describeError } from '../shared/errors';
@@ -54,6 +54,8 @@ const CSS = `${BASE}
 .steer input::placeholder { color: var(--faint); }
 .saved[hidden] { display: none; }
 .saved { padding: 8px 10px; border: 1px dashed var(--border); border-radius: 10px; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
+.saved-item { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.saved-item:first-of-type { border-top: 0; padding-top: 0; }
 .saved p { margin: 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .qf-list { max-height: 220px; overflow: auto; display: grid; gap: 4px; }
 .qf-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); text-align: left; font-size: 12px; }
@@ -405,12 +407,30 @@ export function startAssist(doc: Document): () => void {
     const savedBank = server ? getBank(server) : Promise.resolve([]);
     // Not an answer that names another company ("Why Stripe?" on Ramp's form).
     const company = (await getContext().catch(() => null))?.posting?.company ?? '';
-    const hit = bestAnswer(await savedBank, label, 0.75, company);
-    if (hit && hit.answer.length >= 20) {
-      const useSaved = el(doc, 'button', { class: 'btn', type: 'button' }, icon(doc, 'history'), 'Use this');
-      useSaved.addEventListener('click', () => show({ text: hit.answer, needs: '' }));
-      savedBox.replaceChildren(el(doc, 'span', {}, 'Your earlier answer'), el(doc, 'p', {}, hit.answer), useSaved);
+    const bank = await savedBank;
+    const hit = bestAnswer(bank, label, 0.75, company);
+    const strong = !!hit && hit.answer.length >= 20;
+    // Up to three earlier answers, best first, each one click from the box.
+    const shown = [...new Set([...(strong ? [hit] : []), ...matchAnswers(bank, label, 3, company)])].filter((a) => a.answer.length >= 20).slice(0, 3);
+    if (shown.length) {
+      const items = shown.map((a) => {
+        const useSaved = el(doc, 'button', { class: 'btn', type: 'button' }, icon(doc, 'history'), 'Use this');
+        useSaved.addEventListener('click', () => show({ text: a.answer, needs: '' }));
+        return el(doc, 'div', { class: 'saved-item' }, el(doc, 'p', {}, a.answer), useSaved);
+      });
+      savedBox.replaceChildren(el(doc, 'span', {}, shown.length === 1 ? 'Your earlier answer' : 'Your earlier answers'), ...items);
       savedBox.hidden = false;
+    }
+    // A strong earlier answer is the one to use: the AI drafts only when asked (no wait, no cost).
+    if (strong) {
+      const fresh = el(doc, 'button', { class: 'btn', type: 'button' }, icon(doc, 'sparkles'), 'Draft a new one');
+      fresh.addEventListener('click', () => {
+        fresh.remove();
+        void run();
+      });
+      savedBox.append(fresh);
+      show({ text: hit.answer, needs: '' });
+      return;
     }
     void run();
   };
