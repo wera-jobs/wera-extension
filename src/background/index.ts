@@ -8,6 +8,7 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
+import { cleanRules, RULES_EVERY_MS, RULES_KEY } from '../shared/remoteRules';
 import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob, pendingServer } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
 import type { ContentEvent } from '../shared/types';
@@ -25,9 +26,29 @@ chrome.runtime.onInstalled.addListener(() => {
   void chrome.scripting.unregisterContentScripts({ ids: ['wera-launcher'] }).catch(() => {});
   void chrome.storage.local.remove('wera.launcherDismissed').catch(() => {});
   void syncAll();
+  void refreshRules(true);
 });
 
-chrome.runtime.onStartup.addListener(() => void syncAll());
+chrome.runtime.onStartup.addListener(() => {
+  void syncAll();
+  void refreshRules();
+});
+
+/** Fetches the site rules from the user's Wera (#143) when the kept copy is over an hour old. */
+async function refreshRules(force = false): Promise<void> {
+  const got: Record<string, unknown> = await chrome.storage.local.get(RULES_KEY).catch(() => ({}));
+  const kept = got[RULES_KEY] as { at?: number } | undefined;
+  if (!force && kept?.at && Date.now() - kept.at < RULES_EVERY_MS) return;
+  const s = await loadSession().catch(() => null);
+  try {
+    const res = await fetch(`${s?.server ?? DEFAULT_SERVER}/api/ext/rules`, { credentials: 'omit' });
+    if (!res.ok) return;
+    const rules = cleanRules(await res.json());
+    if (rules) await chrome.storage.local.set({ [RULES_KEY]: { at: Date.now(), rules } });
+  } catch {
+    // offline or an older server: keep what is there
+  }
+}
 chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId).catch(() => {}));
 
 // The panel (a page script) keeps where a multi-page application is in session storage.
@@ -79,6 +100,7 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, reply) => {
   const tabId = sender.tab.id;
   // The lightweight detector found a candidate job page: load the full page engine in that frame.
   if (msg && typeof msg === 'object' && (msg as { type?: unknown }).type === 'wera:wake') {
+    void refreshRules();
     const frameId = sender.frameId ?? 0;
     void chrome.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: ['page.js'] }).catch(() => {});
     return false;

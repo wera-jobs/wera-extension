@@ -18,6 +18,7 @@ import type { JobConfirmed, JobRequest, SubmitReply } from '../shared/jobs';
 import { HIDDEN_SITES, SETTINGS_KEY, siteKey } from '../shared/settings';
 import type { FieldPurpose, JobDraft } from '../shared/types';
 import { startAssist } from './assist';
+import { loadRemoteRules, RULES_KEY } from '../shared/remoteRules';
 
 export { pageKind } from '../content/detect';
 
@@ -232,6 +233,11 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
 }
 
 if (typeof window !== 'undefined' && !window.__weraPage && typeof chrome !== 'undefined' && chrome.runtime?.id) {
+  // The site rules fetched from Wera (#143), kept fresh while the page is open.
+  void loadRemoteRules();
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area === 'local' && changes[RULES_KEY]) void loadRemoteRules();
+  });
   listen();
   watchForJobs(document);
   startAssist(document);

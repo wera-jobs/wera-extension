@@ -3,6 +3,7 @@ import type { FieldPurpose } from '../shared/types';
 import { ENTRY_PURPOSES, entryPurpose } from './entries';
 import type { Field } from './fields';
 import { siteFor } from './sites';
+import { pattern, remoteRules } from '../shared/remoteRules';
 
 // Browser autocomplete tokens say exactly what a field is.
 const AUTOCOMPLETE: Record<string, FieldPurpose> = {
@@ -167,6 +168,10 @@ const SHORT_ANSWERS = new Set<FieldPurpose>(['start_date', 'salary_expectation',
 const SELF_ID_LONG = new Set<FieldPurpose>(['hispanic', 'race', 'gender', 'veteran', 'disability', 'transgender', 'sexual_orientation', 'lgbtq', 'needs_sponsorship', 'authorized_to_work', 'authorized_no_sponsorship', 'over_18', 'consent', 'previously_employed', 'cover_letter', 'resume', 'work_preference', 'willing_to_travel']);
 
 function generic(f: Field): FieldPurpose | null {
+  // Aliases from the remote rules (#143): a label the built-in rules misread, fixed without a release.
+  for (const [src, p] of remoteRules()?.aliases ?? []) {
+    if (pattern(src)?.test(f.label)) return p;
+  }
   if (f.autocomplete) {
     for (const tok of f.autocomplete.split(/\s+/)) {
       const p = AUTOCOMPLETE[tok];
