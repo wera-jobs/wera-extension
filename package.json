@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node scripts/build.mjs --watch",
     "build": "tsc -b && node scripts/build.mjs",
+    "build:firefox": "tsc -b && node scripts/build.mjs --firefox",
     "package": "npm run build && node scripts/package.mjs",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -b",

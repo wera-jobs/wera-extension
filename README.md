@@ -56,6 +56,10 @@ npm run build       # builds to dist/
 
 Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select `dist/`. Use `npm run dev` to rebuild on change.
 
+**Edge** takes the Chrome build as it is: open `edge://extensions`, turn on **Developer mode**, and load `dist/` the same way (an Edge Add-ons listing uploads the same zip).
+
+**Firefox** (128 or later): `npm run build:firefox` writes `dist-firefox/`, the same code with Firefox's manifest (an event-page background and a Gecko id). Load it from `about:debugging#/runtime/this-firefox` with **Load Temporary Add-on** and pick `dist-firefox/manifest.json`. On Firefox, Wera reads closed shadow roots through the element's own `openOrClosedShadowRoot`.
+
 ## Quality checks
 
 ```sh

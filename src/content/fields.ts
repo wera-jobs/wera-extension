@@ -55,7 +55,9 @@ export function allRoots(root: ParentNode): ParentNode[] {
       // Wera's own panel and button are no part of the page (their roots are open in test builds).
       if (el.localName.startsWith('wera-')) continue;
       // Closed roots too (Oracle Redwood, enterprise web components): the extension may open them.
-      const sr = el.shadowRoot ?? (globalThis as { chrome?: { dom?: { openOrClosedShadowRoot?: (e: HTMLElement) => ShadowRoot | null } } }).chrome?.dom?.openOrClosedShadowRoot?.(el as HTMLElement) ?? null;
+      // Chrome: chrome.dom.openOrClosedShadowRoot; Firefox: the element's own openOrClosedShadowRoot.
+      const sr = el.shadowRoot ?? (globalThis as { chrome?: { dom?: { openOrClosedShadowRoot?: (e: HTMLElement) => ShadowRoot | null } } }).chrome?.dom?.openOrClosedShadowRoot?.(el as HTMLElement)
+        ?? (el as HTMLElement & { openOrClosedShadowRoot?: ShadowRoot | null }).openOrClosedShadowRoot ?? null;
       if (sr) out.push(sr);
     }
   }
