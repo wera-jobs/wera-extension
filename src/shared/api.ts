@@ -80,6 +80,19 @@ export interface ResumeEntry {
   hidden?: boolean;
 }
 
+/** Someone the user logged for a job (see the dashboard's Contacts). */
+export interface JobContact {
+  id: number;
+  job_id: number;
+  name: string;
+  role: string;
+  email: string;
+  linkedin_url: string;
+  notes: string;
+  last_contacted_at: string | null;
+  follow_up_at: string | null;
+}
+
 export interface ResumeSection {
   id: string;
   kind: 'entries' | 'projects' | 'compact' | 'skills' | 'summary';
@@ -340,6 +353,15 @@ export class WeraApi {
   }
 
   /** Sets the job's status in the tracker (notes stay as they are). */
+  /** The people the user logged for a job (recruiters, referrers). */
+  jobContacts(jobId: number) {
+    return this.call<{ contacts: JobContact[] }>(`/api/jobs/${jobId}/contacts`).then((r) => r.contacts);
+  }
+
+  addContact(jobId: number, c: Pick<JobContact, 'name'> & Partial<Pick<JobContact, 'role' | 'linkedin_url' | 'notes' | 'follow_up_at' | 'last_contacted_at'>>) {
+    return this.call<JobContact>(`/api/jobs/${jobId}/contacts`, { method: 'POST', body: JSON.stringify(c) });
+  }
+
   setStatus(jobId: number, status: ApplicationStatus) {
     return this.call<WeraJob>(`/api/jobs/${jobId}/application`, { method: 'PUT', body: JSON.stringify({ status }) });
   }

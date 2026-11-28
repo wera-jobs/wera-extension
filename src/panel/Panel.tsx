@@ -131,7 +131,8 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
       {viewKind === 'form' ? <Apply {...props} /> : <Posting api={api} page={page} tabId={props.tabId} onUseForm={() => setForceFormUrl(location.href)} />}
       {page.job ? <Fit api={api} page={page} /> : (page.info || !page.loading) && <QuickMatch api={api} page={page} onScore={viewKind === 'form' ? scoreJob : undefined} />}
       {(page.info || !page.loading) && !page.submitted && (
-        <Referrals api={api} jobId={page.job?.id ?? null}
+        <Referrals key={`${page.job?.id ?? ''}|${page.job?.company || page.info?.draft?.company || page.handle.company || ''}|${page.job?.title || page.info?.draft?.title || page.handle.title || ''}`}
+          api={api} jobId={page.job?.id ?? null}
           company={page.job?.company || page.info?.draft?.company || page.handle.company || ''}
           title={page.job?.title || page.info?.draft?.title || page.handle.title || ''}
           description={page.info?.draft?.description || page.info?.text || ''} />
