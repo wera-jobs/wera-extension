@@ -6,7 +6,7 @@ import clsx from 'clsx';
 import { AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, Copy, FileText, Flag, PenLine, RefreshCw, Sparkles, Square, Zap } from 'lucide-react';
 import type { LetterSteer, WeraApi } from '../shared/api';
 import { PAST_APPLIED } from '../shared/jobs';
-import { frames } from '../shared/rpc';
+import { frames, rpc } from '../shared/rpc';
 import { diagnostics, reportPage, REPORT_DETAILS_MAX } from './diagnostics';
 import { describeError } from '../shared/errors';
 import type { PanelProps } from './Panel';
@@ -59,6 +59,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
         </Notice>
       )}
       {(a.plan?.gate ?? page.info?.gate) && <Notice tone="warn">{a.plan?.gate ?? page.info?.gate}</Notice>}
+      {/account|sign in/i.test(a.plan?.gate ?? page.info?.gate ?? '') && <AccountHelp api={api} />}
       {page.job?.application_status && PAST_APPLIED.has(page.job.application_status) && !page.submitted && (
         <Notice tone="warn">Your tracker says you already applied to this job.</Notice>
       )}
@@ -424,6 +425,64 @@ function Completion({ rows, open: start }: { rows: Row[]; open: boolean }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A job site's account page (Workday asks for one per company): fill the email and the
+ * person's job-site password, kept only in this browser. Wera never presses the page's button.
+ */
+function AccountHelp({ api }: { api: WeraApi }) {
+  const [password, setPassword] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState('');
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    void rpc<string>({ type: 'wera:vault', op: 'get' }).then(setPassword, () => setPassword(''));
+  }, []);
+  const vault = async (op: 'set' | 'generate', value?: string) => setPassword(await rpc<string>({ type: 'wera:vault', op, password: value }));
+  const fill = async () => {
+    setBusy(true);
+    setDone('');
+    try {
+      const me = await api.applicant();
+      const r = await frames('account', me.applicant.email ?? '');
+      setDone(r.filled ? (r.page === 'create'
+        ? 'Filled. Agree to the site\'s terms if it asks, press Create Account, and open the email it sends to verify. Then sign in: Wera fills the same password.'
+        : 'Filled. Press Sign In, then Autofill on the application.') : 'No account form here that Wera can fill.');
+    } catch (e) {
+      setDone(describeError(e, "Couldn't fill the account form"));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (password === null) return null;
+  return (
+    <div className="space-y-2 rounded-card border border-border bg-surface px-3 py-2.5 text-xs">
+      <p className="font-medium">Your job-site password</p>
+      <p className="text-muted">One password for the accounts job sites ask for (Workday wants one per company). It stays in this browser, encrypted; Wera's server never sees it.</p>
+      {password ? (
+        <>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded bg-surface-2 px-2 py-1 font-mono text-[11px]">{shown ? password : '•'.repeat(12)}</code>
+            <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => setShown((v) => !v)}>{shown ? 'Hide' : 'Show'}</button>
+            <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => void navigator.clipboard.writeText(password).catch(() => {})}>Copy</button>
+          </div>
+          <Button variant="primary" className="w-full" busy={busy} onClick={() => void fill()}>Fill my email and password</Button>
+        </>
+      ) : (
+        <div className="space-y-1.5">
+          <Button className="w-full" onClick={() => void vault('generate')}>Make a strong password for me</Button>
+          <div className="flex gap-1.5">
+            <input type="password" aria-label="Your job-site password" placeholder="Or type your own" value={typed} onChange={(e) => setTyped(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-text" />
+            <Button className="px-2 py-1" onClick={() => { if (typed.length >= 8) void vault('set', typed).then(() => setTyped('')); }}>Keep</Button>
+          </div>
+        </div>
+      )}
+      {done && <p className="text-muted">{done}</p>}
     </div>
   );
 }
