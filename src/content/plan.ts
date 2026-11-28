@@ -5,6 +5,7 @@
 import { gateOf } from './gate';
 import { startHasPassed } from '../shared/dates';
 import type { Applicant, FieldGroup, FieldPlan, FieldPurpose, FieldSnapshot, FillItem, FillResult, KnownAnswer, PagePlan, Profile, ValueSource } from '../shared/types';
+import { countryName, hasCodePicker, parsePhone } from './phone';
 import { datePart, ENTRY_PURPOSES, entryValue, findAdder, placeEntries, type Placed, type Section } from './entries';
 import { bestAnswer } from '../shared/answers';
 import { log } from '../shared/log';
@@ -331,6 +332,28 @@ function wholeAddress(fields: FieldPlan[], a: Applicant) {
   }
 }
 
+/**
+ * Phone numbers for forms that split them: the number box gets the national
+ * number alone (Workday refuses one that repeats the code), and a country
+ * code list gets the number's own country, not the one the user lives in.
+ */
+function shapePhones(all: Field[], fields: FieldPlan[], a: Applicant) {
+  const phone = parsePhone(a.phone ?? '', a.country ?? '');
+  if (!phone) return;
+  const els = new Map(all.map((f) => [f.id, f.el]));
+  const split = fields.some((f) => f.purpose === 'phone_code');
+  for (const f of fields) {
+    if (f.source !== 'details') continue;
+    if (f.purpose === 'phone_code') {
+      const name = countryName(phone.region);
+      if (name) f.value = name;
+    } else if (f.purpose === 'phone') {
+      const el = els.get(f.id);
+      if (split || (el && hasCodePicker(el))) f.value = phone.national;
+    }
+  }
+}
+
 // How many blocks Wera adds at most: forms rarely want more than the recent ones.
 const MAX_BLOCKS: Record<Section, number> = { experience: 3, education: 2 };
 
@@ -379,6 +402,7 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   const placed = placeFields(all);
   const fields = all.map((f) => planField(f, a, opts, placed.get(f.id))).filter((p) => p.purpose !== null || p.label !== '' || p.required);
   wholeAddress(fields, a);
+  shapePhones(all, fields, a);
   const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   const site = doc ? siteFor(doc) : null;
   const traps = uniqueTraps([...found, ...all.flatMap((f) => [...(f.said ?? []), ...(f.trap ? [f.trap] : [])])]);

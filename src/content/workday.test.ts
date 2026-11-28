@@ -44,7 +44,7 @@ describe('a Workday application', () => {
     expect($('#state').textContent).toBe('Texas');
     expect($('#phoneType').textContent).toBe('Mobile');
     expect(pill('phoneCode')).toBe('United States of America (+1)');
-    expect($('#ph').value).toBe('469 555 0101');
+    expect($('#ph').value).toBe('4695550101');
     expect($('#jt-1').value).toBe('Data Scientist');
     expect($('#jt-2').value).toBe('Data Analyst');
     expect($('#cw-1').checked).toBe(true);

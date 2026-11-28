@@ -482,7 +482,7 @@ describe('phone parts', () => {
       <label for="c">Country Phone Code</label><select id="c"><option value="">Select One</option><option>Canada (+1)</option><option>United States of America (+1)</option></select>
       <label for="n">Phone Number</label><input id="n"></form>`;
     const out = await fillForm(document, { ...ada, phone: '469 555 0101', country: 'United States' }, {});
-    expect(out.map((r) => [r.purpose, r.value])).toEqual([['phone_type', 'Mobile'], ['phone_code', 'United States of America (+1)'], ['phone', '469 555 0101']]);
+    expect(out.map((r) => [r.purpose, r.value])).toEqual([['phone_type', 'Mobile'], ['phone_code', 'United States of America (+1)'], ['phone', '4695550101']]);
   });
 });
 
