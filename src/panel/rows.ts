@@ -126,7 +126,13 @@ const REFUSAL = /^\s*(none|not |never|n\/?a\b|i (do not|don't|am not|have not|ha
  * required consent, a trap or a question the AI should not answer.
  */
 export function mayChoose(r: Pick<Row, 'kind' | 'options' | 'trap' | 'group'>, value: string): boolean {
-  if (r.trap || r.group === 'consent' || r.group === 'self_id' || !CHOICE.has(r.kind)) return false;
+  if (r.trap || r.group === 'consent' || r.group === 'self_id') return false;
+  // "Which of these have you used?": every ticked choice is one of the list's, none a refusal.
+  if (r.kind === 'checkboxes') {
+    const picks = value.split(/\s*\|\s*/).filter(Boolean);
+    return r.options.length >= 2 && picks.length > 0 && picks.every((p) => r.options.includes(p) && !REFUSAL.test(p) && !YES_NO.test(p));
+  }
+  if (!CHOICE.has(r.kind)) return false;
   if (r.options.length < 3 || !r.options.includes(value)) return false;
   if (YES_NO.test(value) || REFUSAL.test(value)) return false;
   // A yes/no question with a third way out ("Yes", "No", "Prefer not to say") is still a yes or no.
