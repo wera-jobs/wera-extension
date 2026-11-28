@@ -52,7 +52,7 @@ describe('referralSearches', () => {
 describe('Referrals', () => {
   it('lists the searches and writes a note to copy', async () => {
     const answer = vi.fn(async () => ({ answer: 'Hi [Name], I am applying for the SRE role at Acme...' }));
-    const api = { applicant: vi.fn(async () => ({ applicant: {}, saved: true, sources: {}, skills: [], ...me })), answer } as unknown as WeraApi;
+    const api = { applicant: vi.fn(async () => ({ applicant: {}, saved: true, sources: {}, skills: [], ...me })), answer, jobContacts: vi.fn(async () => []) } as unknown as WeraApi;
     render(<Referrals api={api} jobId={7} company="Acme" title="SRE" description="Run things." />);
     fireEvent.click(screen.getByRole('button', { name: /Find someone to refer you/ }));
     expect(await screen.findByRole('link', { name: /University of Texas at Austin alumni at Acme/ })).toHaveAttribute('target', '_blank');
@@ -68,5 +68,24 @@ describe('Referrals', () => {
     expect(screen.getByRole('link', { name: /Recruiters at Acme/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Write a note to send/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Finish your profile first.');
+  });
+
+  it('shows the people saved for the job and saves a new one', async () => {
+    const addContact = vi.fn(async (_job: number, c: { name: string; role?: string }) => ({ id: 2, job_id: 7, email: '', notes: '', linkedin_url: '', last_contacted_at: null, follow_up_at: null, role: '', ...c }));
+    const api = {
+      applicant: vi.fn(async () => ({ applicant: {}, saved: true, sources: {}, skills: [], ...me })), answer: vi.fn(),
+      jobContacts: vi.fn(async () => [{ id: 1, job_id: 7, name: 'Sam Ortiz', role: 'Recruiter', email: '', notes: '', linkedin_url: 'https://www.linkedin.com/in/sam', last_contacted_at: null, follow_up_at: '2026-12-02T09:00:00Z' }]),
+      addContact,
+    } as unknown as WeraApi;
+    render(<Referrals api={api} jobId={7} company="Acme" title="SRE" description="" />);
+    fireEvent.click(screen.getByRole('button', { name: /Find someone to refer you/ }));
+    expect(await screen.findByRole('link', { name: 'Sam Ortiz' })).toHaveAttribute('href', 'https://www.linkedin.com/in/sam');
+    expect(screen.getByText('follow up 2026-12-02')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Save a contact/ }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Riley Chen' } });
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'Engineer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Riley Chen')).toBeInTheDocument();
+    expect(addContact).toHaveBeenCalledWith(7, { name: 'Riley Chen', role: 'Engineer', linkedin_url: undefined, follow_up_at: undefined });
   });
 });

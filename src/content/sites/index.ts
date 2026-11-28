@@ -8,6 +8,8 @@ import type { FieldPurpose } from '../../shared/types';
 import type { Field } from '../fields';
 import { ashby } from './ashby';
 import { EXTRA_SITES } from './ats';
+import { MORE_SITES } from './more';
+import { pattern, remoteRules } from '../../shared/remoteRules';
 import { greenhouse } from './greenhouse';
 import { indeed } from './indeed';
 import { jobvite } from './jobvite';
@@ -42,11 +44,54 @@ export interface Site {
   readsResume?: number;
   /** Its job and school blocks are not Wera's to open: each needs saving by hand, and opening several breaks the page. */
   noBlocks?: boolean;
+  /** Its rules already tell a block's fields from the applicant's (Workday's ids): classify trusts them inside blocks. */
+  blockAware?: boolean;
 }
 
-const SITES: Site[] = [workday, greenhouse, lever, ashby, jobvite, workable, linkedin, indeed, ...EXTRA_SITES];
+const SITES: Site[] = [workday, greenhouse, lever, ashby, jobvite, workable, linkedin, indeed, ...EXTRA_SITES, ...MORE_SITES];
+
+/** A site from the remote rules (#143): its own names win over a built-in site's for the same host. */
+function remoteSite(doc: Document): Site | null {
+  const host = doc.location?.hostname ?? '';
+  const r = remoteRules()?.sites?.find((s) => pattern(s.hosts)?.test(host));
+  if (!r) return null;
+  const base = SITES.find((s) => s.matches(doc));
+  const fields = (r.fields ?? []).map(([p, purpose]) => [pattern(p)!, purpose] as const);
+  return {
+    ...base,
+    name: r.name,
+    matches: () => true,
+    purpose: (f) => {
+      const key = `${f.el.getAttribute('name') ?? ''} ${f.el.id} ${f.el.getAttribute('data-automation-id') ?? ''} ${f.el.getAttribute('data-testid') ?? ''} ${f.label}`;
+      for (const [re, p] of fields) if (re.test(key)) return p;
+      return base?.purpose?.(f);
+    },
+    next: (d) => {
+      for (const sel of r.next ?? []) {
+        try {
+          const b = d.querySelector<HTMLElement>(sel);
+          if (b) return b;
+        } catch {
+          // not a selector
+        }
+      }
+      return base?.next?.(d) ?? null;
+    },
+    gate: (d) => {
+      for (const [sel, say] of r.gate ?? []) {
+        try {
+          if (d.querySelector(sel)) return say;
+        } catch {
+          // not a selector
+        }
+      }
+      return base?.gate?.(d) ?? null;
+    },
+    ...(r.pace != null ? { pace: r.pace } : {}),
+  };
+}
 
 /** The site rules for a document, if Wera has some. Not remembered: a single-page site can change what it shows. */
 export function siteFor(doc: Document): Site | null {
-  return SITES.find((s) => s.matches(doc)) ?? null;
+  return remoteSite(doc) ?? SITES.find((s) => s.matches(doc)) ?? null;
 }

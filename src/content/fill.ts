@@ -4,7 +4,7 @@
 // files, and checking each value took. What to enter comes from
 // values.ts; which choice means it, from match.ts.
 import type { FieldPurpose, FillResult } from '../shared/types';
-import { isHidden, isPressed, isWorkdayPrompt, listboxValue, promptChoice, scopeOf, type Field, type Option } from './fields';
+import { ariaChecked, type Field, isHidden, isPressed, isRichText, isWorkdayPrompt, listboxValue, type Option, promptChoice, scopeOf } from './fields';
 import { isPlaceholderOption, isProperName, matchOption, searchText } from './match';
 import { norm } from './places';
 import { alternatives, choicesOf, firstChoice, formatFor } from './values';
@@ -127,21 +127,33 @@ function saysNoOptions(el: HTMLElement): boolean {
     .some((m) => !isHidden(m) && /^no (options|results|matches)|nothing found/i.test((m.textContent ?? '').trim())));
 }
 
-/** Waits up to ~2s (lists that search as you type load late) for an option that means value to show, then picks it. */
-async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null): Promise<(Option & { node: HTMLElement }) | null> {
+/**
+ * Waits for an option that means value to show (up to ~2s; lists that search a server as you
+ * type, such as schools, get longer), then picks it.
+ */
+async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null, patience = 2000): Promise<(Option & { node: HTMLElement }) | null> {
   const start = Date.now();
   let shownSince = 0;
-  while (Date.now() - start < 2000) {
+  let anything = false;
+  while (Date.now() - start < patience) {
     await wait(50);
     const options = openOptions(el);
+    // No list, not even "Loading...", a second after asking: none is coming.
+    if (options.length) anything = true;
+    else if (!anything && Date.now() - start > 1000) return null;
     const hit = matchOption(options, value, purpose) as (Option & { node: HTMLElement }) | null;
     if (hit) {
       press(hit.node);
       return hit;
     }
+    // A long list draws only the rows in view (virtualized): scroll it on before deciding.
+    const real = options.filter((o) => !/^(loading|searching)\b/i.test(o.label));
+    if (real.length && scrollOn(real[real.length - 1]!.node)) {
+      shownSince = Date.now();
+      continue;
+    }
     // A list that has shown its choices for a while without this one does not have it
     // ("Loading..." and "Searching..." rows are not choices yet).
-    const real = options.filter((o) => !/^(loading|searching)\b/i.test(o.label));
     // The list says it has nothing for this search ("No options"): no point waiting.
     if (!real.length && saysNoOptions(el)) return null;
     if (!real.length) shownSince = 0;
@@ -151,6 +163,24 @@ async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | 
   return null;
 }
 
+/** Scrolls the list an option sits in by a page, when it can scroll further; whether it moved. */
+function scrollOn(option: HTMLElement): boolean {
+  let n: HTMLElement | null = option.parentElement;
+  for (let i = 0; n && i < 4; i++, n = n.parentElement) {
+    if (n.scrollHeight > n.clientHeight + 4 && /auto|scroll/.test(n.ownerDocument.defaultView?.getComputedStyle(n).overflowY ?? '')) {
+      if (n.scrollTop + n.clientHeight >= n.scrollHeight - 2) return false;
+      n.scrollTop += Math.max(n.clientHeight - 20, 40);
+      n.dispatchEvent(new Event('scroll'));
+      return true;
+    }
+  }
+  return false;
+}
+
+// What custom selects show as chosen, beside an input that stays empty: react-select, MUI,
+// Ant Design, Select2, Choices.js.
+const SHOWN_CHOICE = '[class*="singleValue"], [class*="single-value"], [class*="SingleValue"], .ant-select-selection-item, .select2-selection__rendered, .choices__list--single .choices__item, [class*="MuiSelect-select"]';
+
 /** react-select and friends show the choice beside the input, which stays empty. */
 export function comboboxChoice(el: HTMLInputElement): string {
   if (isWorkdayPrompt(el)) return promptChoice(el);
@@ -158,7 +188,7 @@ export function comboboxChoice(el: HTMLInputElement): string {
   let n: Element | null = el.parentElement;
   for (let i = 0; n && i < 4; i++, n = n.parentElement) {
     if (n.querySelectorAll('input, select, textarea').length > 1) break; // reached a neighbour's field
-    const shown = n.querySelector('[class*="singleValue"], [class*="single-value"], [class*="SingleValue"]');
+    const shown = n.querySelector(SHOWN_CHOICE);
     if (shown?.textContent?.trim()) return shown.textContent.trim();
     // A multi-select shows each choice as a chip (Greenhouse's demographic questions).
     const chips = [...n.querySelectorAll('[class*="multi-value__label"], [class*="multiValueLabel"], [class*="MultiValueLabel"], [class*="Chip-label"]')]
@@ -192,7 +222,9 @@ function arrowDown(el: HTMLElement) {
 async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldPurpose | null): Promise<string | null> {
   // A long answer ("No, I do not have a disability") is rarely worded the same in the list:
   // look through the whole list first, then search. Each alternative is searched in turn.
-  const searches = alternatives(value).map((alt) => searchText(alt, purpose));
+  const school = purpose === 'edu_school' || purpose === 'school';
+  // A school is listed under its own name, often worded otherwise: search its telling words too.
+  const searches = [...new Set(alternatives(value).flatMap((alt) => school ? schoolSearches(alt) : [searchText(alt, purpose)]))];
   const prompt = isWorkdayPrompt(el);
   const typedFirst = searches.length === 1 && searches[0]!.length <= 24;
   const control = !prompt ? el.closest<HTMLElement>('[class*="select__control"], [class*="control"]') : null;
@@ -204,19 +236,58 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     // A Workday prompt searches when Enter is pressed; elsewhere Enter would pick the first choice.
     if (prompt) for (const type of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
     else arrowDown(el);
-    const hit = await pickOpen(el, value, purpose);
+    const before = wrapperText(el);
+    const hit = await pickOpen(el, value, purpose, school && typed ? 3500 : 2000);
     if (!hit) continue;
     await wait(60);
-    if (!comboboxChoice(el) && hit.node.isConnected) {
+    // The choice shows (in the box, as a chip, or as the wrapper's new text): done. Clicking the
+    // option again would toggle it off in lists that pick several.
+    const took = () => !!comboboxChoice(el) || (wrapperText(el) !== before && wrapperText(el).includes(hit.label.slice(0, 40)));
+    if (!took() && hit.node.isConnected && openOptions(el).some((o) => o.node === hit.node)) {
       press(hit.node);
       await wait(60);
     }
-    if (comboboxChoice(el)) return hit.label;
+    if (took()) return hit.label;
+  }
+  // A school the list does not have: its "Other" choice, when it offers one (the form then asks
+  // for the name). The note tells the user.
+  if (school) {
+    focusField(el);
+    typeSearch(el, 'Other');
+    arrowDown(el);
+    const other = await pickOpen(el, 'Other', null, 2000);
+    if (other && /^other\b/i.test(other.label)) {
+      await wait(60);
+      if (comboboxChoice(el)) return other.label;
+    }
   }
   // Leave no half-typed search behind.
   typeSearch(el, '');
   escape(el);
   return null;
+}
+
+/** What to type to find a school: its full name, then without "The" and "University of", then its first telling words. */
+export function schoolSearches(name: string): string[] {
+  const full = name.trim();
+  const plain = full.replace(/^the\s+/i, '').replace(/,.*$/, '').trim();
+  const core = plain.replace(/\b(university|college|institute|school)\s+(of|at)\s+/i, '').replace(/\s+(university|college)$/i, '').trim();
+  const words = core.split(/\s+/).filter((w) => !/^(of|at|the|and|&)$/i.test(w)).slice(0, 2).join(' ');
+  return [...new Set([full, plain, core, words].filter((s) => s.length >= 3))];
+}
+
+/** The text a field's own block shows, without its open list: it changes when a choice is made. */
+function wrapperText(el: HTMLElement): string {
+  let n: HTMLElement | null = el.parentElement;
+  for (let i = 0; n && i < 3; i++, n = n.parentElement) {
+    if (n.querySelectorAll('input, select, textarea').length > 1) break;
+    if (n.parentElement && n.parentElement.querySelectorAll('input, select, textarea').length > 1) {
+      const copy = n.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('[role="listbox"], [class*="menu"]').forEach((m) => m.remove());
+      return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+  }
+  return '';
 }
 
 /** Dropdowns that are buttons (Workday) or ARIA comboboxes: open, then pick. */
@@ -280,22 +351,35 @@ const UPLOAD_ERR = /upload|file|format|size|invalid|failed|unsupported|rejected|
  * appeared, and either input.files still holds the file or the widget shows
  * an uploaded attachment pill/filename.
  */
-export async function verifyFileUpload(input: HTMLInputElement, fileName: string): Promise<{ ok: boolean; note?: string }> {
-  await wait(80);
+export async function verifyFileUpload(input: HTMLInputElement, fileName: string, maxWait = 4000): Promise<{ ok: boolean; note?: string }> {
+  // Dropzones (React Dropzone, Greenhouse, Ashby, Workday) often clear the input at once and
+  // show the file's name, or an error, only when their upload ends: watch for either a while.
   const box = input.closest('[data-automation-id^="formField-"], [data-automation-id="file-upload-drop-zone"], fieldset, .field, .application-field') ?? input.parentElement;
-  if (box) {
+  const rejected = () => {
+    if (!box) return false;
     for (const err of box.querySelectorAll<HTMLElement>('[role="alert"], [data-automation-id*="error" i], [class*="error" i]')) {
       if (isHidden(err)) continue;
       const t = (err.textContent ?? '').trim();
-      if (t && UPLOAD_ERR.test(t)) return { ok: false, note: 'the site rejected the file: attach it yourself' };
+      if (t && UPLOAD_ERR.test(t)) return true;
     }
+    return false;
+  };
+  const shown = () => {
+    if (!box) return false;
+    if (box.querySelector('[data-automation-id="file-upload-item"]')) return true;
+    return !!fileName && (box.textContent ?? '').toLowerCase().includes(fileName.toLowerCase());
+  };
+  const uploading = () => !!box?.querySelector('[role="progressbar"], [aria-busy="true"], [class*="uploading" i], [class*="spinner" i], [class*="progress" i], [class*="loading" i]');
+  const start = Date.now();
+  for (let first = true; ; first = false) {
+    await wait(first ? 80 : 120);
+    if (rejected()) return { ok: false, note: 'the site rejected the file: attach it yourself' };
+    if (shown() && !uploading()) return { ok: true };
+    // A plain file box keeps the file and shows no upload of its own: done.
+    if (input.files && input.files.length > 0 && !uploading() && Date.now() - start >= 150) return { ok: true };
+    if (Date.now() - start >= maxWait) break;
   }
-  if (input.files && input.files.length > 0) return { ok: true };
-  if (box) {
-    if (box.querySelector('[data-automation-id="file-upload-item"]')) return { ok: true };
-    const text = (box.textContent ?? '').toLowerCase();
-    if (fileName && text.includes(fileName.toLowerCase())) return { ok: true };
-  }
+  if (shown() || (input.files && input.files.length > 0)) return { ok: true };
   return { ok: false, note: 'the site did not accept the file: attach it yourself' };
 }
 
@@ -370,6 +454,23 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
   switch (f.kind) {
     case 'text':
     case 'textarea': {
+      if (isRichText(f.el)) {
+        value = firstChoice(value);
+        const had = (f.el.textContent ?? '').trim();
+        if (had && (!overwrite || had === value)) {
+          res.status = 'already';
+          res.value = had;
+          return;
+        }
+        if (setRichText(f.el, value)) {
+          res.status = 'filled';
+          res.value = value;
+        } else {
+          res.status = 'review';
+          res.note = 'this editor did not take the text: paste it yourself';
+        }
+        return;
+      }
       const el = f.el as HTMLInputElement;
       value = firstChoice(value);
       if (el.value.trim() && (!overwrite || el.value === value)) {
@@ -426,6 +527,10 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
       res.status = got ? 'filled' : 'review';
       res.value = got ?? value;
       if (!got) res.note = 'pick the matching option';
+      else if ((purpose === 'edu_school' || purpose === 'school') && /^other\b/i.test(got) && !/^other\b/i.test(value)) {
+        res.status = 'review';
+        res.note = `"${firstChoice(value)}" is not in the list, so Wera chose Other: type the school in the box that appears`;
+      }
       return;
     }
     case 'listbox': {
@@ -462,7 +567,7 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
     case 'radio':
     case 'checkboxes':
     case 'buttons': {
-      const chosen = (o: Option) => (f.kind === 'buttons' ? isPressed(o.el!) : (o.el as HTMLInputElement).checked);
+      const chosen = (o: Option) => (f.kind === 'buttons' ? isPressed(o.el!) : o.el instanceof HTMLInputElement ? o.el.checked : ariaChecked(o.el!));
       const wanted = f.kind === 'checkboxes' ? choicesOf(value, purpose) : [value];
       const hits = wanted.map((w) => matchOption(f.options, w, purpose)).filter((o): o is Option => o != null);
       if (f.options.some(chosen) && (!overwrite || (hits.length > 0 && hits.every(chosen)))) {
@@ -477,8 +582,8 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
       }
       for (const hit of hits) {
         if (chosen(hit)) continue;
-        if (f.kind === 'buttons') press(hit.el!);
-        else check(hit.el as HTMLInputElement);
+        if (f.kind === 'buttons' || !(hit.el instanceof HTMLInputElement)) press(hit.el!);
+        else check(hit.el);
       }
       res.status = 'filled';
       res.value = hits.map((o) => o.label).join(' | ');
@@ -486,14 +591,21 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
     }
     case 'checkbox': {
       // A lone box ("I am willing to relocate"): ticked for yes, left alone for no.
-      const box = f.el as HTMLInputElement;
-      if (box.checked) {
+      const box = f.el;
+      const on = () => (box instanceof HTMLInputElement ? box.checked : ariaChecked(box));
+      if (on()) {
         res.status = 'already';
         res.value = 'yes';
         return;
       }
       if (norm(firstChoice(value)) !== 'yes') return;
-      check(box);
+      if (box instanceof HTMLInputElement) check(box);
+      else press(box);
+      if (!on()) {
+        res.status = 'review';
+        res.note = 'tick it yourself';
+        return;
+      }
       res.status = 'filled';
       res.value = 'yes';
       return;
@@ -503,8 +615,43 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
   }
 }
 
+/**
+ * Text into a rich-text editor the way typing does (editors such as Quill, ProseMirror and
+ * Draft.js keep their own model and ignore a changed DOM): select what is there, insert, and check.
+ */
+export function setRichText(el: HTMLElement, text: string): boolean {
+  const doc = el.ownerDocument;
+  el.focus?.();
+  const sel = doc.getSelection?.();
+  if (sel) {
+    const range = doc.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  let done: boolean;
+  try {
+    done = typeof doc.execCommand === 'function' && doc.execCommand('insertText', false, text);
+  } catch {
+    done = false;
+  }
+  const head = text.trim().slice(0, 30);
+  if (!done || !(el.textContent ?? '').includes(head)) {
+    el.textContent = text;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+  }
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.dispatchEvent(new Event('blur', { bubbles: true }));
+  return (el.textContent ?? '').includes(head);
+}
+
 /** Puts text into one field (an AI-drafted answer or a cover letter). */
 export function insertText(el: HTMLElement | null, text: string): boolean {
+  if (el && isRichText(el)) {
+    const ok = setRichText(el, text);
+    if (ok) mark(el, 'filled');
+    return ok;
+  }
   if (!el || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
   setNativeValue(el, text);
   mark(el, 'filled');

@@ -15,7 +15,43 @@ const RULES: [string, (u: URL, body: string) => boolean][] = [
   ['Oracle', (u) => /\/hcmRestApi\/resources\/[^/]+\/recruitingCEJobApplications(\/|$)/i.test(u.pathname) || (/\/hcmui\/candidateexperience\/.*\/applications(\/submit)?\/?$/i.test(u.pathname))],
   ['SuccessFactors', (u) => /(^|\.)(successfactors|sapsf)\.(com|eu)$/i.test(u.hostname) && /\/(applicationSubmit|submitApplication|career[^/]*\/submit|apply\/submit)(\/|$)/i.test(u.pathname)],
   ['BrassRing', (u) => /(^|\.)brassring\.com$/i.test(u.hostname) && /\/(SubmitApplication|SaveAndSubmit|ApplySubmit)(\/|$)/i.test(u.pathname)],
+  ['SmartRecruiters', (u) => /(^|\.)smartrecruiters\.com$/i.test(u.hostname) && /\/(applications?|apply)(\/submit)?\/?$/i.test(u.pathname)],
+  ['Workable', (u) => /(^|\.)workable\.com$/i.test(u.hostname) && /\/jobs\/[^/]+\/(apply|candidates)\/?$/i.test(u.pathname)],
+  ['BambooHR', (u) => /(^|\.)bamboohr\.com$/i.test(u.hostname) && /\/careers\/(\d+\/)?(apply|application)\/?$/i.test(u.pathname)],
+  ['Jobvite', (u) => /(^|\.)jobvite\.com$/i.test(u.hostname) && /\/(apply|application)(\/submit)?\/?$/i.test(u.pathname)],
+  ['Rippling', (u) => /(^|\.)rippling\.com$/i.test(u.hostname) && /\/jobs?\/[^/]+\/(apply|applications?)\/?$/i.test(u.pathname)],
+  ['Taleo', (u) => /(^|\.)taleo\.net$/i.test(u.hostname) && /\/(submit|applicationSubmit|apply\/submit)/i.test(u.pathname)],
+  ['Paylocity', (u) => /(^|\.)paylocity\.com$/i.test(u.hostname) && /\/Recruiting\/Jobs\/(Apply|Submit)/i.test(u.pathname)],
+  ['ADP', (u) => /(^|\.)adp\.com$/i.test(u.hostname) && /\/(job-?applications?|apply)\/?(submit)?$/i.test(u.pathname)],
+  ['UKG', (u) => /(^|\.)(ultipro|ukg)\.(com|net)$/i.test(u.hostname) && /\/JobBoard\/.*\/(Apply|Submit)/i.test(u.pathname)],
+  ['Teamtailor', (u) => /(^|\.)teamtailor\.com$/i.test(u.hostname) && /\/jobs\/[^/]+\/(applications?|apply)\/?$/i.test(u.pathname)],
+  ['Personio', (u) => /(^|\.)personio\.(de|com)$/i.test(u.hostname) && /\/(job\/\d+\/)?(apply|application)\/?$/i.test(u.pathname)],
+  ['JazzHR', (u) => /(^|\.)applytojob\.com$/i.test(u.hostname) && /\/apply(\/[^/]+)?\/?$/i.test(u.pathname)],
+  ['Breezy', (u) => /(^|\.)breezy\.hr$/i.test(u.hostname) && /\/p\/[^/]+\/(apply|submit)\/?$/i.test(u.pathname)],
 ];
+
+/**
+ * Whether a 2xx reply still says the submit failed: GraphQL's {"errors": [...]}, or
+ * {"success": false} / {"ok": false} / {"error": ...}. Ashby answers a form it refuses with
+ * HTTP 200 and errors.
+ */
+export function replyRefuses(text: string): boolean {
+  const t = text.trim();
+  if (!t.startsWith('{')) return false;
+  try {
+    const j = JSON.parse(t) as Record<string, unknown> & { data?: Record<string, unknown> };
+    if (Array.isArray(j.errors) && j.errors.length) return true;
+    if (j.success === false || j.ok === false || (typeof j.error === 'string' && j.error) || (j.error && typeof j.error === 'object')) return true;
+    // GraphQL mutations that report their own failure: {"data": {"x": {"errors": [...]}}}.
+    for (const v of Object.values(j.data ?? {})) {
+      const r = v as { errors?: unknown[]; success?: boolean } | null;
+      if (r && ((Array.isArray(r.errors) && r.errors.length) || r.success === false)) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 /** Returns the applicant system name if this request is a real application submit, else null. */
 export function matchSubmitRequest(url: string, method: string, body = ''): string | null {
@@ -35,8 +71,15 @@ export function matchSubmitRequest(url: string, method: string, body = ''): stri
   return null;
 }
 
-function bodyTextOf(body: unknown): string {
+export function bodyTextOf(body: unknown): string {
   if (typeof body === 'string') return body.slice(0, 4000);
+  if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) return body.toString().slice(0, 4000);
+  // Form posts: their field names (and short values) say what the request is.
+  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    const parts: string[] = [];
+    body.forEach((v, k) => parts.push(typeof v === 'string' ? `${k}=${v.slice(0, 200)}` : `${k}=[file]`));
+    return parts.join('&').slice(0, 4000);
+  }
   return '';
 }
 
@@ -67,8 +110,11 @@ export function installSubmitWatcher(win: Window): void {
       const system = matchSubmitRequest(reqUrl, method, body);
       const pending = origFetch(input, init);
       if (system) {
-        pending.then((res) => {
-          if (res.ok) notify(win.document, reqUrl, system);
+        pending.then(async (res) => {
+          if (!res.ok) return;
+          // A 200 that says it refused (GraphQL errors) is no submit.
+          const text = /json/i.test(res.headers?.get?.('content-type') ?? '') ? await res.clone().text().catch(() => '') : '';
+          if (!replyRefuses(text)) notify(win.document, reqUrl, system);
         }, () => {});
       }
       return pending;
@@ -92,7 +138,13 @@ export function installSubmitWatcher(win: Window): void {
       const system = info ? matchSubmitRequest(info.url, info.method, bodyTextOf(body)) : null;
       if (system && info) {
         this.addEventListener('load', () => {
-          if (this.status >= 200 && this.status < 300) notify(win.document, info.url, system);
+          let text: string;
+          try {
+            text = this.responseType === '' || this.responseType === 'text' ? this.responseText : '';
+          } catch {
+            text = '';
+          }
+          if (this.status >= 200 && this.status < 300 && !replyRefuses(text)) notify(win.document, info.url, system);
         }, { once: true });
       }
       return origSend.call(this, body);

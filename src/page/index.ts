@@ -18,6 +18,7 @@ import type { JobConfirmed, JobRequest, SubmitReply } from '../shared/jobs';
 import { HIDDEN_SITES, SETTINGS_KEY, siteKey } from '../shared/settings';
 import type { FieldPurpose, JobDraft } from '../shared/types';
 import { startAssist } from './assist';
+import { loadRemoteRules, RULES_KEY } from '../shared/remoteRules';
 
 export { pageKind } from '../content/detect';
 
@@ -99,7 +100,9 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
   // Pages that are not job pages are read for a confirmation only for a while after they load.
   let looks = 0;
   let looksFor = '';
-  let asked = false;
+  // The page Wera last told the background about (address and kind): a single-page site moving
+  // from a posting to its form, or to another job, is told again.
+  let askedFor = '';
   // Looks in a row that found no job page: each costs the page some time, so they come less and less often.
   let idle = 0;
   let applyFor = '';
@@ -152,9 +155,11 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     if (key === shownFor) return;
     shownFor = key;
     if (!top) {
-      // An application form embedded in a careers page: the panel (in the top frame) fills it.
+      // An application form embedded in a careers page: the panel (in the top frame) fills it,
+      // and the background notes the form so a confirmation inside the frame counts.
       // Notify on every transition into a form (or new form URL), not only once per frame lifetime.
       if (kind === 'form' && (await allowed(doc))) {
+        void ask({ type: 'wera:job-seen', kind: 'form', draft: null });
         void sendSafe({ type: 'wera:panel-ensure' });
       }
       return;
@@ -162,8 +167,9 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     const { title, company } = jobSummary(shown);
     Object.assign(handle, { kind, title, company, draft: readJobPosting(shown, doc.location.href), canApply });
     subscribers.forEach((fn) => fn(handle));
-    if (kind && !asked && (await allowed(doc))) {
-      asked = true;
+    const seenKey = `${doc.location.href}|${kind}`;
+    if (kind && askedFor !== seenKey && (await allowed(doc))) {
+      askedFor = seenKey;
       void ask({ type: 'wera:job-seen', kind, draft: handle.draft });
       void sendSafe({ type: 'wera:panel-ensure' });
     }
@@ -200,8 +206,8 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
     const key = doc.location.href;
     if (!sawForm || submittedFor === key || isNotJobSite(key)) return;
     submittedFor = key;
-    void ask({ type: 'wera:job-sending' });
-    void ask<SubmitReply>({ type: 'wera:job-submitted', url: key }).then((r) => {
+    // In order: the submit is judged against the moment it was sent.
+    void ask({ type: 'wera:job-sending' }).then(() => ask<SubmitReply>({ type: 'wera:job-submitted', url: key })).then((r) => {
       if (top && r && r.state !== 'off') confirmed(r);
     });
   };
@@ -227,6 +233,11 @@ export function watchForJobs(doc: Document, delay = 1200): () => void {
 }
 
 if (typeof window !== 'undefined' && !window.__weraPage && typeof chrome !== 'undefined' && chrome.runtime?.id) {
+  // The site rules fetched from Wera (#143), kept fresh while the page is open.
+  void loadRemoteRules();
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area === 'local' && changes[RULES_KEY]) void loadRemoteRules();
+  });
   listen();
   watchForJobs(document);
   startAssist(document);

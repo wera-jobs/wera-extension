@@ -304,6 +304,7 @@ export type ContentRequest =
   /** Presses the page's Apply button: the user asked Wera to apply from the posting. */
   | { type: 'wera:press-apply' }
   | { type: 'wera:highlight'; id: string }
+  | { type: 'wera:account'; email: string; password: string }
   /** The user pressed Stop: the fill under way in this frame ends after the field it is on. */
   | { type: 'wera:stop' }
   /** The choices custom dropdowns offer (opened and closed again), by field id. */

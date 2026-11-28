@@ -106,3 +106,34 @@ export async function notePage(tabId: number, patch: Partial<TabPage>): Promise<
   await chrome.storage.session.set({ [TAB_PAGES]: map });
   return next;
 }
+
+/** Per-tab maps in session storage, pruned when their tab closes. */
+const PER_TAB = [TAB_JOBS, TAB_PAGES, 'wera.flows', 'wera.applying', 'wera.tabOpen'];
+
+/** Forgets a closed tab in every per-tab map. */
+export async function forgetTab(tabId: number): Promise<void> {
+  const got = await chrome.storage.session.get(PER_TAB);
+  const next: Record<string, unknown> = {};
+  for (const key of PER_TAB) {
+    const map = got[key] as Record<string, unknown> | undefined;
+    if (map && String(tabId) in map) {
+      const { [String(tabId)]: _gone, ...rest } = map;
+      next[key] = rest;
+    }
+  }
+  if (Object.keys(next).length) await chrome.storage.session.set(next);
+}
+
+const PENDING_SERVER = 'wera.pendingServer';
+
+/** The other Wera server the user is connecting through (signed out), for an hour. */
+export async function pendingServer(): Promise<string | null> {
+  const got: Record<string, unknown> = await chrome.storage.session.get(PENDING_SERVER).catch(() => ({}));
+  const p = got[PENDING_SERVER] as { server: string; at: number } | undefined;
+  return p && Date.now() - p.at < 3_600_000 ? p.server : null;
+}
+
+export async function setPendingServer(server: string | null): Promise<void> {
+  if (server) await chrome.storage.session.set({ [PENDING_SERVER]: { server, at: Date.now() } });
+  else await chrome.storage.session.remove(PENDING_SERVER);
+}

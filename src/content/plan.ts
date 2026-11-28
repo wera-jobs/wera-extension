@@ -5,6 +5,8 @@
 import { gateOf } from './gate';
 import { startHasPassed } from '../shared/dates';
 import type { Applicant, FieldGroup, FieldPlan, FieldPurpose, FieldSnapshot, FillItem, FillResult, KnownAnswer, PagePlan, Profile, ValueSource } from '../shared/types';
+import { countryName, hasCodePicker, parsePhone } from './phone';
+import { derivedAnswer } from './derived';
 import { datePart, ENTRY_PURPOSES, entryValue, findAdder, placeEntries, type Placed, type Section } from './entries';
 import { bestAnswer } from '../shared/answers';
 import { log } from '../shared/log';
@@ -12,7 +14,7 @@ import { asksOwnWords, trapMeaning, uniqueTraps, type Trap } from '../shared/tra
 import { LETTER, RESUME } from '../shared/markers';
 import { SELF_ID } from '../shared/selfId';
 import { classify } from './classify';
-import { byId, collectFields, isPressed, isWorkdayPrompt, listboxValue, type Field } from './fields';
+import { ariaChecked, byId, collectFields, isPressed, isRichText, isWorkdayPrompt, listboxValue, type Field } from './fields';
 import { attachFile, base64ToFile, comboboxChoice, enterValue, mark, setNativeValue, verifyFileUpload, wait } from './fill';
 import { isPlaceholderOption, matchOption } from './match';
 import { countryAnswer, countryIn, norm, sameCountry, stateName } from './places';
@@ -31,18 +33,18 @@ export function currentValue(f: Field): string {
   switch (f.kind) {
     case 'text':
     case 'textarea':
-      return (f.el as HTMLInputElement).value.trim();
+      return isRichText(f.el) ? (f.el.textContent ?? '').trim() : (f.el as HTMLInputElement).value.trim();
     case 'select': {
       const sel = f.el as HTMLSelectElement;
       return sel.selectedIndex > 0 || (sel.selectedIndex === 0 && sel.value) ? (sel.options[sel.selectedIndex]?.textContent ?? '').trim() : '';
     }
     case 'radio':
     case 'checkboxes':
-      return f.options.filter((o) => (o.el as HTMLInputElement).checked).map((o) => o.label).join(' | ');
+      return f.options.filter((o) => (o.el instanceof HTMLInputElement ? o.el.checked : ariaChecked(o.el!))).map((o) => o.label).join(' | ');
     case 'buttons':
       return f.options.filter((o) => isPressed(o.el!)).map((o) => o.label).join(' | ');
     case 'checkbox':
-      return (f.el as HTMLInputElement).checked ? 'yes' : '';
+      return (f.el instanceof HTMLInputElement ? f.el.checked : ariaChecked(f.el)) ? 'yes' : '';
     case 'combobox':
       return comboboxChoice(f.el as HTMLInputElement);
     case 'listbox':
@@ -331,6 +333,50 @@ function wholeAddress(fields: FieldPlan[], a: Applicant) {
   }
 }
 
+/**
+ * Phone numbers for forms that split them: the number box gets the national
+ * number alone (Workday refuses one that repeats the code), and a country
+ * code list gets the number's own country, not the one the user lives in.
+ */
+function shapePhones(all: Field[], fields: FieldPlan[], a: Applicant) {
+  const phone = parsePhone(a.phone ?? '', a.country ?? '');
+  if (!phone) return;
+  const els = new Map(all.map((f) => [f.id, f.el]));
+  const split = fields.some((f) => f.purpose === 'phone_code');
+  for (const f of fields) {
+    if (f.source !== 'details') continue;
+    if (f.purpose === 'phone_code') {
+      const name = countryName(phone.region);
+      if (name) f.value = name;
+    } else if (f.purpose === 'phone') {
+      const el = els.get(f.id);
+      if (split || (el && hasCodePicker(el))) f.value = phone.national;
+    }
+  }
+}
+
+/**
+ * Yes/no questions the user's data settles (years asked against years
+ * worked, the office city against where they live): answered without the
+ * AI, with the reason shown. See derived.ts.
+ */
+function settledAnswers(fields: FieldPlan[], a: Applicant, opts: PlanOptions) {
+  for (const f of fields) {
+    if (f.value || f.current || f.trap || f.abroad || f.group === 'consent' || f.group === 'self_id') continue;
+    if (f.purpose && f.purpose !== 'question') continue;
+    if (!['radio', 'buttons', 'select', 'combobox', 'listbox'].includes(f.kind)) continue;
+    const yes = f.options.find((o) => /^yes\b/i.test(o.trim()));
+    const no = f.options.find((o) => /^no\b/i.test(o.trim()));
+    if (!yes || !no) continue;
+    const d = derivedAnswer(f.label, a, opts);
+    if (!d) continue;
+    f.value = d.value === 'Yes' ? yes : no;
+    f.source = 'profile';
+    f.confidence = 'high';
+    f.note = `from your details: ${d.why}`;
+  }
+}
+
 // How many blocks Wera adds at most: forms rarely want more than the recent ones.
 const MAX_BLOCKS: Record<Section, number> = { experience: 3, education: 2 };
 
@@ -367,6 +413,8 @@ export async function addEntries(root: ParentNode, section: Section, count: numb
       await wait(Math.min(50, maxWait));
       grew = countIn() > before;
     }
+    // No block Wera can read appeared (a dialog, a layout it doesn't know): pressing again would only add empty ones.
+    if (!grew) break;
     if (settle > 0) await wait(settle);
   }
   return added;
@@ -379,6 +427,8 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   const placed = placeFields(all);
   const fields = all.map((f) => planField(f, a, opts, placed.get(f.id))).filter((p) => p.purpose !== null || p.label !== '' || p.required);
   wholeAddress(fields, a);
+  shapePhones(all, fields, a);
+  settledAnswers(fields, a, opts);
   const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   const site = doc ? siteFor(doc) : null;
   const traps = uniqueTraps([...found, ...all.flatMap((f) => [...(f.said ?? []), ...(f.trap ? [f.trap] : [])])]);
@@ -389,17 +439,20 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   };
 }
 
-// The user pressed Stop: fills under way in this frame end after the field they are on.
-let halted = false;
-let applyingNow = false;
+// Fills in this frame run one at a time (the AI's batches arrive together and would fight over
+// focus and open dropdowns). Stop ends every fill queued before it, after the field it is on: a
+// fill queued later (a new Autofill) runs, but nothing queued earlier can undo the Stop.
+let stops = 0;
+let applyingNow = 0;
+let queue: Promise<unknown> = Promise.resolve();
 
 /** Whether Wera is currently applying values to this frame (so watchPage ignores synthetic change events). */
 export function isApplying(): boolean {
-  return applyingNow;
+  return applyingNow > 0;
 }
 
 export function stopFilling() {
-  halted = true;
+  stops++;
 }
 
 export interface ApplyOptions {
@@ -417,19 +470,27 @@ export interface ApplyOptions {
  * shows (the user chose this value for it). It never submits. Fields
  * that are gone (the page changed) are reported for review.
  */
-export async function applyItems(root: ParentNode, items: FillItem[], opts: ApplyOptions = {}): Promise<FillResult[]> {
+export function applyItems(root: ParentNode, items: FillItem[], opts: ApplyOptions = {}): Promise<FillResult[]> {
+  const run = stops;
+  applyingNow++;
+  const next = queue.then(() => applyNow(root, items, opts, run)).finally(() => {
+    applyingNow--;
+  });
+  queue = next.catch(() => {});
+  return next;
+}
+
+async function applyNow(root: ParentNode, items: FillItem[], opts: ApplyOptions, run: number): Promise<FillResult[]> {
   const fields = new Map(collectFields(root).map((f) => [f.id, f]));
   const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   // Some sites need time between fields to keep up (Workday re-renders after each one).
   const pace = Math.max(opts.pace ?? 0, (doc && siteFor(doc)?.pace) || 0);
   const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
-  halted = false;
-  applyingNow = true;
   try {
     for (const item of items) {
       // Stopped: what is left is reported as not filled, and nothing more is touched.
-      if (halted) {
+      if (stops !== run) {
         const res: FillResult = { id: item.id, label: item.label ?? '', purpose: null, status: 'skipped', required: false };
         out.push(res);
         opts.onProgress?.(res);
@@ -525,7 +586,6 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
       if (pace) await wait(pace);
     }
   } finally {
-    applyingNow = false;
     user?.stop();
   }
   // Filling moves the focus from box to box: none is left in the last one, where Wera's button would show.

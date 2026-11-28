@@ -6,7 +6,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { CalendarDays, CircleDollarSign, ExternalLink, FileText, MapPin, Send } from 'lucide-react';
-import type { WeraApi } from '../shared/api';
+import type { ApplicationStatus, WeraApi } from '../shared/api';
+import { log } from '../shared/log';
 import { ageWords, OLD_POSTING_DAYS } from '../content/facts';
 import { hostOf, originOf, siteOf } from '../shared/url';
 import { postingFacts } from './PostingFacts';
@@ -180,7 +181,9 @@ export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: Pane
             Posted {ageWords(facts.age)}
           </Chip>
         )}
-        {status && <span className={clsx('rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium', statusCls)}>{status}</span>}
+        {job && api ? <StatusPicker api={api} page={page} /> : status && <span className={clsx('rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium', statusCls)}>{status}</span>}
+        {job?.early && <Chip tone="plain" title="Posted in the last three days">Early</Chip>}
+        {job && api && job.company_id != null && <FollowButton api={api} page={page} />}
         {job && api && (
           <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer"
             className="ml-auto inline-flex items-center gap-0.5 text-[11px] font-medium text-accent hover:underline">
@@ -190,5 +193,48 @@ export function JobHeader({ api, page, kind }: { api: WeraApi | null; page: Pane
       </div>
       {gone && <Notice tone="warn">{facts.warning}</Notice>}
     </div>
+  );
+}
+
+const STATUS_ORDER: ApplicationStatus[] = ['saved', 'applied', 'interviewing', 'offer', 'rejected', 'not_interested'];
+
+/** The job's tracker status, changed in place. */
+function StatusPicker({ api, page }: { api: WeraApi; page: PanelPageState }) {
+  const job = page.job!;
+  const [busy, setBusy] = useState(false);
+  const current = job.application_status ?? '';
+  const cls = current ? STATUS[current]?.[1] ?? STATUS.not_interested![1] : 'text-muted bg-surface-2';
+  return (
+    <select aria-label="Tracker status" value={current} disabled={busy}
+      onChange={(e) => {
+        const next = e.target.value as ApplicationStatus;
+        if (!next) return;
+        setBusy(true);
+        api.setStatus(job.id, next).then((j) => page.setJob(j), (err: unknown) => log.warn('status', 'changing the status failed', err)).finally(() => setBusy(false));
+      }}
+      className={clsx('rounded-md border-0 px-1.5 py-0.5 text-[11px] leading-4 font-medium', cls)}>
+      {!current && <option value="">Not tracked</option>}
+      {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS[s]![0]}</option>)}
+    </select>
+  );
+}
+
+/** Follow the company: its new roles show up as a notice in Wera. */
+function FollowButton({ api, page }: { api: WeraApi; page: PanelPageState }) {
+  const job = page.job!;
+  const [on, setOn] = useState(!!job.company_followed);
+  const [busy, setBusy] = useState(false);
+  return (
+    <button type="button" aria-pressed={on} disabled={busy} title={on ? 'You follow this company: its new roles show up in Wera' : 'Follow: hear when this company posts a role'}
+      onClick={() => {
+        setBusy(true);
+        api.followCompany(job.company_id!, !on).then(() => {
+          setOn(!on);
+          page.setJob({ ...job, company_followed: !on });
+        }, (e: unknown) => log.warn('follow', 'following the company failed', e)).finally(() => setBusy(false));
+      }}
+      className={clsx('rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium', on ? 'bg-accent/10 text-accent' : 'bg-surface-2 text-muted hover:text-text')}>
+      {on ? 'Following' : 'Follow'}
+    </button>
   );
 }

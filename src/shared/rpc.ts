@@ -20,6 +20,8 @@ export interface FrameOps {
   stop: { args: []; result: void };
   options: { args: [ids: string[]]; result: Record<string, string[]> };
   log: { args: []; result: { frameId: number; url: string; entries: LogEntry[] }[] };
+  /** Fills a job site's own account page (Workday's Create Account or Sign In): email and password, never its button. */
+  account: { args: [email: string]; result: { filled: number; page: 'create' | 'sign-in' | null } };
 }
 
 export type FrameOp = keyof FrameOps;
@@ -34,11 +36,15 @@ export type PanelRequest =
   /** The application went through and the user wants the tab gone (see panel/AppliedAlert.tsx). */
   | { type: 'wera:tab-close' }
   /** The user takes up the next match from the application they just sent: it opens in this tab. */
-  | { type: 'wera:open-next'; jobId: number; url: string };
+  | { type: 'wera:open-next'; jobId: number; url: string }
+  /** Signed out, the user is connecting through another Wera server's dashboard: its connect page may hand over a key. */
+  | { type: 'wera:pending-server'; server: string }
+  /** The job-site password kept in this browser (see background/vault.ts): read, keep, or make one. */
+  | { type: 'wera:vault'; op: 'get' | 'set' | 'generate'; password?: string };
 
 export const isPanelRequest = (m: unknown): m is PanelRequest => {
   const t = (m as { type?: unknown } | null)?.type;
-  return t === 'wera:api' || t === 'wera:frames' || t === 'wera:sign-in' || t === 'wera:sign-out' || t === 'wera:panel-ensure' || t === 'wera:tab-close' || t === 'wera:open-next';
+  return t === 'wera:api' || t === 'wera:frames' || t === 'wera:sign-in' || t === 'wera:sign-out' || t === 'wera:panel-ensure' || t === 'wera:tab-close' || t === 'wera:open-next' || t === 'wera:pending-server' || t === 'wera:vault';
 };
 
 export type RpcReply<T = unknown> = { ok: true; value: T } | { ok: false; status: number; error: string };

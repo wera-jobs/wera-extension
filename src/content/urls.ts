@@ -134,6 +134,16 @@ export function isNotJobSite(url: string): boolean {
   return NOT_JOB_SITES.some((re) => re.test(host)) || NOT_JOB_PATHS.some((re) => re.test(host + u.pathname));
 }
 
+/** Whether the whole site is never a job site (not just some of its pages: LinkedIn's feed leads to its jobs without a load). */
+export function isNotJobHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return NOT_JOB_SITES.some((re) => re.test(host));
+  } catch {
+    return false;
+  }
+}
+
 /** Whether this document is a frame inside such a site (Gmail is full of small frames from other hosts). */
 export function insideNotJobSite(doc: Document): boolean {
   const ancestors = doc.location.ancestorOrigins;

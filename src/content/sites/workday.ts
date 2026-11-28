@@ -106,8 +106,8 @@ function step(doc: Document): Step | null {
 
 function gate(doc: Document): string | null {
   const q = (id: string) => doc.querySelector(`[data-automation-id="${id}"]`);
-  if (q('createAccountSubmitButton')) return 'Workday wants an account for this company. Create one here (Wera fills your email; pick a password), then press Autofill on the next page.';
-  if (q('signInSubmitButton') || q('signInContent')) return 'Sign in to your Workday account for this company, then press Autofill on the application.';
+  if (q('createAccountSubmitButton')) return 'Workday wants an account for this company. Wera fills your email and your job-site password below; create the account, verify the email if it asks, then press Autofill on the next page.';
+  if (q('signInSubmitButton') || q('signInContent')) return 'Sign in to your Workday account for this company (Wera fills your email and job-site password below), then press Autofill on the application.';
   if (q('applyManually') || q('autofillWithResume')) return 'Choose "Apply Manually" (or "Autofill with Resume"): Wera fills the application on the next page.';
   return null;
 }
@@ -122,4 +122,5 @@ export const workday: Site = {
   applyChoice: (doc) => doc.querySelector<HTMLElement>('[data-automation-id="applyManually"]'),
   // Workday re-renders after each choice and loses input typed too soon.
   pace: 120,
+  blockAware: true,
 };

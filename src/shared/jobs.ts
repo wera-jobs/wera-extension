@@ -51,6 +51,14 @@ export interface BadgeResult {
   source: 'wera' | 'keywords' | null;
   /** Direct company application URL when Wera knows a non-board link for this job. */
   applyUrl?: string;
+  /** What the user's tracker says, when the job is on it. */
+  status?: string | null;
+  /** The posting offers visa sponsorship. */
+  sponsors?: boolean;
+  /** Posted in the last three days. */
+  early?: boolean;
+  /** The posting has come down. */
+  closed?: boolean;
 }
 
 export type JobRequest =
@@ -70,7 +78,11 @@ export type JobRequest =
   /** What the user left in a form when moving it on (Next, Submit): its details, and its answers to remember. */
   | { type: 'wera:job-learn'; entries: { purpose: FieldPurpose; value: string }[]; answers?: LearnedAnswer[] }
   /** Batch fit lookup for cards on a job-board search list. */
-  | { type: 'wera:job-badges'; items: BadgeQuery[] };
+  | { type: 'wera:job-badges'; items: BadgeQuery[] }
+  /** Save a card's job to Wera from the search list. */
+  | { type: 'wera:job-board-save'; item: BadgeQuery }
+  /** Line a card's job up in the application queue (saving it first). */
+  | { type: 'wera:job-board-queue'; item: BadgeQuery & { applyUrl?: string } };
 
 export const isJobRequest = (m: unknown): m is JobRequest =>
   !!m && typeof m === 'object' && typeof (m as { type?: unknown }).type === 'string' && (m as { type: string }).type.startsWith('wera:job-')

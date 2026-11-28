@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, splitNeedsInput, WeraApi } from './api';
+import { ApiError, splitNeedsInput, unsupportedNote, WeraApi } from './api';
 import { normalizeServer } from './storage';
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -153,10 +153,53 @@ describe('the next best match', () => {
   });
 });
 
+describe('what a question assumes', () => {
+  it('passes on the tools the person\'s data never mentions, as a note to check the draft', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(json(200, { answer: 'I build on AWS. I have not used Terraform yet.', unsupported: ['Terraform'] }));
+    const got = await new WeraApi('https://wera.example', 'tok', fetcher).answer('Your experience in AWS (with Terraform)?', 3);
+    expect(got).toEqual({ answer: 'I build on AWS. I have not used Terraform yet.', unsupported: ['Terraform'] });
+    expect(unsupportedNote(got.unsupported)).toBe("this asks about Terraform, which your resume doesn't mention: check the draft claims nothing you haven't done");
+    expect(unsupportedNote(['Kafka', 'Flink', 'Scala'])).toContain('Kafka, Flink and Scala');
+    expect(unsupportedNote(undefined)).toBe('');
+  });
+});
+
 describe('the AI request marker', () => {
   it('splits a reply into the text for the form and what it asks the person for', () => {
     expect(splitNeedsInput('Mostly internal work. NEEDS_INPUT: links to public PRs')).toEqual(['Mostly internal work.', 'links to public PRs']);
     expect(splitNeedsInput('Needs input: your notice period')).toEqual(['', 'your notice period']);
     expect(splitNeedsInput('A plain answer.')).toEqual(['A plain answer.', '']);
+  });
+});
+
+describe('several base resumes', () => {
+  const list = { resumes: [
+    { id: 1, title: 'Backend', job_id: null, is_default: false },
+    { id: 2, title: 'ML', job_id: null, is_default: true },
+    { id: 3, title: 'ML for Acme', job_id: 9, base_id: 2 },
+  ] };
+  const pdf = () => new Response(new Blob(['%PDF']), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="r.pdf"' } });
+
+  it('attaches the one the user picked, else the job\'s copy, else the default', async () => {
+    const urls: string[] = [];
+    const fetcher = vi.fn(async (u: string) => {
+      urls.push(u);
+      return u.endsWith('/api/resumes') ? json(200, list) : pdf();
+    });
+    const api = new WeraApi('https://w', 't', fetcher as never);
+    expect((await api.resumeFile(null, 1))?.id).toBe(1);
+    expect((await api.resumeFile(9))?.id).toBe(3);
+    expect((await api.resumeFile(null))?.id).toBe(2);
+  });
+
+  it('tailors from the base resume asked for', async () => {
+    const fetcher = vi.fn(async () => json(200, { resume: {}, coverage_before: {} }));
+    const api = new WeraApi('https://w', 't', fetcher);
+    await api.tailorResume(9, '', 1);
+    await api.tailorResume(9);
+    const [, first] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    const [, second] = fetcher.mock.calls[1] as unknown as [string, RequestInit];
+    expect(JSON.parse(first.body as string)).toEqual({ base_resume_id: 1 });
+    expect(second.body).toBeUndefined();
   });
 });

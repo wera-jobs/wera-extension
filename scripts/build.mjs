@@ -25,3 +25,16 @@ mkdirSync('dist/fonts', { recursive: true });
 cpSync('node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2', 'dist/fonts/geist.woff2');
 cpSync('node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2', 'dist/fonts/geist-mono.woff2');
 console.log(`built wera-extension ${pkg.version} into dist/`);
+
+// Firefox (npm run build:firefox): the same code, with what Firefox's MV3 wants instead.
+if (process.argv.includes('--firefox')) {
+  rmSync('dist-firefox', { recursive: true, force: true });
+  cpSync('dist', 'dist-firefox', { recursive: true });
+  const ff = { ...manifest };
+  // Firefox runs MV3 backgrounds as event pages, not service workers.
+  ff.background = { scripts: ['background.js'], type: 'module' };
+  delete ff.minimum_chrome_version;
+  ff.browser_specific_settings = { gecko: { id: 'wera@wera-jobs.com', strict_min_version: '128.0' } };
+  writeFileSync('dist-firefox/manifest.json', JSON.stringify(ff, null, 2));
+  console.log(`built wera-extension ${pkg.version} for Firefox into dist-firefox/`);
+}

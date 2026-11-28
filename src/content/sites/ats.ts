@@ -294,7 +294,7 @@ export const personio: Site = {
     [/available_from/, 'start_date'],
     [/salary_expectations/, 'salary_expectation'],
     [/cover_letter|anschreiben/, 'cover_letter'],
-    [/\bdocument\b|resume|\bcv\b/, 'resume'],
+    [/resume|\bcv\b|lebenslauf|\bdocument\b/, 'resume'],
     [/\bgender\b/, 'gender'],
     [/\blocation\b/, 'location'],
   ]),

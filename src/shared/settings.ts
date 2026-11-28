@@ -1,4 +1,5 @@
 // The user's choices for how the extension behaves (this browser only).
+import { cleanRules, RULES_KEY, switchedOff } from './remoteRules';
 
 export interface Settings {
   /** Show the Wera panel on job postings and application forms. */
@@ -56,8 +57,10 @@ export async function setSiteHidden(site: string, hidden: boolean): Promise<void
 }
 
 export async function loadSettings(): Promise<Settings> {
-  const got = await chrome.storage.local.get(SETTINGS_KEY);
-  return { ...DEFAULT_SETTINGS, ...(got[SETTINGS_KEY] as Partial<Settings> | undefined) };
+  const got = await chrome.storage.local.get([SETTINGS_KEY, RULES_KEY]);
+  const own = { ...DEFAULT_SETTINGS, ...(got[SETTINGS_KEY] as Partial<Settings> | undefined) };
+  // A feature the remote rules switched off is off, whatever the user chose (until it is fixed).
+  return switchedOff(own, cleanRules((got[RULES_KEY] as { rules?: unknown } | undefined)?.rules));
 }
 
 export async function saveSettings(s: Settings): Promise<void> {

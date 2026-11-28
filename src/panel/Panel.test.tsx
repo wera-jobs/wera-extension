@@ -172,6 +172,63 @@ describe('the Wera panel', () => {
     await screen.findByRole('button', { name: /^Autofill$/ });
   });
 
+  it('reports how the page fared on Continue: purposes, filled and changed, never values', async () => {
+    const plan: PagePlan = {
+      fields: [
+        field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' }),
+        field('w2', 'Phone', { purpose: 'phone', value: '4695550101', source: 'details', group: 'details' }),
+      ],
+      next: { id: 'n1', label: 'Next', final: false }, errors: 0, site: 'Workday',
+    };
+    const { emit, calls } = fakeBackground({ job, info: { hasForm: true }, frames: { ...formPageFrames(plan), next: () => ({ ok: true, label: 'Next' }) } });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:field-changed', id: 'w2', value: '214 555 0199' } });
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the next page/ }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'addRunFields')).toBeTruthy());
+    const [runId, system, fields] = calls.find((c) => c.name === 'addRunFields')!.args as [number, string, unknown[]];
+    expect(runId).toBe(3);
+    expect(system).toBe('Workday');
+    expect(fields).toEqual([{ purpose: 'first_name', kind: 'text', filled: true, changed: false }, { purpose: 'phone', kind: 'text', filled: true, changed: true }]);
+    expect(JSON.stringify(fields)).not.toContain('555');
+  });
+
+  it('fetches the resume file once, however often Autofill is pressed', async () => {
+    const plan: PagePlan = { fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' })], next: null, errors: 0 };
+    const { calls } = fakeBackground({ job, info: { hasForm: true }, frames: formPageFrames(plan) });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await userEvent.click(await finished());
+    await finished();
+    // Loaded once for this job (perhaps also before the job was known), never again per press.
+    expect(calls.filter((c) => c.name === 'resumeFile' && c.args[0] === job.id)).toHaveLength(1);
+  });
+
+  it('presses a section\'s Add once per form, however often the form is read again', async () => {
+    const plan: PagePlan = {
+      fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details', required: true })],
+      next: null, errors: 0, adders: [{ section: 'experience', missing: 2 }],
+    };
+    const { scan, apply } = formPage(plan);
+    let adds = 0;
+    const { emit } = fakeBackground({ job, info: { hasForm: true }, frames: { scan, apply, 'add-entries': () => { adds++; return 2; } } });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    // A dialog opening, or blocks Wera can't read, look like a new step: Wera fills again, but never adds again.
+    let reads = 0;
+    for (let i = 0; i < 3; i++) {
+      emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:form-changed', fields: 1, step: true } });
+      await finished();
+      reads++;
+    }
+    await userEvent.click(await finished());
+    await finished();
+    expect(reads).toBe(3);
+    expect(adds).toBe(1);
+  });
+
   it('goes with one click on the tab\'s ×, stays gone when a frame announces its form, and comes back from the toolbar', async () => {
     const { store } = fakeBackground({ job });
     const { rerender } = render(<App handle={handle('posting')} show={show({ initial: false })} />);
@@ -250,6 +307,11 @@ describe('the Wera panel', () => {
     expect(applied.flat().some((i) => i.id === 'w3' || i.id === 'w5')).toBe(false);
     expect(calls.filter((c) => c.name === 'suggest')).toHaveLength(1);
     expect(screen.getByText("Wera's guess: None")).toBeInTheDocument();
+    // Completion: the required fields first, each with its state; the optional ones folded.
+    const required = await screen.findByRole('region', { name: 'Required fields' });
+    expect(within(required).getByRole('heading')).toHaveTextContent('Required (2/3)');
+    expect(within(required).getByLabelText('not filled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Optional \(1\/2\)/ })).toBeInTheDocument();
     expect(screen.getByText(/Wera drafted this answer/)).toBeInTheDocument();
     expect(screen.getByText('agree yourself after reading it')).toBeInTheDocument();
     expect(screen.getByText(/press/)).toHaveTextContent('Submit application');
@@ -261,6 +323,35 @@ describe('the Wera panel', () => {
     await waitFor(() => expect(applied.at(-1)).toEqual([{ id: 'w3', value: 'None' }]));
     // The application is counted in Wera.
     expect(calls.some((c) => c.name === 'startRun')).toBe(true);
+  });
+
+  it('writes a letter from the panel straight into the form, shows it, and rewrites it in another tone', async () => {
+    const plan: PagePlan = {
+      fields: [field('c1', 'Additional information', { purpose: 'cover_letter', kind: 'textarea', group: 'documents' })],
+      next: null, errors: 0,
+    };
+    const applied: ApplyRequest[] = [];
+    let n = 0;
+    const { calls } = fakeBackground({
+      job, info: { hasForm: true },
+      frames: { ...formPageFrames(plan, (req) => applied.push(req)) },
+      api: { writeCoverLetter: () => ({ body: ++n === 1 ? 'Dear Acme, I keep robots running.' : 'Dear Acme, briefly: robots.' }) },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    // An optional letter box: Autofill writes none, the user asks for one.
+    expect(calls.some((c) => c.name === 'writeCoverLetter')).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: /^Write$/ }));
+    await waitFor(() => expect(applied.some((r) => r.items.some((i) => i.id === 'c1'))).toBe(true));
+    expect(applied.at(-1)!.coverLetter).toBe('Dear Acme, I keep robots running.');
+    expect(await screen.findByText('Dear Acme, I keep robots running.')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Tone'), 'concise');
+    await userEvent.selectOptions(screen.getByLabelText('Length'), 'short');
+    await userEvent.click(screen.getByRole('button', { name: /Write again/ }));
+    expect(await screen.findByText('Dear Acme, briefly: robots.')).toBeInTheDocument();
+    expect(calls.filter((c) => c.name === 'writeCoverLetter').at(-1)!.args[2]).toEqual({ tone: 'concise', length: 'short' });
+    expect(applied.at(-1)!.coverLetter).toBe('Dear Acme, briefly: robots.');
   });
 
   it('writes a cover letter for this job when the form asks for one, attaches it, and asks the user to read it', async () => {
@@ -466,20 +557,51 @@ describe('the Wera panel', () => {
   });
 
   it('shows why a job fits: the reason, the resume\'s keywords, sponsorship and H-1B filings', async () => {
-    const scored = { ...job, reason: 'Strong SRE match, light on Terraform.', sponsorship: 'yes' as const };
-    fakeBackground({
+    const scored = { ...job, reason: 'Strong SRE match, light on Terraform.', sponsorship: 'yes' as const, early: true, also_in: ['Austin, TX'],
+      fit_parts: { role: 9, seniority: 7, skills: 6, domain: 8, location: 10, blocker: false } };
+    const { calls } = fakeBackground({
       job: scored,
       api: {
         jobKeywords: () => ({ keywords: ['Go', 'Kubernetes', 'Terraform'], coverage: { matched: ['Go', 'Kubernetes'], missing: ['Terraform'], percent: 67 }, resume_id: 3 }),
         h1b: () => ({ matched: true, filings: 12, new_hires: 3, wage_median: null, similar: [], similar_low: null, similar_high: null, level: '' }),
+        addSkill: () => ({ job: { ...scored, fit_score: 91 } }),
       },
     });
     render(<App handle={handle('posting')} show={show()} />);
     await userEvent.click(await screen.findByRole('button', { name: /has 2 of this job's 3 keywords/ }));
     expect(screen.getByText('Strong SRE match, light on Terraform.')).toBeInTheDocument();
-    expect(screen.getByText('Terraform')).toBeInTheDocument();
     expect(screen.getByText(/offers visa sponsorship/)).toBeInTheDocument();
+    expect(screen.getByText(/early applicant/)).toBeInTheDocument();
+    expect(screen.getByText('Also posted in Austin, TX.')).toBeInTheDocument();
+    expect(screen.getByText('Skills').nextElementSibling).toBeTruthy();
     expect(await screen.findByText(/filed 12 H-1B petitions/)).toBeInTheDocument();
+    // "I have it": the skill goes on the profile and the job is scored again.
+    await userEvent.click(screen.getByRole('button', { name: '+ Terraform' }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'addSkill')?.args).toEqual(['Terraform', scored.id]));
+  });
+
+  it('offers a practice application once, and takes feedback from the header', async () => {
+    const { store, calls } = fakeBackground({ job, api: { reportProblem: () => ({ id: 1 }) } });
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByRole('link', { name: 'Open the practice form' })).toHaveAttribute('href', 'https://wera.example/practice');
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByText(/practice application/)).toBeNull();
+    await waitFor(() => expect(store['wera.practiceSeen']).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    await userEvent.type(await screen.findByRole('textbox'), 'The school list was empty.');
+    await userEvent.click(screen.getByRole('button', { name: /Send/ }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'reportProblem')?.args[0]).toMatchObject({ note: 'The school list was empty.' }));
+  });
+
+  it('changes the tracker status and follows the company from the job card', async () => {
+    const tracked = { ...job, application_status: 'saved', company_id: 4, company_followed: false };
+    const { calls } = fakeBackground({ job: tracked, api: { setStatus: () => ({ ...tracked, application_status: 'applied' }), followCompany: () => undefined } });
+    render(<App handle={handle('posting')} show={show()} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Tracker status'), 'applied');
+    await waitFor(() => expect(calls.find((c) => c.name === 'setStatus')?.args).toEqual([tracked.id, 'applied']));
+    await userEvent.click(screen.getByRole('button', { name: 'Follow' }));
+    expect(await screen.findByRole('button', { name: 'Following' })).toHaveAttribute('aria-pressed', 'true');
+    expect(calls.find((c) => c.name === 'followCompany')?.args).toEqual([4, true]);
   });
 
   it("says why a job has no fit score when the user's own rules rule it out", async () => {

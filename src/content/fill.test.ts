@@ -482,7 +482,7 @@ describe('phone parts', () => {
       <label for="c">Country Phone Code</label><select id="c"><option value="">Select One</option><option>Canada (+1)</option><option>United States of America (+1)</option></select>
       <label for="n">Phone Number</label><input id="n"></form>`;
     const out = await fillForm(document, { ...ada, phone: '469 555 0101', country: 'United States' }, {});
-    expect(out.map((r) => [r.purpose, r.value])).toEqual([['phone_type', 'Mobile'], ['phone_code', 'United States of America (+1)'], ['phone', '469 555 0101']]);
+    expect(out.map((r) => [r.purpose, r.value])).toEqual([['phone_type', 'Mobile'], ['phone_code', 'United States of America (+1)'], ['phone', '4695550101']]);
   });
 });
 
@@ -529,10 +529,24 @@ describe('more questions from real forms', () => {
 });
 
 describe('never the opposite answer', () => {
-  it('leaves a veteran question when no option means "not a protected veteran"', () => {
-    const robinhood = ['I am on active duty', 'I have never served in the military', 'I identify as a protected veteran', 'I identify as a non-protected veteran', "I don't wish to answer"]
-      .map((label) => ({ label, value: label }));
-    expect(matchOption(robinhood, 'I am not a protected veteran', 'veteran')).toBeNull();
+  it('never tells a non-veteran they are a veteran, in any order or case (Workday, Robinhood)', () => {
+    const o = (labels: string[]) => labels.map((label) => ({ label, value: label }));
+    const pick = (labels: string[], v: string) => matchOption(o(labels), v, 'veteran')?.label ?? null;
+    const workday = ['I am a veteran, but I am not a protected veteran', 'I am not a veteran', 'I identify as one or more of the classifications of protected veterans', 'I do not wish to self-identify'];
+    for (const old of ['I am not a protected veteran', 'I am not a veteran', 'no']) {
+      expect(pick(workday, old)).toBe('I am not a veteran');
+      expect(pick(workday.map((l) => l.toUpperCase()), old)).toBe('I AM NOT A VETERAN');
+    }
+    expect(pick(workday, 'I am a veteran, but not a protected veteran')).toBe('I am a veteran, but I am not a protected veteran');
+    expect(pick(workday, 'I am a protected veteran')).toBe('I identify as one or more of the classifications of protected veterans');
+    const robinhood = ['I am on active duty', 'I have never served in the military', 'I identify as a protected veteran', 'I identify as a non-protected veteran', "I don't wish to answer"];
+    expect(pick(robinhood, 'I am not a veteran')).toBe('I have never served in the military');
+    expect(pick(robinhood, 'I am a veteran, but not a protected veteran')).toBe('I identify as a non-protected veteran');
+    // Only veterans' choices: no answer for someone who never served.
+    expect(pick(['Protected Veteran', 'Veteran, not protected', 'Active Duty Wartime Veteran'], 'I am not a veteran')).toBeNull();
+    // "Are you a veteran?" Yes / No.
+    expect(pick(['Yes', 'No'], 'I am not a veteran')).toBe('No');
+    expect(pick(['Yes', 'No'], 'I am a veteran, but not a protected veteran')).toBe('Yes');
   });
 });
 
@@ -570,7 +584,7 @@ describe('not waiting for nothing', () => {
       document.querySelector('#vl')!.innerHTML = '<div role="option">I am on active duty</div><div role="option">I have never served</div>';
     });
     const t0 = Date.now();
-    const out = await fillForm(document, { ...ada, city: 'Dallas', veteran: 'I am not a protected veteran' }, { passes: 1 });
+    const out = await fillForm(document, { ...ada, city: 'Dallas', veteran: 'I am a protected veteran' }, { passes: 1 });
     expect(out.find((r) => r.purpose === 'city')).toMatchObject({ status: 'filled', value: 'Dallas' });
     expect(out.find((r) => r.purpose === 'veteran')).toMatchObject({ status: 'review' });
     expect(Date.now() - t0).toBeLessThan(2000);

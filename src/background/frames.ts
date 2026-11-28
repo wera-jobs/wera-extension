@@ -4,6 +4,7 @@
 // form, each field in its own frame. The page script runs in every frame
 // (manifest), so this only talks to it; pages opened before Wera was
 // installed or updated get it injected first.
+import { jobSitePassword } from './vault';
 import type { LogEntry } from '../shared/log';
 import type { FrameOps } from '../shared/rpc';
 import { uniqueTraps } from '../shared/traps';
@@ -148,6 +149,14 @@ export async function highlight(tabId: number, id: string): Promise<void> {
   await sendTo(tabId, f.frameId, { type: 'wera:highlight', id: f.id }).catch(() => {});
 }
 
+/** Fills the email and the kept password on a job site's account page, in the frame that has one. */
+export async function account(tabId: number, email: string): Promise<{ filled: number; page: 'create' | 'sign-in' | null }> {
+  const password = await jobSitePassword();
+  if (!password) return { filled: 0, page: null };
+  const replies = await sendAll<{ filled: number; page: 'create' | 'sign-in' | null }>(tabId, await reach(tabId), { type: 'wera:account', email, password });
+  return replies.map((r) => r.value).find((v) => v && v.filled > 0) ?? { filled: 0, page: null };
+}
+
 /** Ends the fill under way in every frame of the tab. */
 export async function stop(tabId: number): Promise<void> {
   await sendAll(tabId, await reach(tabId), { type: 'wera:stop' });
@@ -187,4 +196,5 @@ export const run: { [K in keyof FrameOps]: (tabId: number, ...args: FrameOps[K][
   stop,
   options,
   log: logs,
+  account,
 };

@@ -13,6 +13,7 @@ import { formFrameOrigins } from './frames';
 import { findApply, hasPreFormGate, ownApplicationForm, pageDocument, pageKind } from './detect';
 import { siteFor } from './sites';
 import { pressNext } from './next';
+import { fillAccount } from './account';
 import { addEntries, applyItems, highlight, planForm, snapshot, stopFilling } from './plan';
 import { mainText } from './text';
 import { bodyText, looksSubmitted, watchPage } from './watch';
@@ -129,6 +130,9 @@ export function listen() {
       }
       case 'wera:highlight':
         reply({ ok: highlight(document, msg.id) });
+        return false;
+      case 'wera:account':
+        reply(fillAccount(document, msg.email, msg.password));
         return false;
       case 'wera:stop':
         stopFilling();

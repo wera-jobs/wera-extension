@@ -34,6 +34,10 @@ function setup(opts: { signedIn?: boolean; found?: WeraJob | null; autoApplied?:
     const path = url.replace('https://w.example', '');
     calls.push(`${init.method ?? 'GET'} ${path.replace(/\?.*/, '')}`);
     const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
+    if (path === '/api/ext/jobs/lookup-batch') {
+      const { urls } = JSON.parse(init.body as string) as { urls: string[] };
+      return json({ jobs: urls.map((u) => (job && u === job.url ? job : null)) });
+    }
     if (path.startsWith('/api/ext/jobs/lookup')) return json({ job });
     if (path === '/api/ext/jobs') {
       job = { ...base, id: 12, title: draft.title };
@@ -202,5 +206,18 @@ describe('job requests in the background', () => {
     lookups.mockImplementation((url) => Promise.resolve(new Response(JSON.stringify(url.includes(encodeURIComponent(URL1)) ? { job: base } : { job: null }), { status: 200 })));
     const workdayUrl = 'https://acme.wd5.myworkdayjobs.com/en-US/Careers/job/SRE/apply';
     expect(await handleJobRequest({ type: 'wera:job-resolve', url: workdayUrl, title: 'SRE - Acme', referrer: URL1 }, 8, workdayUrl)).toMatchObject({ id: 9 });
+  });
+
+  it('badges a board\'s cards from one lookup: score, tracker status, sponsorship and early', async () => {
+    const { calls } = setup({ found: { ...base, url: 'https://acme.example/careers/7', fit_score: 81, application_status: 'applied', sponsorship: 'yes', early: true } });
+    const items = [
+      { key: 'a', url: 'https://acme.example/careers/7', title: 'SRE', company: 'Acme', text: '' },
+      { key: 'b', url: 'https://other.example/1', title: 'Ops', company: 'Other', text: '' },
+    ];
+    const out = await handleJobRequest({ type: 'wera:job-badges', items }, TAB, 'https://www.linkedin.com/jobs/search/', 0) as { key: string }[];
+    expect(out.find((r) => r.key === 'a')).toMatchObject({ score: 81, status: 'applied', sponsors: true, early: true, source: 'wera' });
+    expect(out.find((r) => r.key === 'b')).toMatchObject({ source: null });
+    expect(calls.filter((c) => c.startsWith('POST /api/ext/jobs/lookup-batch'))).toHaveLength(1);
+    expect(calls.some((c) => c.startsWith('GET /api/ext/jobs/lookup'))).toBe(false);
   });
 });
