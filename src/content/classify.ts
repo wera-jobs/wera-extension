@@ -74,7 +74,7 @@ const RULES: [FieldPurpose, RegExp][] = [
   ['hispanic', /hispanic|latin[oaxe]/],
   ['race', /\brace\b|ethnic/],
   ['gender', /gender|\bsex\b|geschlecht|\bgenre\b|\bsexe\b|\bgenero\b|geslacht/],
-  ['veteran', /veteran|served in the (u\.?s\.? )?(military|armed forces)|military service|active duty/],
+  ['veteran', /veteran|served in the (u\.?s\.? )?(military|armed forces)|military (service|status)|active duty/],
   ['disability', /disabilit/],
   // High school is not the degree the details hold.
   ['graduation_year', /^(?!.*\b(high school|secondary)\b).*\bgraduat|abschlussjahr|annee d.?obtention|ano de graduacion|afstudeerjaar/],

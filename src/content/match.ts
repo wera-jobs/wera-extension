@@ -298,6 +298,12 @@ export function matchOption(options: Option[], value: string, purpose: FieldPurp
       const neg = answers.map((o) => NEGATED.test(norm(o.label)));
       if (neg[0] !== neg[1]) return answers[neg.indexOf(v === 'no')] ?? null;
     }
+    // Several ways of saying yes and one of saying no ("I currently work at Acme", "I previously
+    // worked at Acme", "I have never worked at Acme"): a no is that one. A yes still needs the person.
+    if (v === 'no') {
+      const negs = answers.filter((o) => NEGATED.test(norm(o.label)));
+      if (negs.length === 1 && answers.length > 2) return negs[0]!;
+    }
     return null;
   }
   const wanted = new Set([v]);
