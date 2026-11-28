@@ -139,9 +139,14 @@ async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | 
       press(hit.node);
       return hit;
     }
+    // A long list draws only the rows in view (virtualized): scroll it on before deciding.
+    const real = options.filter((o) => !/^(loading|searching)\b/i.test(o.label));
+    if (real.length && scrollOn(real[real.length - 1]!.node)) {
+      shownSince = Date.now();
+      continue;
+    }
     // A list that has shown its choices for a while without this one does not have it
     // ("Loading..." and "Searching..." rows are not choices yet).
-    const real = options.filter((o) => !/^(loading|searching)\b/i.test(o.label));
     // The list says it has nothing for this search ("No options"): no point waiting.
     if (!real.length && saysNoOptions(el)) return null;
     if (!real.length) shownSince = 0;
@@ -151,6 +156,24 @@ async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | 
   return null;
 }
 
+/** Scrolls the list an option sits in by a page, when it can scroll further; whether it moved. */
+function scrollOn(option: HTMLElement): boolean {
+  let n: HTMLElement | null = option.parentElement;
+  for (let i = 0; n && i < 4; i++, n = n.parentElement) {
+    if (n.scrollHeight > n.clientHeight + 4 && /auto|scroll/.test(n.ownerDocument.defaultView?.getComputedStyle(n).overflowY ?? '')) {
+      if (n.scrollTop + n.clientHeight >= n.scrollHeight - 2) return false;
+      n.scrollTop += Math.max(n.clientHeight - 20, 40);
+      n.dispatchEvent(new Event('scroll'));
+      return true;
+    }
+  }
+  return false;
+}
+
+// What custom selects show as chosen, beside an input that stays empty: react-select, MUI,
+// Ant Design, Select2, Choices.js.
+const SHOWN_CHOICE = '[class*="singleValue"], [class*="single-value"], [class*="SingleValue"], .ant-select-selection-item, .select2-selection__rendered, .choices__list--single .choices__item, [class*="MuiSelect-select"]';
+
 /** react-select and friends show the choice beside the input, which stays empty. */
 export function comboboxChoice(el: HTMLInputElement): string {
   if (isWorkdayPrompt(el)) return promptChoice(el);
@@ -158,7 +181,7 @@ export function comboboxChoice(el: HTMLInputElement): string {
   let n: Element | null = el.parentElement;
   for (let i = 0; n && i < 4; i++, n = n.parentElement) {
     if (n.querySelectorAll('input, select, textarea').length > 1) break; // reached a neighbour's field
-    const shown = n.querySelector('[class*="singleValue"], [class*="single-value"], [class*="SingleValue"]');
+    const shown = n.querySelector(SHOWN_CHOICE);
     if (shown?.textContent?.trim()) return shown.textContent.trim();
     // A multi-select shows each choice as a chip (Greenhouse's demographic questions).
     const chips = [...n.querySelectorAll('[class*="multi-value__label"], [class*="multiValueLabel"], [class*="MultiValueLabel"], [class*="Chip-label"]')]
@@ -204,19 +227,37 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     // A Workday prompt searches when Enter is pressed; elsewhere Enter would pick the first choice.
     if (prompt) for (const type of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
     else arrowDown(el);
+    const before = wrapperText(el);
     const hit = await pickOpen(el, value, purpose);
     if (!hit) continue;
     await wait(60);
-    if (!comboboxChoice(el) && hit.node.isConnected) {
+    // The choice shows (in the box, as a chip, or as the wrapper's new text): done. Clicking the
+    // option again would toggle it off in lists that pick several.
+    const took = () => !!comboboxChoice(el) || (wrapperText(el) !== before && wrapperText(el).includes(hit.label.slice(0, 40)));
+    if (!took() && hit.node.isConnected && openOptions(el).some((o) => o.node === hit.node)) {
       press(hit.node);
       await wait(60);
     }
-    if (comboboxChoice(el)) return hit.label;
+    if (took()) return hit.label;
   }
   // Leave no half-typed search behind.
   typeSearch(el, '');
   escape(el);
   return null;
+}
+
+/** The text a field's own block shows, without its open list: it changes when a choice is made. */
+function wrapperText(el: HTMLElement): string {
+  let n: HTMLElement | null = el.parentElement;
+  for (let i = 0; n && i < 3; i++, n = n.parentElement) {
+    if (n.querySelectorAll('input, select, textarea').length > 1) break;
+    if (n.parentElement && n.parentElement.querySelectorAll('input, select, textarea').length > 1) {
+      const copy = n.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('[role="listbox"], [class*="menu"]').forEach((m) => m.remove());
+      return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+  }
+  return '';
 }
 
 /** Dropdowns that are buttons (Workday) or ARIA comboboxes: open, then pick. */
