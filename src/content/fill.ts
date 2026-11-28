@@ -127,13 +127,20 @@ function saysNoOptions(el: HTMLElement): boolean {
     .some((m) => !isHidden(m) && /^no (options|results|matches)|nothing found/i.test((m.textContent ?? '').trim())));
 }
 
-/** Waits up to ~2s (lists that search as you type load late) for an option that means value to show, then picks it. */
-async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null): Promise<(Option & { node: HTMLElement }) | null> {
+/**
+ * Waits for an option that means value to show (up to ~2s; lists that search a server as you
+ * type, such as schools, get longer), then picks it.
+ */
+async function pickOpen(el: HTMLElement, value: string, purpose: FieldPurpose | null, patience = 2000): Promise<(Option & { node: HTMLElement }) | null> {
   const start = Date.now();
   let shownSince = 0;
-  while (Date.now() - start < 2000) {
+  let anything = false;
+  while (Date.now() - start < patience) {
     await wait(50);
     const options = openOptions(el);
+    // No list, not even "Loading...", a second after asking: none is coming.
+    if (options.length) anything = true;
+    else if (!anything && Date.now() - start > 1000) return null;
     const hit = matchOption(options, value, purpose) as (Option & { node: HTMLElement }) | null;
     if (hit) {
       press(hit.node);
@@ -215,7 +222,9 @@ function arrowDown(el: HTMLElement) {
 async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldPurpose | null): Promise<string | null> {
   // A long answer ("No, I do not have a disability") is rarely worded the same in the list:
   // look through the whole list first, then search. Each alternative is searched in turn.
-  const searches = alternatives(value).map((alt) => searchText(alt, purpose));
+  const school = purpose === 'edu_school' || purpose === 'school';
+  // A school is listed under its own name, often worded otherwise: search its telling words too.
+  const searches = [...new Set(alternatives(value).flatMap((alt) => school ? schoolSearches(alt) : [searchText(alt, purpose)]))];
   const prompt = isWorkdayPrompt(el);
   const typedFirst = searches.length === 1 && searches[0]!.length <= 24;
   const control = !prompt ? el.closest<HTMLElement>('[class*="select__control"], [class*="control"]') : null;
@@ -228,7 +237,7 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     if (prompt) for (const type of ['keydown', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
     else arrowDown(el);
     const before = wrapperText(el);
-    const hit = await pickOpen(el, value, purpose);
+    const hit = await pickOpen(el, value, purpose, school && typed ? 3500 : 2000);
     if (!hit) continue;
     await wait(60);
     // The choice shows (in the box, as a chip, or as the wrapper's new text): done. Clicking the
@@ -240,10 +249,31 @@ async function fillCombobox(el: HTMLInputElement, value: string, purpose: FieldP
     }
     if (took()) return hit.label;
   }
+  // A school the list does not have: its "Other" choice, when it offers one (the form then asks
+  // for the name). The note tells the user.
+  if (school) {
+    focusField(el);
+    typeSearch(el, 'Other');
+    arrowDown(el);
+    const other = await pickOpen(el, 'Other', null, 2000);
+    if (other && /^other\b/i.test(other.label)) {
+      await wait(60);
+      if (comboboxChoice(el)) return other.label;
+    }
+  }
   // Leave no half-typed search behind.
   typeSearch(el, '');
   escape(el);
   return null;
+}
+
+/** What to type to find a school: its full name, then without "The" and "University of", then its first telling words. */
+export function schoolSearches(name: string): string[] {
+  const full = name.trim();
+  const plain = full.replace(/^the\s+/i, '').replace(/,.*$/, '').trim();
+  const core = plain.replace(/\b(university|college|institute|school)\s+(of|at)\s+/i, '').replace(/\s+(university|college)$/i, '').trim();
+  const words = core.split(/\s+/).filter((w) => !/^(of|at|the|and|&)$/i.test(w)).slice(0, 2).join(' ');
+  return [...new Set([full, plain, core, words].filter((s) => s.length >= 3))];
 }
 
 /** The text a field's own block shows, without its open list: it changes when a choice is made. */
@@ -497,6 +527,10 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
       res.status = got ? 'filled' : 'review';
       res.value = got ?? value;
       if (!got) res.note = 'pick the matching option';
+      else if ((purpose === 'edu_school' || purpose === 'school') && /^other\b/i.test(got) && !/^other\b/i.test(value)) {
+        res.status = 'review';
+        res.note = `"${firstChoice(value)}" is not in the list, so Wera chose Other: type the school in the box that appears`;
+      }
       return;
     }
     case 'listbox': {
