@@ -77,6 +77,9 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const [flow, setFlow] = useState<Flow | null>(null);
   const [thinking, setThinking] = useState(0);
   const [corrections, setCorrections] = useState<DetailCorrection[]>([]);
+  // Fields Wera filled that the person then changed on the page, and whether this page was reported.
+  const changedIds = useRef(new Set<string>());
+  const reported = useRef(false);
   // The employer asks for no AI, and the user chose to have Wera draft anyway.
   const [draftAnyway, setDraftAnyway] = useState(false);
   const noAiHere = useMemo(() => [...(page.info?.traps ?? []), ...(plan?.traps ?? [])].some((t) => t.kind === 'ai_policy'), [page.info?.traps, plan?.traps]);
@@ -481,6 +484,25 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     }
   }, [api, host, tabId]);
 
+  /**
+   * How this page's fields fared, once (on Continue or when the site confirms): each field's
+   * purpose (never its value), whether Wera filled it and whether the person changed it.
+   */
+  const reportQuality = useCallback(async () => {
+    const runId = flow?.runId || (tabId != null ? (await loadFlow(tabId, host).catch(() => null))?.runId : 0);
+    if (reported.current || !runId) return;
+    reported.current = true;
+    const fields = latest.current.filter((r) => r.purpose).map((r) => ({
+      purpose: r.purpose!, kind: r.kind, filled: r.status === 'filled', changed: changedIds.current.has(r.id),
+    }));
+    changedIds.current = new Set();
+    if (fields.length) await api.addRunFields(runId, plan?.site ?? host, fields).catch((e: unknown) => log.warn('autofill', 'reporting the page\'s fields failed', e));
+  }, [api, flow, host, plan?.site, tabId]);
+  // The site confirmed the application: the last page is reported too.
+  useEffect(() => {
+    if (page.submitted) void reportQuality();
+  }, [page.submitted, reportQuality]);
+
   /** The page as it is now, once what went in has settled. */
   const rescan = useCallback(async (): Promise<PagePlan | null> => {
     const req = scanReq.current;
@@ -630,6 +652,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     setError('');
     page.clearNewStep();
     await learn(rows);
+    void reportQuality();
     const r = await frames('next', plan.next.id).catch((e: unknown) => {
       log.warn('autofill', 'pressing Next failed', e);
       return { ok: false, final: false };
@@ -643,13 +666,14 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       return;
     }
     counted.current = false;
+    reported.current = false;
     if (tabId != null) {
       const f = (await loadFlow(tabId, host).catch(() => null)) ?? flow ?? { runId: 0, host, jobId, pages: 1, continuing: false, at: Date.now() };
       const next = { ...f, continuing: true, pages: f.pages + 1 };
       setFlow(next);
       await saveFlow(tabId, next).catch((e: unknown) => log.warn('autofill', 'could not keep the application in progress', e));
     }
-  }, [plan, page, learn, rows, tabId, host, flow, jobId]);
+  }, [plan, page, learn, rows, tabId, host, flow, jobId, reportQuality]);
 
   // Each field a frame fills is reported as it lands; edits the person makes afterwards teach Wera.
   useEffect(() => {
@@ -666,7 +690,9 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       if (!row || row.status !== 'filled') return;
       const nextVal = value.trim();
       const prevVal = (row.result || row.value).trim();
-      if (!nextVal || nextVal === prevVal) return;
+      if (nextVal === prevVal) return;
+      changedIds.current.add(id);
+      if (!nextVal) return;
       if (row.group === 'questions' || row.group === 'other') {
         if (!settings.learn) return;
         const learned = answersToLearn([row], [{ id: row.id, label: row.label, purpose: row.purpose, kind: row.kind, value: nextVal }], [], posting.company);
@@ -734,7 +760,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   useEffect(() => {
     if (started2 && page.newStep > 0 && settings.autoContinue) {
       counted.current = false;
-        // A step the page rendered on its own (an external change): fill it now.
+      reported.current = false;
+      // A step the page rendered on its own (an external change): fill it now.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void autofill();
     }

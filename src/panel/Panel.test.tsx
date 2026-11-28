@@ -172,6 +172,28 @@ describe('the Wera panel', () => {
     await screen.findByRole('button', { name: /^Autofill$/ });
   });
 
+  it('reports how the page fared on Continue: purposes, filled and changed, never values', async () => {
+    const plan: PagePlan = {
+      fields: [
+        field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' }),
+        field('w2', 'Phone', { purpose: 'phone', value: '4695550101', source: 'details', group: 'details' }),
+      ],
+      next: { id: 'n1', label: 'Next', final: false }, errors: 0, site: 'Workday',
+    };
+    const { emit, calls } = fakeBackground({ job, info: { hasForm: true }, frames: { ...formPageFrames(plan), next: () => ({ ok: true, label: 'Next' }) } });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:field-changed', id: 'w2', value: '214 555 0199' } });
+    await userEvent.click(screen.getByRole('button', { name: /Continue to the next page/ }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'addRunFields')).toBeTruthy());
+    const [runId, system, fields] = calls.find((c) => c.name === 'addRunFields')!.args as [number, string, unknown[]];
+    expect(runId).toBe(3);
+    expect(system).toBe('Workday');
+    expect(fields).toEqual([{ purpose: 'first_name', kind: 'text', filled: true, changed: false }, { purpose: 'phone', kind: 'text', filled: true, changed: true }]);
+    expect(JSON.stringify(fields)).not.toContain('555');
+  });
+
   it('fetches the resume file once, however often Autofill is pressed', async () => {
     const plan: PagePlan = { fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' })], next: null, errors: 0 };
     const { calls } = fakeBackground({ job, info: { hasForm: true }, frames: formPageFrames(plan) });

@@ -546,6 +546,11 @@ export class WeraApi {
     return this.call<AutofillRun>(`/api/ext/autofill-runs/${runId}/pages`, { method: 'POST', body: JSON.stringify({ filled, suggested, ...attachments(sent) }) });
   }
 
+  /** How a page's fields fared (purposes only, never values), for autofill quality in the admin app. */
+  addRunFields(runId: number, system: string, fields: { purpose: string; kind: string; filled: boolean; changed: boolean }[]) {
+    return this.call<void>(`/api/ext/autofill-runs/${runId}/fields`, { method: 'POST', body: JSON.stringify({ system, fields }) });
+  }
+
   /** "Report a problem": the person's note, the page and the diagnostics, for the Wera team. */
   reportProblem(r: { note: string; page: string; version: string; details: string }) {
     return this.call<{ id: number }>('/api/ext/reports', { method: 'POST', body: JSON.stringify(r) });
