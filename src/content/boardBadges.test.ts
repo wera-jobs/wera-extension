@@ -55,3 +55,24 @@ describe('job-board search list fit badges (#146)', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('what a card shows besides its score', () => {
+  it('the tracker status, sponsorship and early; a Save button for a job not on the tracker', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('chrome', { runtime: { id: 'x', sendMessage: vi.fn(async (m: unknown) => { sent.push(m); return { key: 'k2', score: 72, source: 'wera', status: 'saved' }; }) } });
+    document.body.innerHTML = '<ul><li id="c1"></li><li id="c2"></li></ul>';
+    const card = (id: string) => ({ key: id === 'c1' ? 'k1' : 'k2', url: `https://acme.example/${id}`, title: 'SRE', company: 'Acme', text: '', el: document.getElementById(id)! });
+    renderBadge(card('c1'), { key: 'k1', score: 81, source: 'wera', status: 'applied', sponsors: true, early: true });
+    const one = document.getElementById('c1')!.textContent;
+    expect(one).toContain('Applied');
+    expect(one).toContain('Sponsors visas');
+    expect(one).toContain('Early');
+    expect(one).not.toContain('Save to Wera');
+    renderBadge(card('c2'), { key: 'k2', score: null, source: null });
+    const save = [...document.querySelectorAll<HTMLButtonElement>('#c2 button')].find((b) => b.textContent === 'Save to Wera')!;
+    save.click();
+    await vi.waitFor(() => expect(document.getElementById('c2')!.textContent).toContain('Saved'));
+    expect(sent[0]).toMatchObject({ type: 'wera:job-board-save', item: { url: 'https://acme.example/c2', title: 'SRE', company: 'Acme' } });
+    vi.unstubAllGlobals();
+  });
+});

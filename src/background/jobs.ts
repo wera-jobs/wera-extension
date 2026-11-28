@@ -138,6 +138,15 @@ export async function handleJobRequest(msg: JobRequest, tabId: number, tabUrl: s
     }
     case 'wera:job-badges':
       return api ? scoreBoardCards(api, msg.items) : [];
+    case 'wera:job-board-save': {
+      if (!api) return null;
+      const { item } = msg;
+      if (!item.title || !item.company || !/^https?:\/\//.test(item.url)) return null;
+      const job = await api.addJob({ url: item.url, company: item.company, title: item.title, location: '', work_mode: '', employment_type: '', department: '', salary: '', industry: '', description: item.text.slice(0, 4000), source: 'manual' });
+      const res = badgeFor(item, job, []);
+      badgeCache.set(item.url, { at: Date.now(), res });
+      return res;
+    }
     default:
       return null;
   }
@@ -169,34 +178,38 @@ export function clearBadgeCache() {
 const BADGE_TTL = 10 * 60_000;
 
 /** Looks up Wera's fit score (or falls back to quick resume-skill match) for search-list cards. */
+/** A card's badge from the user's job (score, tracker status, sponsorship, early, closed), else a quick skill match. */
+function badgeFor(item: BadgeQuery, found: WeraJob | null, skills: string[]): BadgeResult {
+  if (found) {
+    const direct = found.url && !BOARD_HOST.test(hostOf(found.url)) ? found.url : undefined;
+    const score = found.fit_score ?? found.estimated_score;
+    return {
+      key: item.key, score: score ?? null, source: score != null ? 'wera' : null, ...(direct ? { applyUrl: direct } : {}),
+      status: found.application_status, sponsors: found.sponsorship === 'yes', early: !!found.early, closed: !!found.closed_at,
+    };
+  }
+  const quick = quickSkillScore(`${item.title} ${item.text}`, skills);
+  return { key: item.key, score: quick, source: quick != null ? 'keywords' : null };
+}
+
 async function scoreBoardCards(api: WeraApi, items: BadgeQuery[]): Promise<BadgeResult[]> {
   const cached = await loadProfileCache(api.dashboardUrl('')).catch(() => null);
   const skills = cached?.view.skills ?? (await api.applicant().then((v) => v.skills).catch(() => [] as string[]));
   const out: BadgeResult[] = [];
-  const concurrency = 6;
-  const queue = items.slice(0, 30);
-  const worker = async () => {
-    while (queue.length) {
-      const item = queue.shift()!;
-      const hit = badgeCache.get(item.url);
-      if (hit && Date.now() - hit.at < BADGE_TTL) {
-        out.push({ ...hit.res, key: item.key });
-        continue;
-      }
-      const found = await api.lookup(item.url).then((r) => r.job).catch(() => null);
-      let res: BadgeResult;
-      if (found && (found.fit_score != null || found.estimated_score != null)) {
-        const direct = found.url && !BOARD_HOST.test(hostOf(found.url)) ? found.url : undefined;
-        res = { key: item.key, score: found.fit_score ?? found.estimated_score, source: 'wera', ...(direct ? { applyUrl: direct } : {}) };
-      } else {
-        const quick = quickSkillScore(`${item.title} ${item.text}`, skills);
-        res = { key: item.key, score: quick, source: quick != null ? 'keywords' : null };
-      }
-      badgeCache.set(item.url, { at: Date.now(), res });
-      out.push(res);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  const todo: BadgeQuery[] = [];
+  for (const item of items.slice(0, 50)) {
+    const hit = badgeCache.get(item.url);
+    if (hit && Date.now() - hit.at < BADGE_TTL) out.push({ ...hit.res, key: item.key });
+    else todo.push(item);
+  }
+  if (!todo.length) return out;
+  // One request for all the cards (older servers: one each).
+  const found = await api.lookupMany(todo.map((i) => i.url)).catch(() => todo.map(() => null));
+  todo.forEach((item, i) => {
+    const res = badgeFor(item, found[i] ?? null, skills);
+    badgeCache.set(item.url, { at: Date.now(), res });
+    out.push(res);
+  });
   return out;
 }
 

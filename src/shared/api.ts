@@ -319,6 +319,17 @@ export class WeraApi {
     return this.call<{ job: WeraJob | null }>(`/api/ext/jobs/lookup?url=${encodeURIComponent(url)}`);
   }
 
+  /** The user's job for each address, in order (null where Wera has none): one request for a board's cards. */
+  async lookupMany(urls: string[]): Promise<(WeraJob | null)[]> {
+    try {
+      return (await this.call<{ jobs: (WeraJob | null)[] }>('/api/ext/jobs/lookup-batch', { method: 'POST', body: JSON.stringify({ urls }) })).jobs;
+    } catch (e) {
+      // An older server: one request each.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) return Promise.all(urls.map((u) => this.lookup(u).then((r) => r.job, () => null)));
+      throw e;
+    }
+  }
+
   job(id: number) {
     return this.call<WeraJob>(`/api/jobs/${id}`);
   }

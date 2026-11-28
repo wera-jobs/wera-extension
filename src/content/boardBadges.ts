@@ -97,9 +97,23 @@ export function quickSkillScore(text: string, skills: string[]): number | null {
 }
 
 /** Renders or updates Wera's fit pill on one job card (never duplicating or misattaching). */
+const STATUS_WORDS: Record<string, [string, string, string]> = {
+  saved: ['Saved', '#dbeafe', '#1e40af'], applied: ['Applied', '#ede9fe', '#5b21b6'], interviewing: ['Interviewing', '#fef3c7', '#92400e'],
+  offer: ['Offer', '#dcfce7', '#166534'], rejected: ['Rejected', '#fee2e2', '#991b1b'], not_interested: ['Dismissed', '#f3f4f6', '#4b5563'],
+};
+
+function chip(doc: Document, text: string, bg: string, fg: string, title = ''): HTMLElement {
+  const c = doc.createElement('span');
+  c.style.cssText = `display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;background:${bg};color:${fg};`;
+  c.textContent = text;
+  if (title) c.title = title;
+  return c;
+}
+
 export function renderBadge(card: BoardCard, res: BadgeResult): void {
   const existing = card.el.querySelector<HTMLElement>(`[${BADGE_ATTR}]`);
-  if (res.score == null && !res.applyUrl) {
+  const doc = card.el.ownerDocument;
+  if (res.score == null && !res.applyUrl && !res.status && !res.sponsors && !res.early && !res.closed && !card.title) {
     existing?.remove();
     return;
   }
@@ -119,6 +133,35 @@ export function renderBadge(card: BoardCard, res: BadgeResult): void {
     pill.textContent = res.source === 'wera' ? `Wera ${res.score}%` : `Wera ~${res.score}%`;
     pill.title = res.source === 'wera' ? 'Wera fit score' : 'Quick skill match from your resume';
     badge.append(pill);
+  }
+
+  // What the tracker says, at a glance while scrolling.
+  const st = res.status ? STATUS_WORDS[res.status] : undefined;
+  if (st) badge.append(chip(doc, st[0], st[1], st[2], 'On your Wera tracker'));
+  if (res.closed) badge.append(chip(doc, 'Closed', '#f3f4f6', '#6b7280', 'This posting has come down'));
+  if (res.sponsors) badge.append(chip(doc, 'Sponsors visas', '#e0f2fe', '#075985', 'The posting offers visa sponsorship'));
+  if (res.early) badge.append(chip(doc, 'Early', '#dcfce7', '#166534', 'Posted in the last three days'));
+  // Not on the tracker yet: one click saves it, with its fit score to follow.
+  if (!res.status && card.title && card.company) {
+    const save = doc.createElement('button');
+    save.type = 'button';
+    save.textContent = 'Save to Wera';
+    save.style.cssText = 'border:1px solid #d1d5db;background:#fff;color:#111827;border-radius:999px;padding:1px 8px;font:inherit;cursor:pointer;';
+    save.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      save.disabled = true;
+      save.textContent = 'Saving…';
+      const item: BadgeQuery = { key: card.key, url: card.url, title: card.title, company: card.company, text: card.text };
+      void sendSafe<BadgeResult | null>({ type: 'wera:job-board-save', item }).then((r) => {
+        if (r) renderBadge(card, { ...r, key: card.key });
+        else {
+          save.disabled = false;
+          save.textContent = 'Save to Wera';
+        }
+      });
+    });
+    badge.append(save);
   }
 
   if (res.applyUrl && /^https?:\/\//i.test(res.applyUrl)) {
