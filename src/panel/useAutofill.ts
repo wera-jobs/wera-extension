@@ -53,6 +53,9 @@ function newHalt(): Halt {
   return h;
 }
 
+/** How long the panel keeps a resume file it fetched (a dashboard edit in between is picked up after this). */
+const RESUME_CACHE_MS = 10 * 60_000;
+
 export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settings, tabId: number | null, revealDelay = 700) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [plan, setPlan] = useState<PagePlan | null>(null);
@@ -66,6 +69,10 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   // The resume the user picked in the panel: it stays through Autofill and later steps.
   const picked = useRef<number | null>(null);
+  // The resume file and the letter's PDF, kept while the panel is open: pressing Autofill again, or
+  // the next step of a long form, attaches them without asking the server to make them again.
+  const resumeCache = useRef<{ key: string; at: number; file: ResumeFile | null } | null>(null);
+  const letterPdfCache = useRef<{ key: string; file: { name: string; base64: string } } | null>(null);
   const [letter, setLetter] = useState('');
   const [flow, setFlow] = useState<Flow | null>(null);
   const [thinking, setThinking] = useState(0);
@@ -135,7 +142,14 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       if (cached) void fetchProfile(true).catch(() => {});
       const [{ view, saved }, file, cover] = await Promise.all([
         cached ? Promise.resolve(cached) : fetchProfile(false),
-        api.resumeFile(jobId, picked.current).catch((e: unknown) => {
+        (async () => {
+          const key = `${jobId ?? ''}|${picked.current ?? ''}`;
+          const hit = resumeCache.current;
+          if (hit && hit.key === key && Date.now() - hit.at < RESUME_CACHE_MS) return hit.file;
+          const file = await api.resumeFile(jobId, picked.current);
+          resumeCache.current = { key, at: Date.now(), file };
+          return file;
+        })().catch((e: unknown) => {
           warn(describeError(e, "Couldn't load your resume, so Wera won't attach it"), e);
           return null;
         }),
@@ -232,10 +246,15 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     setRows((rs) => rs.map((r) => (queued.has(r.id) ? { ...r, status: 'filling', result: undefined } : r)));
     const wantsLetterFile = list.some((r) => r.checked && r.value === LETTER && r.kind === 'file');
     const forJob = wantsLetterFile ? await ensureJob() : jobId;
-    const letterFile = wantsLetterFile && forJob != null ? await api.coverLetterPdf(forJob).catch((e: unknown) => {
+    const letterKey = `${forJob ?? ''}|${files.current.letter.length}|${files.current.letter.slice(0, 64)}|${files.current.letter.slice(-64)}`;
+    const cachedPdf = letterPdfCache.current?.key === letterKey ? letterPdfCache.current.file : null;
+    const letterFile = !wantsLetterFile || forJob == null ? null : cachedPdf ?? await api.coverLetterPdf(forJob).then((f) => {
+      if (f) letterPdfCache.current = { key: letterKey, file: f };
+      return f;
+    }).catch((e: unknown) => {
       warn(describeError(e, "Couldn't make the cover letter PDF"), e);
       return null;
-    }) : null;
+    });
     const { resume: file, letter: body } = files.current;
     if (halt.current.on) return [];
     const results = await frames('apply', { items, resume: file ?? undefined, coverLetter: body || undefined, letterFile: letterFile ?? undefined, pace: 30 });
@@ -771,6 +790,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       setResume(file);
       setSelectedResumeId(doc.id);
       picked.current = doc.id;
+      resumeCache.current = null;
       const attached = latest.current.find((r) => r.value === RESUME && (r.status === 'filled' || r.status === 'already'));
       if (attached) {
         await fill([{ ...attached, checked: true }]);
@@ -796,6 +816,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       const base = resumes.find((r) => r.id === picked.current && r.job_id == null)?.id;
       await api.tailorResume(forJob, '', base);
       picked.current = null;
+      resumeCache.current = null;
       const [file, list] = await Promise.all([api.resumeFile(forJob), api.listResumes().catch(() => resumes)]);
       files.current = { ...files.current, resume: file };
       setResume(file);

@@ -172,6 +172,16 @@ describe('the Wera panel', () => {
     await screen.findByRole('button', { name: /^Autofill$/ });
   });
 
+  it('fetches the resume file once, however often Autofill is pressed', async () => {
+    const plan: PagePlan = { fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details' })], next: null, errors: 0 };
+    const { calls } = fakeBackground({ job, info: { hasForm: true }, frames: formPageFrames(plan) });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await userEvent.click(await finished());
+    await finished();
+    expect(calls.filter((c) => c.name === 'resumeFile')).toHaveLength(1);
+  });
+
   it('presses a section\'s Add once per form, however often the form is read again', async () => {
     const plan: PagePlan = {
       fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details', required: true })],
