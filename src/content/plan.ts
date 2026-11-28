@@ -6,6 +6,7 @@ import { gateOf } from './gate';
 import { startHasPassed } from '../shared/dates';
 import type { Applicant, FieldGroup, FieldPlan, FieldPurpose, FieldSnapshot, FillItem, FillResult, KnownAnswer, PagePlan, Profile, ValueSource } from '../shared/types';
 import { countryName, hasCodePicker, parsePhone } from './phone';
+import { derivedAnswer } from './derived';
 import { datePart, ENTRY_PURPOSES, entryValue, findAdder, placeEntries, type Placed, type Section } from './entries';
 import { bestAnswer } from '../shared/answers';
 import { log } from '../shared/log';
@@ -354,6 +355,28 @@ function shapePhones(all: Field[], fields: FieldPlan[], a: Applicant) {
   }
 }
 
+/**
+ * Yes/no questions the user's data settles (years asked against years
+ * worked, the office city against where they live): answered without the
+ * AI, with the reason shown. See derived.ts.
+ */
+function settledAnswers(fields: FieldPlan[], a: Applicant, opts: PlanOptions) {
+  for (const f of fields) {
+    if (f.value || f.current || f.trap || f.abroad || f.group === 'consent' || f.group === 'self_id') continue;
+    if (f.purpose && f.purpose !== 'question') continue;
+    if (!['radio', 'buttons', 'select', 'combobox', 'listbox'].includes(f.kind)) continue;
+    const yes = f.options.find((o) => /^yes\b/i.test(o.trim()));
+    const no = f.options.find((o) => /^no\b/i.test(o.trim()));
+    if (!yes || !no) continue;
+    const d = derivedAnswer(f.label, a, opts);
+    if (!d) continue;
+    f.value = d.value === 'Yes' ? yes : no;
+    f.source = 'profile';
+    f.confidence = 'high';
+    f.note = `from your details: ${d.why}`;
+  }
+}
+
 // How many blocks Wera adds at most: forms rarely want more than the recent ones.
 const MAX_BLOCKS: Record<Section, number> = { experience: 3, education: 2 };
 
@@ -405,6 +428,7 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   const fields = all.map((f) => planField(f, a, opts, placed.get(f.id))).filter((p) => p.purpose !== null || p.label !== '' || p.required);
   wholeAddress(fields, a);
   shapePhones(all, fields, a);
+  settledAnswers(fields, a, opts);
   const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   const site = doc ? siteFor(doc) : null;
   const traps = uniqueTraps([...found, ...all.flatMap((f) => [...(f.said ?? []), ...(f.trap ? [f.trap] : [])])]);
