@@ -280,22 +280,35 @@ const UPLOAD_ERR = /upload|file|format|size|invalid|failed|unsupported|rejected|
  * appeared, and either input.files still holds the file or the widget shows
  * an uploaded attachment pill/filename.
  */
-export async function verifyFileUpload(input: HTMLInputElement, fileName: string): Promise<{ ok: boolean; note?: string }> {
-  await wait(80);
+export async function verifyFileUpload(input: HTMLInputElement, fileName: string, maxWait = 4000): Promise<{ ok: boolean; note?: string }> {
+  // Dropzones (React Dropzone, Greenhouse, Ashby, Workday) often clear the input at once and
+  // show the file's name, or an error, only when their upload ends: watch for either a while.
   const box = input.closest('[data-automation-id^="formField-"], [data-automation-id="file-upload-drop-zone"], fieldset, .field, .application-field') ?? input.parentElement;
-  if (box) {
+  const rejected = () => {
+    if (!box) return false;
     for (const err of box.querySelectorAll<HTMLElement>('[role="alert"], [data-automation-id*="error" i], [class*="error" i]')) {
       if (isHidden(err)) continue;
       const t = (err.textContent ?? '').trim();
-      if (t && UPLOAD_ERR.test(t)) return { ok: false, note: 'the site rejected the file: attach it yourself' };
+      if (t && UPLOAD_ERR.test(t)) return true;
     }
+    return false;
+  };
+  const shown = () => {
+    if (!box) return false;
+    if (box.querySelector('[data-automation-id="file-upload-item"]')) return true;
+    return !!fileName && (box.textContent ?? '').toLowerCase().includes(fileName.toLowerCase());
+  };
+  const uploading = () => !!box?.querySelector('[role="progressbar"], [aria-busy="true"], [class*="uploading" i], [class*="spinner" i], [class*="progress" i], [class*="loading" i]');
+  const start = Date.now();
+  for (let first = true; ; first = false) {
+    await wait(first ? 80 : 120);
+    if (rejected()) return { ok: false, note: 'the site rejected the file: attach it yourself' };
+    if (shown() && !uploading()) return { ok: true };
+    // A plain file box keeps the file and shows no upload of its own: done.
+    if (input.files && input.files.length > 0 && !uploading() && Date.now() - start >= 150) return { ok: true };
+    if (Date.now() - start >= maxWait) break;
   }
-  if (input.files && input.files.length > 0) return { ok: true };
-  if (box) {
-    if (box.querySelector('[data-automation-id="file-upload-item"]')) return { ok: true };
-    const text = (box.textContent ?? '').toLowerCase();
-    if (fileName && text.includes(fileName.toLowerCase())) return { ok: true };
-  }
+  if (shown() || (input.files && input.files.length > 0)) return { ok: true };
   return { ok: false, note: 'the site did not accept the file: attach it yourself' };
 }
 
