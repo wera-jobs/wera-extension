@@ -439,17 +439,20 @@ export function planForm(root: ParentNode, a: Applicant | Profile, opts: PlanOpt
   };
 }
 
-// The user pressed Stop: fills under way in this frame end after the field they are on.
-let halted = false;
-let applyingNow = false;
+// Fills in this frame run one at a time (the AI's batches arrive together and would fight over
+// focus and open dropdowns). Stop ends every fill queued before it, after the field it is on: a
+// fill queued later (a new Autofill) runs, but nothing queued earlier can undo the Stop.
+let stops = 0;
+let applyingNow = 0;
+let queue: Promise<unknown> = Promise.resolve();
 
 /** Whether Wera is currently applying values to this frame (so watchPage ignores synthetic change events). */
 export function isApplying(): boolean {
-  return applyingNow;
+  return applyingNow > 0;
 }
 
 export function stopFilling() {
-  halted = true;
+  stops++;
 }
 
 export interface ApplyOptions {
@@ -467,19 +470,27 @@ export interface ApplyOptions {
  * shows (the user chose this value for it). It never submits. Fields
  * that are gone (the page changed) are reported for review.
  */
-export async function applyItems(root: ParentNode, items: FillItem[], opts: ApplyOptions = {}): Promise<FillResult[]> {
+export function applyItems(root: ParentNode, items: FillItem[], opts: ApplyOptions = {}): Promise<FillResult[]> {
+  const run = stops;
+  applyingNow++;
+  const next = queue.then(() => applyNow(root, items, opts, run)).finally(() => {
+    applyingNow--;
+  });
+  queue = next.catch(() => {});
+  return next;
+}
+
+async function applyNow(root: ParentNode, items: FillItem[], opts: ApplyOptions, run: number): Promise<FillResult[]> {
   const fields = new Map(collectFields(root).map((f) => [f.id, f]));
   const doc = (root as Node).nodeType === 9 ? (root as Document) : (root as Node).ownerDocument;
   // Some sites need time between fields to keep up (Workday re-renders after each one).
   const pace = Math.max(opts.pace ?? 0, (doc && siteFor(doc)?.pace) || 0);
   const user = doc ? watchUser(doc) : null;
   const out: FillResult[] = [];
-  halted = false;
-  applyingNow = true;
   try {
     for (const item of items) {
       // Stopped: what is left is reported as not filled, and nothing more is touched.
-      if (halted) {
+      if (stops !== run) {
         const res: FillResult = { id: item.id, label: item.label ?? '', purpose: null, status: 'skipped', required: false };
         out.push(res);
         opts.onProgress?.(res);
@@ -575,7 +586,6 @@ export async function applyItems(root: ParentNode, items: FillItem[], opts: Appl
       if (pace) await wait(pace);
     }
   } finally {
-    applyingNow = false;
     user?.stop();
   }
   // Filling moves the focus from box to box: none is left in the last one, where Wera's button would show.
