@@ -44,7 +44,7 @@ if (!window.__weraBridge) {
   window.addEventListener('message', (e: MessageEvent<BridgeMessage & { source?: string }>) => {
     if (e.source !== window || e.origin !== location.origin || e.data?.source !== BRIDGE_FROM_DASHBOARD) return;
     const { type } = e.data;
-    if (type === 'open-job' || type === 'changed') {
+    if (type === 'open-job' || type === 'changed' || type === 'queue') {
       void sendSafe({ ...e.data, type: `wera:dashboard-${type}` });
     } else if (type === 'connect') {
       // The connect page's key for this account: the background checks it with the server, then keeps it.

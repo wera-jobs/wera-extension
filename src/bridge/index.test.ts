@@ -21,6 +21,10 @@ describe('dashboard bridge script', () => {
     post({ source: 'wera-dashboard', type: 'open-job', jobId: 1, url: 'https://evil.example' }, 'https://evil.example');
     post({ source: 'someone-else', type: 'open-job', jobId: 2, url: 'https://x.example' });
     expect(sendMessage.mock.calls).toEqual([[{ source: 'wera-dashboard', type: 'wera:dashboard-open-job', jobId: 9, url: 'https://jobs.example/9' }]]);
+    // "Queue in the extension": the jobs go to the background's queue.
+    post({ source: 'wera-dashboard', type: 'queue', jobs: [{ jobId: 9, url: 'https://jobs.example/9', title: 'SRE', company: 'Acme' }] });
+    expect(sendMessage.mock.calls[1]).toEqual([{ source: 'wera-dashboard', type: 'wera:dashboard-queue', jobs: [{ jobId: 9, url: 'https://jobs.example/9', title: 'SRE', company: 'Acme' }] }]);
+    sendMessage.mockClear();
 
     const seen: unknown[] = [];
     window.addEventListener('message', (e) => seen.push(e.data));

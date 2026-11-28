@@ -10,6 +10,8 @@ const SCRIPT_ID = 'wera-bridge';
 export type BridgeMessage =
   | { type: 'open-job'; jobId: number; url: string }
   | { type: 'changed'; what?: string }
+  /** The dashboard's "Queue in the extension": jobs to line up in the application queue. */
+  | { type: 'queue'; jobs: { jobId: number; url: string; title: string; company: string }[] }
   /** The dashboard's connect page: a key for the account signed in there. */
   | { type: 'connect'; token: string };
 

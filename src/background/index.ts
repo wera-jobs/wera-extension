@@ -8,7 +8,7 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
-import { passQueueTab } from '../shared/queue';
+import { addToQueue, passQueueTab } from '../shared/queue';
 import { cleanRules, RULES_EVERY_MS, RULES_KEY } from '../shared/remoteRules';
 import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob, pendingServer } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
@@ -164,6 +164,22 @@ chrome.runtime.onMessage.addListener((msg: { type?: string }, sender) => {
     if (!s || from !== s.server) return; // only the user's own Wera
     void clearProfileCache();
     clearBadgeCache();
+  });
+  return false;
+});
+
+// "Queue in the extension" in the dashboard: line the jobs up in the application queue.
+chrome.runtime.onMessage.addListener((msg: { type?: string; jobs?: unknown }, sender) => {
+  if (msg?.type !== 'wera:dashboard-queue' || sender.tab?.id == null || !Array.isArray(msg.jobs)) return false;
+  const jobs = msg.jobs as unknown[];
+  void loadSession().then(async (s) => {
+    const from = sender.origin ?? (sender.url ? new URL(sender.url).origin : '');
+    if (!s || from !== s.server) return; // only the user's own Wera
+    for (const j of jobs.slice(0, 30)) {
+      const { jobId, url, title, company } = (j ?? {}) as Record<string, unknown>;
+      if (typeof jobId !== 'number' || typeof url !== 'string' || !/^https?:\/\//.test(url) || typeof title !== 'string' || typeof company !== 'string') continue;
+      await addToQueue({ jobId, url, title: title.slice(0, 200), company: company.slice(0, 200) });
+    }
   });
   return false;
 });
