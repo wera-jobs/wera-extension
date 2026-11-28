@@ -71,7 +71,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const picked = useRef<number | null>(null);
   // The resume file and the letter's PDF, kept while the panel is open: pressing Autofill again, or
   // the next step of a long form, attaches them without asking the server to make them again.
-  const resumeCache = useRef<{ key: string; at: number; file: ResumeFile | null } | null>(null);
+  const resumeCache = useRef<{ key: string; at: number; file: Promise<ResumeFile | null> } | null>(null);
   const letterPdfCache = useRef<{ key: string; file: { name: string; base64: string } } | null>(null);
   const [letter, setLetter] = useState('');
   const [flow, setFlow] = useState<Flow | null>(null);
@@ -120,6 +120,31 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     setRows((rs) => rs.map((r) => by.get(r.id) ?? r));
   }, []);
 
+  // On an application, what a fill needs from Wera loads before the press: the details and the
+  // resume file (which the server makes as a PDF). Nothing is filled or sent to the AI.
+  const warmed = useRef('');
+  const onForm = !!page.info?.hasForm && !page.loading;
+  useEffect(() => {
+    const key = `${jobId ?? ''}|${picked.current ?? ''}`;
+    if (!onForm || warmed.current === key) return;
+    const first = warmed.current === '';
+    warmed.current = key;
+    const serverKey = api.dashboardUrl('');
+    if (first) void loadProfileCache(serverKey).then(async (cached) => {
+      if (!cached) {
+        const [v, s] = await Promise.all([api.applicant(), api.answers().catch(() => [] as SavedAnswer[])]);
+        await saveProfileCache(serverKey, v, s);
+      }
+    }).catch(() => {});
+    if (resumeCache.current?.key !== key) {
+      const file = api.resumeFile(jobId, picked.current);
+      resumeCache.current = { key, at: Date.now(), file };
+      file.catch(() => {
+        resumeCache.current = null;
+      });
+    }
+  }, [onForm, api, jobId]);
+
   /** Reads the form in every frame (and adds job and school blocks the resume needs, once). */
   const read = useCallback(async (): Promise<{ plan: PagePlan; rows: Row[] } | null> => {
     setPhase('reading');
@@ -146,8 +171,11 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
           const key = `${jobId ?? ''}|${picked.current ?? ''}`;
           const hit = resumeCache.current;
           if (hit && hit.key === key && Date.now() - hit.at < RESUME_CACHE_MS) return hit.file;
-          const file = await api.resumeFile(jobId, picked.current);
+          const file = api.resumeFile(jobId, picked.current);
           resumeCache.current = { key, at: Date.now(), file };
+          file.catch(() => {
+            resumeCache.current = null;
+          });
           return file;
         })().catch((e: unknown) => {
           warn(describeError(e, "Couldn't load your resume, so Wera won't attach it"), e);
@@ -520,23 +548,26 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     };
     if (stopped()) return;
     setPhase('filling');
+    // The job this application is for, saved now (reading the posting may take the AI a while):
+    // the letter and the tracker's count wait on it, the fields do not.
+    const jobSoon = ensureJob().catch(() => null);
     try {
+      // The AI starts on the page's questions at once, while what Wera knows goes in: its answers
+      // land as they come (fills in a frame run one at a time). Follow-ups wait for the answers
+      // they follow.
+      const firsts = got.rows.filter((r) => !isFollowUp(r));
+      setThinking(firsts.filter(needsSuggestion).length + firsts.filter(needsDraft).length + (firsts.some(needsLetter) && settings.aiQuestions ? 1 : 0));
+      const ai = Promise.all([suggestAndFill(firsts), draftAndFill(firsts), letterAndFill(got.rows)]);
       // The files first: many systems read an uploaded resume and fill the form themselves, over what is there.
       const docs = got.rows.filter((r) => r.group === 'documents');
       await fill(docs);
-      await fill(got.rows.filter((r) => r.group !== 'documents'));
-      if (stopped()) return;
-      // Answers can reveal more fields, and so can the AI's below.
-      let now = await rescan();
-      const all = [...got.rows, ...(await revealed(now, got.rows))];
+      await fill(got.rows.filter((r) => r.group !== 'documents' && r.checked));
       if (stopped()) return;
       setPhase('thinking');
-      setThinking(all.filter(needsSuggestion).length + all.filter(needsDraft).length + (all.some(needsLetter) && settings.aiQuestions ? 1 : 0));
-      // Follow-ups wait for the answers they follow. Fields the page revealed
-      // are left out: they were added last, not beside their question.
-      const paged = new Set(got.rows.map((r) => r.id));
-      const firsts = all.filter((r) => !(paged.has(r.id) && isFollowUp(r)));
-      await Promise.all([suggestAndFill(firsts), draftAndFill(firsts), letterAndFill(all)]);
+      // Answers can reveal more fields, and so can the AI's below.
+      let now = await rescan();
+      const extra = await revealed(now, got.rows);
+      await Promise.all([ai, extra.length ? Promise.all([suggestAndFill(extra), draftAndFill(extra), letterAndFill(extra)]) : null]);
       if (stopped()) return;
       await followUps(got.rows);
       for (let round = 0; round < 2 && !mine.on; round++) {
@@ -549,7 +580,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       setThinking(0);
       await repair(now);
       if (stopped()) return;
-      const forJob = await ensureJob();
+      const forJob = await jobSoon;
       const filled = latest.current.filter((x) => x.status === 'filled');
       // Which resume went in (and whether a letter), for the tracker's record of this application.
       const resume = filled.some((x) => x.value === RESUME) ? files.current.resume : null;

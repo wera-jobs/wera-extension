@@ -179,7 +179,8 @@ describe('the Wera panel', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
     await userEvent.click(await finished());
     await finished();
-    expect(calls.filter((c) => c.name === 'resumeFile')).toHaveLength(1);
+    // Loaded once for this job (perhaps also before the job was known), never again per press.
+    expect(calls.filter((c) => c.name === 'resumeFile' && c.args[0] === job.id)).toHaveLength(1);
   });
 
   it('presses a section\'s Add once per form, however often the form is read again', async () => {
