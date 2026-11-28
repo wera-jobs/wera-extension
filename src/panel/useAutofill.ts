@@ -5,6 +5,7 @@
 // Wera never submits; what it could not settle is listed for the user.
 // Anything that fails along the way is said in the panel (warnings), and
 // written to the log (Settings > Debug log, Copy diagnostics).
+import { unsupportedNote } from '../shared/api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LetterSteer, ResumeFile, ResumeSummary, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
 import { answerKey, bestAnswer, type SavedAnswer } from '../shared/answers';
@@ -383,7 +384,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
         if (a?.needs_input) merge([{ ...r, note: `add yourself: ${a.needs_input}` }]);
         return;
       }
-      const note = a.needs_input ? `drafted by Wera: read it, and add ${a.needs_input}` : 'drafted by Wera: read it';
+      const gap = unsupportedNote(a.unsupported);
+      const note = a.needs_input ? `drafted by Wera: read it, and add ${a.needs_input}` : gap ? `drafted by Wera: ${gap}` : 'drafted by Wera: read it';
       const row: Row = { ...r, value: a.answer, source: 'ai', note, checked: true, drafted: true };
       merge([row]);
       await fill([row]);

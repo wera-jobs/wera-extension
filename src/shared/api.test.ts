@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, splitNeedsInput, WeraApi } from './api';
+import { ApiError, splitNeedsInput, unsupportedNote, WeraApi } from './api';
 import { normalizeServer } from './storage';
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
@@ -150,6 +150,17 @@ describe('the next best match', () => {
 
   it('is nothing when nothing is left', async () => {
     await expect(api([job(1)]).nextMatch(1)).resolves.toBeNull();
+  });
+});
+
+describe('what a question assumes', () => {
+  it('passes on the tools the person\'s data never mentions, as a note to check the draft', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(json(200, { answer: 'I build on AWS. I have not used Terraform yet.', unsupported: ['Terraform'] }));
+    const got = await new WeraApi('https://wera.example', 'tok', fetcher).answer('Your experience in AWS (with Terraform)?', 3);
+    expect(got).toEqual({ answer: 'I build on AWS. I have not used Terraform yet.', unsupported: ['Terraform'] });
+    expect(unsupportedNote(got.unsupported)).toBe("this asks about Terraform, which your resume doesn't mention: check the draft claims nothing you haven't done");
+    expect(unsupportedNote(['Kafka', 'Flink', 'Scala'])).toContain('Kafka, Flink and Scala');
+    expect(unsupportedNote(undefined)).toBe('');
   });
 });
 

@@ -3,6 +3,7 @@
 // clicking it drafts an answer from the user's profile, resume, earlier
 // answers and the job, which the user can rework (shorter, longer, their
 // own steer) and insert. Nothing is typed into the page until they insert.
+import { unsupportedNote } from '../shared/api';
 import { classify } from '../content/classify';
 import { pageKind } from '../content/detect';
 import { collectFields, isRichText, type Field } from '../content/fields';
@@ -140,6 +141,8 @@ interface Draft {
   needs: string;
   /** Why drafting failed (a draft from before stays). */
   error?: string;
+  /** What the question asks about that the person's data never mentions. */
+  check?: string;
 }
 
 /** Starts watching the frame's fields for open questions; returns a stop. */
@@ -346,9 +349,10 @@ export function startAssist(doc: Document): () => void {
 
     const show = (d: Draft) => {
       current = d;
-      draftBox.className = d.needs || d.error ? 'draft need' : 'draft';
+      draftBox.className = d.needs || d.error || d.check ? 'draft need' : 'draft';
       draftBox.textContent = d.error ? (d.text ? `${d.error}\n\n${d.text}` : d.error)
         : d.needs && d.text ? `${d.text}\n\nAdd this yourself: ${d.needs}`
+        : d.check && d.text ? `${d.text}\n\nCheck: ${d.check}.`
         : d.needs ? `Wera needs this from you first: ${d.needs}`
         : d.text || "Wera couldn't draft this one. Try again, or tell it what to say.";
       meta.textContent = d.text ? `${d.text.split(/\s+/).filter(Boolean).length} words · from your profile, resume and earlier answers` : '';
@@ -367,7 +371,7 @@ export function startAssist(doc: Document): () => void {
       const ctx = await getContext();
       try {
         const r = await remoteApi(server).answer(label, ctx?.jobId ?? null, length, ctx?.posting ?? undefined, rework);
-        show({ text: (r.answer ?? '').trim(), needs: r.needs_input ?? '' });
+        show({ text: (r.answer ?? '').trim(), needs: r.needs_input ?? '', check: unsupportedNote(r.unsupported) });
       } catch (e) {
         log.warn('assist', 'drafting failed', e);
         show({ text: current.text, needs: '', error: describeError(e, rework ? "Couldn't rework the answer" : "Couldn't draft an answer") });
