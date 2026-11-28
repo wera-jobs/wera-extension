@@ -56,3 +56,22 @@ describe('My details', () => {
     expect(within(saved).getByText('No saved answer matches.')).toBeInTheDocument();
   });
 });
+
+describe('editing my details in the panel', () => {
+  it('changes a detail and the veteran status (three states), and saves them to Wera', async () => {
+    const saveApplicant = vi.fn(async (a: Record<string, string>) => ({ applicant: a, saved: true }));
+    const api = {
+      applicant: vi.fn(async () => view({ first_name: 'Ada', city: 'Dallas', veteran: 'I am not a protected veteran' })),
+      dashboardUrl: (p: string) => `https://w${p}`, answers: vi.fn(async () => []), saveApplicant,
+    } as unknown as WeraApi;
+    render(<DetailsView api={api} onClose={() => {}} />);
+    // The old dashboard value reads as "not a veteran".
+    expect(await screen.findByRole('button', { name: 'Copy Veteran status: Not a veteran' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Austin' } });
+    fireEvent.change(screen.getByLabelText('Veteran status'), { target: { value: 'I am a veteran, but not a protected veteran' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saveApplicant).toHaveBeenCalledWith(expect.objectContaining({ first_name: 'Ada', city: 'Austin', veteran: 'I am a veteran, but not a protected veteran' })));
+    expect(await screen.findByRole('button', { name: 'Copy City: Austin' })).toBeInTheDocument();
+  });
+});

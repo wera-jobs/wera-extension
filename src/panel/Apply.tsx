@@ -20,7 +20,6 @@ import { TailoredLine, useTailoredScore } from './Tailored';
 /** An application: Autofill, then what still needs the user, then Continue on multi-page forms. */
 export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & { api: WeraApi }) {
   const a = useAutofill(api, page, settings, tabId);
-  const [showFilled, setShowFilled] = useState(false);
   const [reporting, setReporting] = useState(false);
 
   // The toolbar shortcut or right-click menu asked to fill.
@@ -74,14 +73,7 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
           </button>
         )}
       </div>
-      {total > 0 && (
-        <div className="flex items-center gap-2 text-[11px] text-muted">
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-            <span className="block h-full rounded-full bg-good transition-all duration-300" style={{ width: `${(100 * filled.length) / total}%` }} />
-          </span>
-          <span className="font-mono">{filled.length}/{total}</span>
-        </div>
-      )}
+      {total > 0 && <Completion rows={a.rows} open={done} />}
       {a.phase === 'idle' && !a.plan && (
         <p className="text-center text-[11px] text-faint">Fills your details, attaches your resume and drafts the open questions. You review and submit.</p>
       )}
@@ -129,26 +121,6 @@ export function Apply({ api, page, settings, tabId, fillRequest }: PanelProps & 
 
       <Docs api={api} page={page} a={a} />
 
-      {filled.length > 0 && (
-        <div>
-          <button type="button" className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-text" onClick={() => setShowFilled((v) => !v)}>
-            <ChevronDown className={clsx('size-3 transition-transform', showFilled && 'rotate-180')} /> What Wera filled ({filled.length})
-          </button>
-          {showFilled && (
-            <ul className="mt-1.5 space-y-1">
-              {filled.map((r) => (
-                <li key={r.id}>
-                  <button type="button" onClick={() => void frames('highlight', r.id)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] hover:bg-surface-2">
-                    <CheckCircle2 className={clsx('size-3 shrink-0', r.status === 'filled' ? 'text-good' : 'text-faint')} />
-                    <span className="min-w-0 flex-1 truncate text-muted">{rowLabel(r)}</span>
-                    <span className="max-w-[45%] truncate text-text">{r.value === RESUME ? 'resume' : r.value === LETTER ? 'cover letter' : r.result || r.value}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
       <div className="flex items-center gap-3">
         <a href={api.dashboardUrl('/profile#application')} target="_blank" rel="noreferrer" className="text-[11px] text-faint hover:text-text hover:underline">
           Your details and saved answers
@@ -373,6 +345,82 @@ function LetterCard({ a, writing, setWriting }: { a: ReturnType<typeof useAutofi
               </select>
               <Button className="px-2 py-1" busy={writing} onClick={() => write({ tone, length })}>{!writing && <RefreshCw className="size-3.5" />} Write again</Button>
             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A field's state as the completion card shows it. */
+function stateOf(r: Row): 'done' | 'check' | 'todo' | 'filling' {
+  if (r.status === 'filling') return 'filling';
+  if (r.status === 'filled' && (r.drafted || r.chosen)) return 'check';
+  if (r.status === 'filled' || r.status === 'already') return 'done';
+  return 'todo';
+}
+
+function CompletionRow({ r }: { r: Row }) {
+  const st = stateOf(r);
+  const value = r.value === RESUME ? 'resume' : r.value === LETTER ? 'cover letter' : r.result || r.value;
+  return (
+    <li>
+      <button type="button" onClick={() => void frames('highlight', r.id)} title="Show it on the page"
+        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] hover:bg-surface-2">
+        {st === 'done' ? <CheckCircle2 className="size-3.5 shrink-0 text-good" aria-label="filled" />
+          : st === 'check' ? <CheckCircle2 className="size-3.5 shrink-0 text-accent-2" aria-label="filled, check it" />
+          : st === 'filling' ? <span className="size-3.5 shrink-0 animate-pulse rounded-full bg-accent/40" aria-label="filling" />
+          : <span className="grid size-3.5 shrink-0 place-items-center rounded-full border border-border text-faint" aria-label="not filled">–</span>}
+        <span className={clsx('min-w-0 flex-1 truncate', st === 'todo' ? 'text-text' : 'text-muted')}>{rowLabel(r)}</span>
+        {st !== 'todo' && value && <span className="max-w-[45%] truncate text-text">{value}</span>}
+      </button>
+    </li>
+  );
+}
+
+/**
+ * How complete the form is: the share of required fields filled, then
+ * each required field and (folded) each optional one, with its state.
+ * A row shows its field on the page.
+ */
+function Completion({ rows, open: start }: { rows: Row[]; open: boolean }) {
+  const [open, setOpen] = useState(start);
+  const [opened, setOpened] = useState(start);
+  if (start && !opened) {
+    setOpened(true);
+    setOpen(true);
+  }
+  const [showOptional, setShowOptional] = useState(false);
+  const required = rows.filter((r) => r.required);
+  const optional = rows.filter((r) => !r.required);
+  const doneOf = (list: Row[]) => list.filter((r) => stateOf(r) === 'done' || stateOf(r) === 'check').length;
+  const base = required.length ? required : rows;
+  const pct = base.length ? Math.round((100 * doneOf(base)) / base.length) : 0;
+  return (
+    <div className="rounded-card border border-border bg-surface text-xs">
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+        <span className="font-medium">Completion</span>
+        <span className="font-mono text-muted">{pct}%</span>
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+          <span className="block h-full rounded-full bg-good transition-all duration-300" style={{ width: `${pct}%` }} />
+        </span>
+        <ChevronDown className={clsx('size-3 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-border px-2 py-2">
+          {required.length > 0 && (
+            <section aria-label="Required fields">
+              <h4 className="px-1.5 text-[10px] font-semibold tracking-wide text-faint uppercase">Required ({doneOf(required)}/{required.length})</h4>
+              <ul>{required.map((r) => <CompletionRow key={r.id} r={r} />)}</ul>
+            </section>
+          )}
+          {optional.length > 0 && (
+            <section aria-label="Optional fields">
+              <button type="button" onClick={() => setShowOptional((v) => !v)} className="flex w-full items-center gap-1 px-1.5 text-[10px] font-semibold tracking-wide text-faint uppercase hover:text-text">
+                Optional ({doneOf(optional)}/{optional.length}) <ChevronDown className={clsx('size-3 transition-transform', showOptional && 'rotate-180')} />
+              </button>
+              {showOptional && <ul>{optional.map((r) => <CompletionRow key={r.id} r={r} />)}</ul>}
+            </section>
           )}
         </div>
       )}

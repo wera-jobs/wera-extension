@@ -4,12 +4,12 @@
 // posting, the job's fit and Save. Resume and cover letter sit under it.
 // Deeper work (editing the resume, details, the letter) opens in the
 // dashboard. The views live in Apply.tsx, JobViews.tsx and SettingsView.tsx.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { ChevronsRight, IdCard, Settings2 } from 'lucide-react';
+import { ChevronsRight, GraduationCap, IdCard, MessageSquare, Settings2, X } from 'lucide-react';
 import type { WeraApi } from '../shared/api';
 import type { Settings } from '../shared/settings';
-import { Apply } from './Apply';
+import { Apply, ReportProblem } from './Apply';
 import { Fit, Posting, QuickMatch, Submitted } from './JobViews';
 import { JobHeader } from './JobHeader';
 import { Referrals } from './Referrals';
@@ -47,6 +47,7 @@ export function Panel(props: PanelProps) {
   const { api, page, open, onOpen } = props;
   const [menu, setMenu] = useState(false);
   const [details, setDetails] = useState(false);
+  const [feedback, setFeedback] = useState(false);
   const kind = page.info?.hasForm ? 'form' : page.handle.kind;
 
   // Collapsed: Wera's mark on a tab at the right edge, which the user can move up and down.
@@ -69,13 +70,19 @@ export function Panel(props: PanelProps) {
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3.5">
         <Logo />
         {api && (
-          <button type="button" className={clsx('ml-auto grid size-8 place-items-center rounded-lg hover:bg-surface-2', details ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
-            onClick={() => { setDetails((d) => !d); setMenu(false); }} aria-label="My details" aria-pressed={details} title="My details, to copy">
+          <button type="button" className={clsx('ml-auto grid size-8 place-items-center rounded-lg hover:bg-surface-2', feedback ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
+            onClick={() => { setFeedback((f) => !f); setDetails(false); setMenu(false); }} aria-label="Feedback" aria-pressed={feedback} title="Tell us what went wrong or what you'd like">
+            <MessageSquare className="size-4" />
+          </button>
+        )}
+        {api && (
+          <button type="button" className={clsx('grid size-8 place-items-center rounded-lg hover:bg-surface-2', details ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
+            onClick={() => { setDetails((d) => !d); setMenu(false); setFeedback(false); }} aria-label="My details" aria-pressed={details} title="My details, to copy or change">
             <IdCard className="size-4" />
           </button>
         )}
         <button type="button" className={clsx(!api && 'ml-auto', 'grid size-8 place-items-center rounded-lg hover:bg-surface-2', menu ? 'bg-surface-2 text-accent' : 'text-muted hover:text-text')}
-          onClick={() => { setMenu((m) => !m); setDetails(false); }} aria-label="Settings" aria-pressed={menu} title="Settings">
+          onClick={() => { setMenu((m) => !m); setDetails(false); setFeedback(false); }} aria-label="Settings" aria-pressed={menu} title="Settings">
           <Settings2 className="size-4" />
         </button>
         <button type="button" className="grid size-8 place-items-center rounded-lg border border-border text-text hover:border-accent/40 hover:bg-surface-2" onClick={() => onOpen(false)} aria-label="Collapse the Wera panel" title="Collapse to the edge (Alt+Shift+W)">
@@ -83,7 +90,8 @@ export function Panel(props: PanelProps) {
         </button>
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 [scrollbar-width:thin]">
-        {menu ? <SettingsView {...props} onClose={() => setMenu(false)} />
+        {feedback && api ? <ReportProblem api={api} a={{ phase: 'idle', plan: null, rows: [], error: '', warnings: [] }} onClose={() => setFeedback(false)} />
+          : menu ? <SettingsView {...props} onClose={() => setMenu(false)} />
           : details && api ? <DetailsView api={api} onClose={() => setDetails(false)} />
           : !api ? <SignedOut {...props} kind={kind} />
           : <Main {...props} api={api} kind={kind} />}
@@ -125,6 +133,7 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
   };
   return (
     <>
+      {viewKind !== 'form' && <Practice api={api} />}
       {page.submitted && <Submitted api={api} page={page} />}
       <JobHeader api={api} page={page} kind={viewKind} />
       {page.error && <Notice tone="bad">{page.error}</Notice>}
@@ -138,5 +147,31 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
           description={page.info?.draft?.description || page.info?.text || ''} />
       )}
     </>
+  );
+}
+
+const PRACTICED = 'wera.practiceSeen';
+
+/** New to Wera: a practice application on Wera's own site, where nothing is sent. Shown until dismissed or tried. */
+function Practice({ api }: { api: WeraApi }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    void chrome.storage.local.get(PRACTICED).then((g) => setShow(!g[PRACTICED]), () => {});
+  }, []);
+  if (!show) return null;
+  const done = () => {
+    setShow(false);
+    void chrome.storage.local.set({ [PRACTICED]: Date.now() }).catch(() => {});
+  };
+  return (
+    <div className="flex items-start gap-2 rounded-card border border-accent/25 bg-accent/5 px-3 py-2.5 text-xs">
+      <GraduationCap className="mt-0.5 size-4 shrink-0 text-accent" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-text">New to Wera? Try it on a practice application.</p>
+        <p className="mt-0.5 text-muted">See Autofill fill a sample form, what it asks you to check, and where to change your details. Nothing is sent.</p>
+        <a href={api.dashboardUrl('/practice')} target="_blank" rel="noreferrer" onClick={done} className="mt-1 inline-block font-medium text-accent hover:underline">Open the practice form</a>
+      </div>
+      <button type="button" aria-label="Not now" onClick={done} className="text-faint hover:text-text"><X className="size-3.5" /></button>
+    </div>
   );
 }

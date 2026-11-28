@@ -285,6 +285,11 @@ describe('the Wera panel', () => {
     expect(applied.flat().some((i) => i.id === 'w3' || i.id === 'w5')).toBe(false);
     expect(calls.filter((c) => c.name === 'suggest')).toHaveLength(1);
     expect(screen.getByText("Wera's guess: None")).toBeInTheDocument();
+    // Completion: the required fields first, each with its state; the optional ones folded.
+    const required = await screen.findByRole('region', { name: 'Required fields' });
+    expect(within(required).getByRole('heading')).toHaveTextContent('Required (2/3)');
+    expect(within(required).getByLabelText('not filled')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Optional \(1\/2\)/ })).toBeInTheDocument();
     expect(screen.getByText(/Wera drafted this answer/)).toBeInTheDocument();
     expect(screen.getByText('agree yourself after reading it')).toBeInTheDocument();
     expect(screen.getByText(/press/)).toHaveTextContent('Submit application');
@@ -551,6 +556,19 @@ describe('the Wera panel', () => {
     // "I have it": the skill goes on the profile and the job is scored again.
     await userEvent.click(screen.getByRole('button', { name: '+ Terraform' }));
     await waitFor(() => expect(calls.find((c) => c.name === 'addSkill')?.args).toEqual(['Terraform', scored.id]));
+  });
+
+  it('offers a practice application once, and takes feedback from the header', async () => {
+    const { store, calls } = fakeBackground({ job, api: { reportProblem: () => ({ id: 1 }) } });
+    render(<App handle={handle('posting')} show={show()} />);
+    expect(await screen.findByRole('link', { name: 'Open the practice form' })).toHaveAttribute('href', 'https://wera.example/practice');
+    await userEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByText(/practice application/)).toBeNull();
+    await waitFor(() => expect(store['wera.practiceSeen']).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    await userEvent.type(await screen.findByRole('textbox'), 'The school list was empty.');
+    await userEvent.click(screen.getByRole('button', { name: /Send/ }));
+    await waitFor(() => expect(calls.find((c) => c.name === 'reportProblem')?.args[0]).toMatchObject({ note: 'The school list was empty.' }));
   });
 
   it('changes the tracker status and follows the company from the job card', async () => {
