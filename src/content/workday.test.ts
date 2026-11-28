@@ -110,10 +110,10 @@ describe('a newer Workday application', () => {
 });
 
 describe('a Workday account page', () => {
-  it('says what to do first, and fills only the email', () => {
+  it('says what to do first; Autofill fills only the email (the password is the panel\'s account help)', () => {
     document.body.innerHTML = WORKDAY_ACCOUNT;
     const plan = planForm(document, profile);
-    expect(plan.gate).toMatch(/Create one here/);
+    expect(plan.gate).toMatch(/Wera fills your email and your job-site password/);
     expect(plan.fields.map((f) => [f.purpose, f.value])).toEqual([['email', 'jesse@example.com']]);
   });
 });
