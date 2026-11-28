@@ -8,7 +8,7 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
-import { DEFAULT_SERVER, loadSession, passTabJob } from '../shared/storage';
+import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
 import type { ContentEvent } from '../shared/types';
 import { handleJobRequest } from './jobs';
@@ -16,7 +16,10 @@ import { frameField } from './frames';
 import { ensurePanel, handlePanel } from './panel';
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({ id: 'wera-fill', title: 'Fill this application with Wera', contexts: ['page', 'editable'] });
+  // An update keeps the old menu: recreating it with the same id would fail.
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'wera-fill', title: 'Fill this application with Wera', contexts: ['page', 'editable'] }, () => void chrome.runtime.lastError);
+  });
   // Older installs registered the Wera button per site, and could hide Wera on a site for a week.
   void chrome.scripting.unregisterContentScripts({ ids: ['wera-launcher'] }).catch(() => {});
   void chrome.storage.local.remove('wera.launcherDismissed').catch(() => {});
@@ -24,6 +27,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onStartup.addListener(() => void syncAll());
+chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId).catch(() => {}));
 
 // The panel (a page script) keeps where a multi-page application is in session storage.
 void chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => {});

@@ -106,3 +106,20 @@ export async function notePage(tabId: number, patch: Partial<TabPage>): Promise<
   await chrome.storage.session.set({ [TAB_PAGES]: map });
   return next;
 }
+
+/** Per-tab maps in session storage, pruned when their tab closes. */
+const PER_TAB = [TAB_JOBS, TAB_PAGES, 'wera.flows', 'wera.applying', 'wera.tabOpen'];
+
+/** Forgets a closed tab in every per-tab map. */
+export async function forgetTab(tabId: number): Promise<void> {
+  const got = await chrome.storage.session.get(PER_TAB);
+  const next: Record<string, unknown> = {};
+  for (const key of PER_TAB) {
+    const map = got[key] as Record<string, unknown> | undefined;
+    if (map && String(tabId) in map) {
+      const { [String(tabId)]: _gone, ...rest } = map;
+      next[key] = rest;
+    }
+  }
+  if (Object.keys(next).length) await chrome.storage.session.set(next);
+}
