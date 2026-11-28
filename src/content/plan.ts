@@ -390,6 +390,8 @@ export async function addEntries(root: ParentNode, section: Section, count: numb
       await wait(Math.min(50, maxWait));
       grew = countIn() > before;
     }
+    // No block Wera can read appeared (a dialog, a layout it doesn't know): pressing again would only add empty ones.
+    if (!grew) break;
     if (settle > 0) await wait(settle);
   }
   return added;

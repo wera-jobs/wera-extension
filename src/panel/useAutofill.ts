@@ -75,7 +75,9 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const bank = useRef<SavedAnswer[]>([]);
   const scanReq = useRef<ScanRequest | null>(null);
   const sources = useRef<Record<string, string>>({});
-  const addedBlocks = useRef(false);
+  // Sections Wera has pressed Add in, by form address: never again for that form, whatever
+  // re-renders look like a new step (an Add that opens a dialog, blocks Wera can't read).
+  const addedFor = useRef(new Set<string>());
   // The resume and letter as last read: a fill started in the same run as the read must see them.
   const files = useRef<{ resume: ResumeFile | null; letter: string }>({ resume: null, letter: '' });
   // The rows as last rendered, for work that finishes after several updates.
@@ -154,16 +156,20 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       };
       scanReq.current = req;
       let p = await frames('scan', req);
-      if (p.adders?.length && !addedBlocks.current) {
-        addedBlocks.current = true;
+      const blockKey = (ad: NonNullable<PagePlan['adders']>[number]) => `${location.pathname}|${ad.frameId ?? 0}|${ad.section}`;
+      const todo = (p.adders ?? []).filter((ad) => !addedFor.current.has(blockKey(ad)));
+      if (todo.length) {
         let added = 0;
-        for (const ad of p.adders) added += await frames('add-entries', ad.frameId ?? 0, ad.section, ad.missing);
+        for (const ad of todo) {
+          addedFor.current.add(blockKey(ad));
+          added += await frames('add-entries', ad.frameId ?? 0, ad.section, ad.missing);
+        }
         if (added) {
           log.info('autofill', `added ${added} job/school block(s) for the resume`);
           await wait(200);
           p = await frames('scan', req);
           // Slow ATSs (Workday) may still be mounting the new block's inputs: give them one more settle pass.
-          if (p.adders?.length) {
+          if (p.adders?.some((ad) => todo.some((t) => t.section === ad.section))) {
             await wait(600);
             p = await frames('scan', req);
           }
@@ -585,7 +591,6 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       return;
     }
     counted.current = false;
-    addedBlocks.current = false;
     if (tabId != null) {
       const f = (await loadFlow(tabId, host).catch(() => null)) ?? flow ?? { runId: 0, host, jobId, pages: 1, continuing: false, at: Date.now() };
       const next = { ...f, continuing: true, pages: f.pages + 1 };
@@ -677,8 +682,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   useEffect(() => {
     if (started2 && page.newStep > 0 && settings.autoContinue) {
       counted.current = false;
-      addedBlocks.current = false;
-      // A step the page rendered on its own (an external change): fill it now.
+        // A step the page rendered on its own (an external change): fill it now.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void autofill();
     }

@@ -172,6 +172,30 @@ describe('the Wera panel', () => {
     await screen.findByRole('button', { name: /^Autofill$/ });
   });
 
+  it('presses a section\'s Add once per form, however often the form is read again', async () => {
+    const plan: PagePlan = {
+      fields: [field('w1', 'First name', { purpose: 'first_name', value: 'Ada', source: 'details', group: 'details', required: true })],
+      next: null, errors: 0, adders: [{ section: 'experience', missing: 2 }],
+    };
+    const { scan, apply } = formPage(plan);
+    let adds = 0;
+    const { emit } = fakeBackground({ job, info: { hasForm: true }, frames: { scan, apply, 'add-entries': () => { adds++; return 2; } } });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    // A dialog opening, or blocks Wera can't read, look like a new step: Wera fills again, but never adds again.
+    let reads = 0;
+    for (let i = 0; i < 3; i++) {
+      emit({ type: 'wera:frame-event', frameId: 0, event: { type: 'wera:form-changed', fields: 1, step: true } });
+      await finished();
+      reads++;
+    }
+    await userEvent.click(await finished());
+    await finished();
+    expect(reads).toBe(3);
+    expect(adds).toBe(1);
+  });
+
   it('goes with one click on the tab\'s ×, stays gone when a frame announces its form, and comes back from the toolbar', async () => {
     const { store } = fakeBackground({ job });
     const { rerender } = render(<App handle={handle('posting')} show={show({ initial: false })} />);
