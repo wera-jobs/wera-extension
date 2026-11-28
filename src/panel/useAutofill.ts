@@ -6,7 +6,7 @@
 // Anything that fails along the way is said in the panel (warnings), and
 // written to the log (Settings > Debug log, Copy diagnostics).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ResumeFile, ResumeSummary, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
+import type { LetterSteer, ResumeFile, ResumeSummary, RunAttachments, SuggestField, Suggestion, WeraApi } from '../shared/api';
 import { answerKey, bestAnswer, type SavedAnswer } from '../shared/answers';
 import { detailCorrection } from '../shared/details';
 import { describeError } from '../shared/errors';
@@ -700,7 +700,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   }, [phase]);
 
   /** Writes the cover letter (for a form that asks for one) and fills it. */
-  const writeLetter = useCallback(async (): Promise<boolean> => {
+  const writeLetter = useCallback(async (steer?: LetterSteer): Promise<boolean> => {
     setError('');
     const forJob = await ensureJob();
     if (forJob == null) {
@@ -708,15 +708,40 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       return false;
     }
     try {
-      const l = await api.writeCoverLetter(forJob);
+      const l = await api.writeCoverLetter(forJob, undefined, steer);
       files.current = { ...files.current, letter: l.body };
       setLetter(l.body);
+      // Into the form at once: the letter's box or upload, empty or holding Wera's earlier letter.
+      const spots = latest.current.filter((r) => r.purpose === 'cover_letter' && (r.kind === 'file' || r.kind === 'textarea')
+        && (r.current === '' || r.value === LETTER || r.status === 'filled'));
+      if (spots.length) {
+        const rows = spots.map((r): Row => ({ ...r, value: LETTER, source: 'ai', note: 'Wera wrote this letter for this job: read it', checked: true, drafted: true }));
+        merge(rows);
+        await fill(rows);
+      }
       return true;
     } catch (e) {
       setError(describeError(e, "Couldn't write the cover letter"));
       return false;
     }
-  }, [api, ensureJob]);
+  }, [api, ensureJob, fill, merge]);
+
+  /** Saves the user's own edit of the letter, and puts that in the form. */
+  const saveLetter = useCallback(async (body: string): Promise<boolean> => {
+    const forJob = await ensureJob();
+    if (forJob == null) return false;
+    try {
+      const l = await api.writeCoverLetter(forJob, body);
+      files.current = { ...files.current, letter: l.body };
+      setLetter(l.body);
+      const spots = latest.current.filter((r) => r.purpose === 'cover_letter' && r.value === LETTER && r.status === 'filled');
+      if (spots.length) await fill(spots.map((r) => ({ ...r, checked: true })));
+      return true;
+    } catch (e) {
+      setError(describeError(e, "Couldn't save the letter"));
+      return false;
+    }
+  }, [api, ensureJob, fill]);
 
   // Load the user's resumes so they can pick which one to attach.
   useEffect(() => {
@@ -788,5 +813,5 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const busy = phase === 'reading' || phase === 'filling' || phase === 'thinking' || phase === 'stopping' || phase === 'continuing';
   /** A fill the user can stop. */
   const stoppable = phase === 'reading' || phase === 'filling' || phase === 'thinking';
-  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, resumes, selectedResumeId, selectResume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, corrections, acceptCorrection, dismissCorrection, autofill, fillOne, acceptGuesses, continueOn, writeLetter, tailor, learn, setNotice, draftDespitePolicy };
+  return { stop, stoppable, phase, plan, rows, error, warnings, notice, resume, resumes, selectedResumeId, selectResume, letter, flow, thinking, busy, noAiHere: noAiHere && !draftAnyway, corrections, acceptCorrection, dismissCorrection, autofill, fillOne, acceptGuesses, continueOn, writeLetter, saveLetter, tailor, learn, setNotice, draftDespitePolicy };
 }

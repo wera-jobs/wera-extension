@@ -287,6 +287,35 @@ describe('the Wera panel', () => {
     expect(calls.some((c) => c.name === 'startRun')).toBe(true);
   });
 
+  it('writes a letter from the panel straight into the form, shows it, and rewrites it in another tone', async () => {
+    const plan: PagePlan = {
+      fields: [field('c1', 'Additional information', { purpose: 'cover_letter', kind: 'textarea', group: 'documents' })],
+      next: null, errors: 0,
+    };
+    const applied: ApplyRequest[] = [];
+    let n = 0;
+    const { calls } = fakeBackground({
+      job, info: { hasForm: true },
+      frames: { ...formPageFrames(plan, (req) => applied.push(req)) },
+      api: { writeCoverLetter: () => ({ body: ++n === 1 ? 'Dear Acme, I keep robots running.' : 'Dear Acme, briefly: robots.' }) },
+    });
+    render(<App handle={handle('form')} show={show()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Autofill$/ }));
+    await finished();
+    // An optional letter box: Autofill writes none, the user asks for one.
+    expect(calls.some((c) => c.name === 'writeCoverLetter')).toBe(false);
+    await userEvent.click(screen.getByRole('button', { name: /^Write$/ }));
+    await waitFor(() => expect(applied.some((r) => r.items.some((i) => i.id === 'c1'))).toBe(true));
+    expect(applied.at(-1)!.coverLetter).toBe('Dear Acme, I keep robots running.');
+    expect(await screen.findByText('Dear Acme, I keep robots running.')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Tone'), 'concise');
+    await userEvent.selectOptions(screen.getByLabelText('Length'), 'short');
+    await userEvent.click(screen.getByRole('button', { name: /Write again/ }));
+    expect(await screen.findByText('Dear Acme, briefly: robots.')).toBeInTheDocument();
+    expect(calls.filter((c) => c.name === 'writeCoverLetter').at(-1)!.args[2]).toEqual({ tone: 'concise', length: 'short' });
+    expect(applied.at(-1)!.coverLetter).toBe('Dear Acme, briefly: robots.');
+  });
+
   it('writes a cover letter for this job when the form asks for one, attaches it, and asks the user to read it', async () => {
     const plan: PagePlan = {
       fields: [field('c1', 'Cover Letter', { purpose: 'cover_letter', kind: 'file', group: 'documents', required: true, note: 'no cover letter for this job yet' })],

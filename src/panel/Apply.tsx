@@ -3,8 +3,8 @@
 // resume and cover letter Wera uses, and what it filled.
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, FileText, Flag, PenLine, Sparkles, Square, Zap } from 'lucide-react';
-import type { WeraApi } from '../shared/api';
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronDown, Copy, FileText, Flag, PenLine, RefreshCw, Sparkles, Square, Zap } from 'lucide-react';
+import type { LetterSteer, WeraApi } from '../shared/api';
 import { PAST_APPLIED } from '../shared/jobs';
 import { frames } from '../shared/rpc';
 import { diagnostics, reportPage, REPORT_DETAILS_MAX } from './diagnostics';
@@ -297,23 +297,85 @@ function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnT
           </select>
         )}
       </div>
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <LetterCard a={a} writing={writing} setWriting={setWriting} />
+    </div>
+  );
+}
+
+const TONES: [NonNullable<LetterSteer['tone']>, string][] = [['', 'Any tone'], ['warm', 'Warm'], ['formal', 'Formal'], ['confident', 'Confident'], ['enthusiastic', 'Enthusiastic'], ['concise', 'Concise']];
+const LENGTHS: [NonNullable<LetterSteer['length']>, string][] = [['', 'Any length'], ['short', 'Short'], ['standard', 'Standard'], ['long', 'Long']];
+
+/** The cover letter: write it (straight into the form), read it, copy it, edit it, or write it again in another tone or length. */
+function LetterCard({ a, writing, setWriting }: { a: ReturnType<typeof useAutofill>; writing: boolean; setWriting: (b: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const [tone, setTone] = useState<NonNullable<LetterSteer['tone']>>('');
+  const [length, setLength] = useState<NonNullable<LetterSteer['length']>>('');
+  const [copied, setCopied] = useState(false);
+  const write = (steer?: LetterSteer) => {
+    setWriting(true);
+    void a.writeLetter(steer).then((ok) => ok && setOpen(true)).finally(() => setWriting(false));
+  };
+  const select = 'rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-text';
+  return (
+    <div className="space-y-2 px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
         <PenLine className="size-4 shrink-0 text-muted" />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium">Cover letter</p>
           <p className="truncate text-[11px] text-muted">{a.letter ? 'written: Wera puts it in the form' : 'none for this job yet'}</p>
         </div>
         {a.letter ? (
-          job && <a href={api.dashboardUrl(`/jobs/${job.id}`)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
+          <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline">
+            {open ? 'Hide' : 'Read'} <ChevronDown className={clsx('size-3 transition-transform', open && 'rotate-180')} />
+          </button>
         ) : (
-          <Button className="px-2 py-1" busy={writing} onClick={() => {
-            setWriting(true);
-            void a.writeLetter().finally(() => setWriting(false));
-          }}>
-            {!writing && <Sparkles className="size-3.5" />} Write
-          </Button>
+          <Button className="px-2 py-1" busy={writing} onClick={() => write()}>{!writing && <Sparkles className="size-3.5" />} Write</Button>
         )}
       </div>
+      {a.letter && open && (
+        <div className="space-y-1.5">
+          {editing ? (
+            <textarea aria-label="Your cover letter" value={text} onChange={(e) => setText(e.target.value)} rows={10}
+              className="w-full resize-y rounded-lg border border-border bg-surface-2 p-2 text-xs text-text" />
+          ) : (
+            <p className="max-h-56 overflow-y-auto rounded-lg bg-surface-2 p-2 text-xs whitespace-pre-wrap text-text">{a.letter}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {editing ? (
+              <>
+                <Button className="px-2 py-1" busy={writing} onClick={() => {
+                  setWriting(true);
+                  void a.saveLetter(text).then((ok) => ok && setEditing(false)).finally(() => setWriting(false));
+                }}>Save</Button>
+                <button type="button" className="text-[11px] text-muted hover:text-text" onClick={() => setEditing(false)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <Button className="px-2 py-1" onClick={() => {
+                  void navigator.clipboard.writeText(a.letter).then(() => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1200);
+                  }, () => {});
+                }}>{copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />} {copied ? 'Copied' : 'Copy'}</Button>
+                <Button className="px-2 py-1" onClick={() => { setText(a.letter); setEditing(true); }}>Edit</Button>
+              </>
+            )}
+          </div>
+          {!editing && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select aria-label="Tone" value={tone} onChange={(e) => setTone(e.target.value as typeof tone)} className={select}>
+                {TONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <select aria-label="Length" value={length} onChange={(e) => setLength(e.target.value as typeof length)} className={select}>
+                {LENGTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <Button className="px-2 py-1" busy={writing} onClick={() => write({ tone, length })}>{!writing && <RefreshCw className="size-3.5" />} Write again</Button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
