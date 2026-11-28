@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.22.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.21.0...wera-extension-v0.22.0) (2026-11-28)
+
+
+### Features
+
+* a live test for every night, on fresh postings ([9d9979a](https://github.com/wera-jobs/wera-extension/commit/9d9979a9570616e4a7852dabd0dbbc7adb458901)), closes [#139](https://github.com/wera-jobs/wera-extension/issues/139)
+* an application queue the person reviews and submits ([e41bede](https://github.com/wera-jobs/wera-extension/commit/e41bede1a039e310cedaf86cf231c9ddaa434b74)), closes [#150](https://github.com/wera-jobs/wera-extension/issues/150)
+* **autofill:** answer yes/no questions the user's data settles ([e0855c1](https://github.com/wera-jobs/wera-extension/commit/e0855c1a30f7a696c86e49399b3bcc49ce89b3f0)), closes [#234](https://github.com/wera-jobs/wera-extension/issues/234)
+* **autofill:** enter inferred ticks on a checklist, marked to check ([38c7025](https://github.com/wera-jobs/wera-extension/commit/38c7025d23269fc29959e03e08a9077bf128e946)), closes [#233](https://github.com/wera-jobs/wera-extension/issues/233)
+* **autofill:** read and fill rich-text editors, ARIA checkboxes, choice rows and closed roots ([7d5e6f5](https://github.com/wera-jobs/wera-extension/commit/7d5e6f51370f6724a9774ffc56773d27a2abd43e)), closes [#245](https://github.com/wera-jobs/wera-extension/issues/245)
+* **boards:** job-board cards show the tracker's status, sponsorship and early, and save in a click ([9d732b5](https://github.com/wera-jobs/wera-extension/commit/9d732b5027f3abc48f8f18573512111f234c70e1)), closes [#252](https://github.com/wera-jobs/wera-extension/issues/252)
+* earlier answers first in the Wera button, and in My details ([a833702](https://github.com/wera-jobs/wera-extension/commit/a83370270ccf454777fc26f0439974cc139d9b5b)), closes [#254](https://github.com/wera-jobs/wera-extension/issues/254)
+* Firefox build, and an Edge note ([0810c3c](https://github.com/wera-jobs/wera-extension/commit/0810c3ca55ee73a3653f4e2b2b99598b8f7130fb)), closes [#153](https://github.com/wera-jobs/wera-extension/issues/153)
+* **panel:** a written letter goes straight into the form, to read, copy, edit or rewrite ([1628363](https://github.com/wera-jobs/wera-extension/commit/1628363a100632fb38daa353fb6323b13d864033)), closes [#249](https://github.com/wera-jobs/wera-extension/issues/249)
+* **panel:** add a missing skill, change status, follow the company, see early and the fit's parts ([3ef89c9](https://github.com/wera-jobs/wera-extension/commit/3ef89c9f0eea20f7e2fc03206505247fb9e838e5)), closes [#251](https://github.com/wera-jobs/wera-extension/issues/251)
+* **panel:** completion card, details editing, feedback and practice, as Jobright does ([6cedcf1](https://github.com/wera-jobs/wera-extension/commit/6cedcf11cf7caa6250cdb31c6c8359e88537caa0)), closes [#238](https://github.com/wera-jobs/wera-extension/issues/238)
+* **panel:** referrals start clean on each job, and log contacts there ([3af782a](https://github.com/wera-jobs/wera-extension/commit/3af782ad79ce608afeb9c04f3e8fd42c65c77df4)), closes [#253](https://github.com/wera-jobs/wera-extension/issues/253)
+* report how autofill fared on each page, purposes only ([6375e65](https://github.com/wera-jobs/wera-extension/commit/6375e65be007299f7120fc5af4de7f2328c3aea5)), closes [#133](https://github.com/wera-jobs/wera-extension/issues/133)
+* say when a question asks about what the resume lacks ([d3fa13c](https://github.com/wera-jobs/wera-extension/commit/d3fa13c28dfa4a97b96cdd081321ea61e68e2402))
+* several base resumes, the picked one sticks and tailoring starts from it ([e9ae284](https://github.com/wera-jobs/wera-extension/commit/e9ae2841b2a930d9855bd545bd4533de8a669b6e)), closes [#248](https://github.com/wera-jobs/wera-extension/issues/248)
+* site rules as data, fixed for every install within an hour ([f62f346](https://github.com/wera-jobs/wera-extension/commit/f62f346a5aad155ee2f72ecb61c1b5b9b8d9d5c5)), closes [#143](https://github.com/wera-jobs/wera-extension/issues/143)
+* **sites:** ten more systems, and cookie banners and data consents read right ([0718402](https://github.com/wera-jobs/wera-extension/commit/07184027b6c4580f9c673c276f8c95811a747b8f)), closes [#239](https://github.com/wera-jobs/wera-extension/issues/239)
+* the dashboard can line jobs up in the application queue ([7795e3f](https://github.com/wera-jobs/wera-extension/commit/7795e3face96c32952c83d9b979aa7058023d015)), closes [#150](https://github.com/wera-jobs/wera-extension/issues/150)
+* **workday:** create and sign in to job-site accounts with a password kept in the browser ([856c99d](https://github.com/wera-jobs/wera-extension/commit/856c99dc74678122298cb51b63eabe03bd8e6260)), closes [#141](https://github.com/wera-jobs/wera-extension/issues/141)
+
+
+### Bug Fixes
+
+* **autofill:** add job and school blocks once per form ([e8b7716](https://github.com/wera-jobs/wera-extension/commit/e8b7716ea8a45a98f0e33ce2b5002c8b7ab7421c)), closes [#231](https://github.com/wera-jobs/wera-extension/issues/231)
+* **autofill:** fill one batch at a time per frame, and make Stop final ([74b94f4](https://github.com/wera-jobs/wera-extension/commit/74b94f4220f4f64437b4a5770079c2a0e465fef7)), closes [#241](https://github.com/wera-jobs/wera-extension/issues/241)
+* **autofill:** find schools in lists that search a server, or choose Other ([58f426b](https://github.com/wera-jobs/wera-extension/commit/58f426b6e75647088d5587b9d0d65b021e83e238)), closes [#237](https://github.com/wera-jobs/wera-extension/issues/237)
+* **autofill:** keep a dropdown's first pick, and scroll long lists for it ([28b8184](https://github.com/wera-jobs/wera-extension/commit/28b81848c03078f79e14cc813786e82aff7b0923)), closes [#243](https://github.com/wera-jobs/wera-extension/issues/243)
+* **autofill:** keep the applicant's details out of job, school and reference blocks ([53af0fa](https://github.com/wera-jobs/wera-extension/commit/53af0fae6fcffcd121d389045498e6faa7f0a6b7)), closes [#244](https://github.com/wera-jobs/wera-extension/issues/244)
+* **autofill:** never call a non-veteran a veteran; three veteran states ([0c7145a](https://github.com/wera-jobs/wera-extension/commit/0c7145a0b26c4eaefe922cc20b7e8541d85d9247)), closes [#229](https://github.com/wera-jobs/wera-extension/issues/229)
+* **autofill:** never-worked-here and military status, from the live test ([11eaabb](https://github.com/wera-jobs/wera-extension/commit/11eaabbfa2d347f1ca3f486663bcbad365562ab2)), closes [#139](https://github.com/wera-jobs/wera-extension/issues/139)
+* **autofill:** one country code per phone number ([2ba01ed](https://github.com/wera-jobs/wera-extension/commit/2ba01edf927ce147482f985c6486e8347c3e2176)), closes [#230](https://github.com/wera-jobs/wera-extension/issues/230)
+* **autofill:** wait for an upload to end before judging it ([fcbc506](https://github.com/wera-jobs/wera-extension/commit/fcbc5062d41a96d79edc0a70701fee231c39fb72)), closes [#246](https://github.com/wera-jobs/wera-extension/issues/246)
+* dashboard edits reach the next Autofill, and self-hosted connect works ([e1ec4cf](https://github.com/wera-jobs/wera-extension/commit/e1ec4cf4c0bc736515e7ae3860b39ce589ae46fd)), closes [#250](https://github.com/wera-jobs/wera-extension/issues/250)
+* lighter on sites that are not job sites, and tidy for the store ([a88792b](https://github.com/wera-jobs/wera-extension/commit/a88792bd9c2af06b76fc5495799a6595d1cfaa1f)), closes [#247](https://github.com/wera-jobs/wera-extension/issues/247)
+* **panel:** the × hides Wera at once, and only the user brings it back ([7ab6011](https://github.com/wera-jobs/wera-extension/commit/7ab6011011dae14ec2e3d4eac8ffcfcf758624a0))
+* **panel:** the × hides Wera at once, and only the user brings it back ([035535c](https://github.com/wera-jobs/wera-extension/commit/035535ca15d8dc135999970d2d07a7733ab60657)), closes [#232](https://github.com/wera-jobs/wera-extension/issues/232)
+* the Nov 28 audit batch: smarter fills, faster, Jobright-grade panel ([6f4c0f7](https://github.com/wera-jobs/wera-extension/commit/6f4c0f72bac3c83df295e2cfef0869b2b02fee30))
+* the panel shows again on pages with icons ([3264564](https://github.com/wera-jobs/wera-extension/commit/3264564f60ea8d9c2ed2ae3ff94f5d39abeda169)), closes [#245](https://github.com/wera-jobs/wera-extension/issues/245)
+* **tracking:** mark Applied on single-page and embedded forms, never on a refused submit ([4671298](https://github.com/wera-jobs/wera-extension/commit/467129818fbaa3c477f81afdb93a777775fd8f37)), closes [#242](https://github.com/wera-jobs/wera-extension/issues/242)
+
+
+### Performance
+
+* **autofill:** start the AI at once, and load what a fill needs before the press ([fd5de25](https://github.com/wera-jobs/wera-extension/commit/fd5de25ad4d56705beb45e5ef5c3a4f2e302f26d)), closes [#235](https://github.com/wera-jobs/wera-extension/issues/235)
+* **panel:** keep the resume and letter files instead of fetching them per press ([332ab25](https://github.com/wera-jobs/wera-extension/commit/332ab25364d12a85261e1dc3c5ceb17c02f2ddc6)), closes [#236](https://github.com/wera-jobs/wera-extension/issues/236)
+
+
+### Documentation
+
+* Chrome Web Store listing kit ([f5a826f](https://github.com/wera-jobs/wera-extension/commit/f5a826f7d765ff1b5d51595be35051c52b1f9c53)), closes [#124](https://github.com/wera-jobs/wera-extension/issues/124)
+
 ## [0.21.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.20.1...wera-extension-v0.21.0) (2026-11-23)
 
 
