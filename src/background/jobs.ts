@@ -1,6 +1,7 @@
 // The background's side of the job page: it looks the page's job up in
 // Wera, learns details from forms, and marks a job applied when the site confirms
 // the application. Signed-in calls happen here, never in the page.
+import { addToQueue } from '../shared/queue';
 import { WeraApi, type WeraJob } from '../shared/api';
 import { notifyDashboard, sameRole, tabHandoff } from '../shared/bridge';
 import { answerKey } from '../shared/answers';
@@ -146,6 +147,16 @@ export async function handleJobRequest(msg: JobRequest, tabId: number, tabUrl: s
       const res = badgeFor(item, job, []);
       badgeCache.set(item.url, { at: Date.now(), res });
       return res;
+    }
+    case 'wera:job-board-queue': {
+      if (!api) return null;
+      const { item } = msg;
+      if (!item.title || !item.company || !/^https?:\/\//.test(item.url)) return null;
+      const job = await api.addJob({ url: item.url, company: item.company, title: item.title, location: '', work_mode: '', employment_type: '', department: '', salary: '', industry: '', description: item.text.slice(0, 4000), source: 'manual' }).catch(() => null);
+      // The company's own application when the board knows it: the queue fills that page.
+      const url = item.applyUrl && /^https?:\/\//.test(item.applyUrl) ? item.applyUrl : item.url;
+      const ok = await addToQueue({ url, title: item.title, company: item.company, ...(job ? { jobId: job.id } : {}) });
+      return { ok };
     }
     default:
       return null;

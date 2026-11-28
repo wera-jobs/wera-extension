@@ -4,6 +4,7 @@
 // posting, the job's fit and Save. Resume and cover letter sit under it.
 // Deeper work (editing the resume, details, the letter) opens in the
 // dashboard. The views live in Apply.tsx, JobViews.tsx and SettingsView.tsx.
+import { QueueCard } from './QueueCard';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { ChevronsRight, GraduationCap, IdCard, MessageSquare, Settings2, X } from 'lucide-react';
@@ -134,6 +135,7 @@ function Main(props: PanelProps & { api: WeraApi; kind: 'form' | 'posting' | nul
   return (
     <>
       {viewKind !== 'form' && <Practice api={api} />}
+      <QueueCard tabId={props.tabId} />
       {page.submitted && <Submitted api={api} page={page} />}
       <JobHeader api={api} page={page} kind={viewKind} />
       {page.error && <Notice tone="bad">{page.error}</Notice>}

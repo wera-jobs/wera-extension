@@ -1,13 +1,14 @@
 // The job the panel is on: its card (fit, title, company, tracker
 // status), Save for a posting, and what Wera did when the site confirmed
 // an application.
-import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X, Zap } from 'lucide-react';
 import type { ApplicationStatus, JobH1B, JobKeywords, ResumeSummary, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { applyingSince, markApplying } from '../shared/flow';
+import { queuedTab } from '../shared/queue';
 import { prettyReason } from '../shared/jobs';
 import { log } from '../shared/log';
 import { frames, rpc } from '../shared/rpc';
@@ -246,6 +247,15 @@ export function Posting({ api, page, tabId, onUseForm }: { api: WeraApi; page: P
   const stuck = useApplyStuck(tabId, pressed);
   const [error, setError] = useState('');
   const [review, setReview] = useState<JobDraft | null>(null);
+  // A posting the application queue opened: press Apply, and the application fills itself.
+  const applyNow = useRef<(() => Promise<void>) | null>(null);
+  const queuedApply = useRef(false);
+  const canApply = page.handle.canApply || !!page.info?.apply;
+  useEffect(() => {
+    if (queuedApply.current || tabId == null || !canApply || page.loading) return;
+    queuedApply.current = true;
+    void queuedTab(tabId).then((q) => (q ? applyNow.current?.() : undefined)).catch(() => {});
+  }, [tabId, canApply, page.loading]);
   // Only the first read shows a placeholder: a re-read (the page moved on) keeps the buttons where they are.
   if (page.loading && !page.info) return <Skeleton className="h-11" />;
   /** The job as the page states it, or as the AI read it from the page. */
@@ -290,6 +300,8 @@ export function Posting({ api, page, tabId, onUseForm }: { api: WeraApi; page: P
     }
   };
   const apply = page.handle.canApply || !!page.info?.apply;
+  // eslint-disable-next-line react-hooks/refs -- the latest Apply, for the queue's effect above
+  applyNow.current = onApply;
   if (review) {
     return <ReviewJob draft={review} onCancel={() => setReview(null)} onSave={async (d) => {
       page.setJob(await api.addJob({ ...d, source: 'manual' }));

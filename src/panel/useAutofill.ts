@@ -11,6 +11,7 @@ import { answerKey, bestAnswer, type SavedAnswer } from '../shared/answers';
 import { detailCorrection } from '../shared/details';
 import { describeError } from '../shared/errors';
 import { loadFlow, markApplying, saveFlow, takeApplying, type Flow } from '../shared/flow';
+import { queuedTab, reportQueueTab } from '../shared/queue';
 import { clearProfileCache, loadProfileCache, saveProfileCache } from '../shared/profileCache';
 import { log } from '../shared/log';
 import { frames } from '../shared/rpc';
@@ -18,7 +19,7 @@ import type { Settings } from '../shared/settings';
 import type { Applicant, ApplicantKey, FillResult, JobDraft, PagePlan, Profile, ScanRequest } from '../shared/types';
 import { answersToLearn } from '../shared/learn';
 import { payFromText } from '../content/facts';
-import { asSalaryOffer, chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, isSalary, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, pool, readsLikeAnswer, RESUME, rowLabel, rowsFor, type Row } from './rows';
+import { asSalaryOffer, chunk, fitsPurpose, followUpOf, isFollowUp, isGuess, isSalary, LETTER, mayChoose, needsDraft, needsLetter, needsSuggestion, needsYou, pool, readsLikeAnswer, RESUME, rowLabel, rowsFor, type Row } from './rows';
 import type { PanelEvent, PanelPageState } from './usePanelPage';
 
 export { needsYou, type Row } from './rows';
@@ -500,8 +501,10 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   }, [api, flow, host, plan?.site, tabId]);
   // The site confirmed the application: the last page is reported too.
   useEffect(() => {
-    if (page.submitted) void reportQuality();
-  }, [page.submitted, reportQuality]);
+    if (!page.submitted) return;
+    void reportQuality();
+    if (tabId != null) void reportQueueTab(tabId, { status: 'submitted' }).catch(() => {});
+  }, [page.submitted, reportQuality, tabId]);
 
   /** The page as it is now, once what went in has settled. */
   const rescan = useCallback(async (): Promise<PagePlan | null> => {
@@ -612,6 +615,11 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       });
       page.clearNewStep();
       setPhase(!got.plan.next || got.plan.next.final ? 'final' : 'filled');
+      // An application the queue opened: say how it came out, for the queue's list.
+      if (tabId != null) {
+        const needs = needsYou(latest.current).length;
+        void queuedTab(tabId).then((q) => (q ? reportQueueTab(tabId, { status: needs ? 'needs' : 'ready', filled: filled.length, needs }) : undefined)).catch(() => {});
+      }
     } catch (e) {
       if (stopped()) return;
       log.error('autofill', 'filling failed', e);
@@ -619,7 +627,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       setRows((rs) => rs.map((r) => (r.status === 'filling' ? { ...r, status: undefined } : r)));
       setPhase('idle');
     }
-  }, [read, fill, rescan, revealed, repair, suggestAndFill, draftAndFill, followUps, letterAndFill, settings.aiQuestions, ensureJob, count, page]);
+  }, [read, fill, rescan, revealed, repair, suggestAndFill, draftAndFill, followUps, letterAndFill, settings.aiQuestions, ensureJob, count, page, tabId]);
 
   /** Stop: ends the fill under way, in the panel and in every frame of the page. Nothing that went in is undone. */
   const stop = useCallback(() => {

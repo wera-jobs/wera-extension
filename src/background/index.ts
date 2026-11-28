@@ -8,6 +8,7 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
+import { passQueueTab } from '../shared/queue';
 import { cleanRules, RULES_EVERY_MS, RULES_KEY } from '../shared/remoteRules';
 import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob, pendingServer } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
@@ -16,6 +17,7 @@ import { clearBadgeCache, handleJobRequest } from './jobs';
 import { clearProfileCache } from '../shared/profileCache';
 import { frameField } from './frames';
 import { ensurePanel, handlePanel } from './panel';
+import { pumpQueue, queueTabClosed, watchQueue } from './queue';
 
 chrome.runtime.onInstalled.addListener(() => {
   // An update keeps the old menu: recreating it with the same id would fail.
@@ -49,7 +51,20 @@ async function refreshRules(force = false): Promise<void> {
     // offline or an older server: keep what is there
   }
 }
-chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId).catch(() => {}));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void forgetTab(tabId).catch(() => {});
+  void queueTabClosed(tabId).catch(() => {});
+});
+watchQueue();
+void pumpQueue();
+
+// The queue's Review button: bring that application's tab forward.
+chrome.runtime.onMessage.addListener((msg: { type?: string; tabId?: unknown }, sender) => {
+  if (msg?.type !== 'wera:queue-focus' || sender.id !== chrome.runtime.id || typeof msg.tabId !== 'number') return false;
+  const tabId = msg.tabId;
+  void chrome.tabs.update(tabId, { active: true }).then((t) => (t?.windowId != null ? chrome.windows.update(t.windowId, { focused: true }) : undefined)).catch(() => {});
+  return false;
+});
 
 // The panel (a page script) keeps where a multi-page application is in session storage.
 void chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => {});
@@ -173,5 +188,6 @@ chrome.tabs.onCreated.addListener((tab) => {
   if (tab.openerTabId != null) {
     void passApplying(tab.openerTabId, id).catch(() => {});
     void passTabJob(tab.openerTabId, id).catch(() => {});
+    void passQueueTab(tab.openerTabId, id).catch(() => {});
   }
 });

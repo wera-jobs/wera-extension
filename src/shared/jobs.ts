@@ -80,7 +80,9 @@ export type JobRequest =
   /** Batch fit lookup for cards on a job-board search list. */
   | { type: 'wera:job-badges'; items: BadgeQuery[] }
   /** Save a card's job to Wera from the search list. */
-  | { type: 'wera:job-board-save'; item: BadgeQuery };
+  | { type: 'wera:job-board-save'; item: BadgeQuery }
+  /** Line a card's job up in the application queue (saving it first). */
+  | { type: 'wera:job-board-queue'; item: BadgeQuery & { applyUrl?: string } };
 
 export const isJobRequest = (m: unknown): m is JobRequest =>
   !!m && typeof m === 'object' && typeof (m as { type?: unknown }).type === 'string' && (m as { type: string }).type.startsWith('wera:job-')

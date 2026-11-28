@@ -164,6 +164,27 @@ export function renderBadge(card: BoardCard, res: BadgeResult): void {
     badge.append(save);
   }
 
+  // Line it up: Wera fills it in a background tab, and the person reviews and submits it.
+  if (!res.closed && (!res.status || res.status === 'saved') && card.title && card.company) {
+    const queue = doc.createElement('button');
+    queue.type = 'button';
+    queue.textContent = 'Queue';
+    queue.title = 'Wera fills this application in the background; you review it and press Submit yourself';
+    queue.style.cssText = 'border:1px solid #d1d5db;background:#fff;color:#111827;border-radius:999px;padding:1px 8px;font:inherit;cursor:pointer;';
+    queue.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      queue.disabled = true;
+      queue.textContent = 'Queuing…';
+      const item = { key: card.key, url: card.url, title: card.title, company: card.company, text: card.text, ...(res.applyUrl ? { applyUrl: res.applyUrl } : {}) };
+      void sendSafe<{ ok: boolean } | null>({ type: 'wera:job-board-queue', item }).then((r) => {
+        queue.textContent = r?.ok ? 'Queued ✓' : r ? 'Queue full' : 'Queue';
+        queue.disabled = !!r?.ok;
+      });
+    });
+    badge.append(queue);
+  }
+
   if (res.applyUrl && /^https?:\/\//i.test(res.applyUrl)) {
     const a = card.el.ownerDocument.createElement('a');
     a.href = res.applyUrl;

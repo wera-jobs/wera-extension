@@ -75,4 +75,18 @@ describe('what a card shows besides its score', () => {
     expect(sent[0]).toMatchObject({ type: 'wera:job-board-save', item: { url: 'https://acme.example/c2', title: 'SRE', company: 'Acme' } });
     vi.unstubAllGlobals();
   });
+  it('a Queue button lines the job up, with the company\'s own application when the board knows it', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal('chrome', { runtime: { id: 'x', sendMessage: vi.fn(async (m: unknown) => { sent.push(m); return { ok: true }; }) } });
+    document.body.innerHTML = '<ul><li id="c1"></li><li id="c2"></li></ul>';
+    const card = (id: string) => ({ key: id, url: `https://acme.example/${id}`, title: 'SRE', company: 'Acme', text: '', el: document.getElementById(id)! });
+    renderBadge(card('c1'), { key: 'c1', score: null, source: null, status: 'applied' });
+    expect(document.querySelector('#c1 button')).toBeNull();
+    renderBadge(card('c2'), { key: 'c2', score: 70, source: 'wera', status: 'saved', applyUrl: 'https://boards.greenhouse.io/acme/jobs/7' });
+    const queue = [...document.querySelectorAll<HTMLButtonElement>('#c2 button')].find((b) => b.textContent === 'Queue')!;
+    queue.click();
+    await vi.waitFor(() => expect(queue.textContent).toBe('Queued ✓'));
+    expect(sent[0]).toMatchObject({ type: 'wera:job-board-queue', item: { url: 'https://acme.example/c2', applyUrl: 'https://boards.greenhouse.io/acme/jobs/7' } });
+    vi.unstubAllGlobals();
+  });
 });
