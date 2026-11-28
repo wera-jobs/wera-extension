@@ -14,7 +14,7 @@ import { asksOwnWords, trapMeaning, uniqueTraps, type Trap } from '../shared/tra
 import { LETTER, RESUME } from '../shared/markers';
 import { SELF_ID } from '../shared/selfId';
 import { classify } from './classify';
-import { byId, collectFields, isPressed, isWorkdayPrompt, listboxValue, type Field } from './fields';
+import { ariaChecked, byId, collectFields, isPressed, isRichText, isWorkdayPrompt, listboxValue, type Field } from './fields';
 import { attachFile, base64ToFile, comboboxChoice, enterValue, mark, setNativeValue, verifyFileUpload, wait } from './fill';
 import { isPlaceholderOption, matchOption } from './match';
 import { countryAnswer, countryIn, norm, sameCountry, stateName } from './places';
@@ -33,18 +33,18 @@ export function currentValue(f: Field): string {
   switch (f.kind) {
     case 'text':
     case 'textarea':
-      return (f.el as HTMLInputElement).value.trim();
+      return isRichText(f.el) ? (f.el.textContent ?? '').trim() : (f.el as HTMLInputElement).value.trim();
     case 'select': {
       const sel = f.el as HTMLSelectElement;
       return sel.selectedIndex > 0 || (sel.selectedIndex === 0 && sel.value) ? (sel.options[sel.selectedIndex]?.textContent ?? '').trim() : '';
     }
     case 'radio':
     case 'checkboxes':
-      return f.options.filter((o) => (o.el as HTMLInputElement).checked).map((o) => o.label).join(' | ');
+      return f.options.filter((o) => (o.el instanceof HTMLInputElement ? o.el.checked : ariaChecked(o.el!))).map((o) => o.label).join(' | ');
     case 'buttons':
       return f.options.filter((o) => isPressed(o.el!)).map((o) => o.label).join(' | ');
     case 'checkbox':
-      return (f.el as HTMLInputElement).checked ? 'yes' : '';
+      return (f.el instanceof HTMLInputElement ? f.el.checked : ariaChecked(f.el)) ? 'yes' : '';
     case 'combobox':
       return comboboxChoice(f.el as HTMLInputElement);
     case 'listbox':

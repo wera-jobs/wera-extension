@@ -5,7 +5,7 @@
 // own steer) and insert. Nothing is typed into the page until they insert.
 import { classify } from '../content/classify';
 import { pageKind } from '../content/detect';
-import { collectFields, type Field } from '../content/fields';
+import { collectFields, isRichText, type Field } from '../content/fields';
 import { insertText } from '../content/fill';
 import { firstChoice, valueFor } from '../content/values';
 import { bestAnswer, matchAnswers, type SavedAnswer } from '../shared/answers';
@@ -439,7 +439,10 @@ export function startAssist(doc: Document): () => void {
   let retry = 0;
   const onFocus = (e: FocusEvent) => focused(e.target as HTMLElement | null);
   const focused = (target: HTMLElement | null) => {
-    if (!target || !(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement)) return;
+    // A rich-text editor (focus lands on it, or inside it) counts as the box it is.
+    const rich = target?.closest?.<HTMLElement>('[contenteditable="true"], [contenteditable=""], [role="textbox"]');
+    if (rich && isRichText(rich)) target = rich;
+    if (!target || !(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement || isRichText(target))) return;
     window.clearTimeout(hideTimer);
     if (field?.el === target) return showMark(field, markMode);
     if (looked(target)) {
@@ -459,7 +462,7 @@ export function startAssist(doc: Document): () => void {
       if (isOpenQuestion(f)) {
         closePop();
         showMark(f, 'draft');
-      } else if (isQuickFillField(f) && !target.value.trim()) {
+      } else if (isQuickFillField(f) && !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ? target.value : target.textContent ?? '').trim()) {
         closePop();
         showMark(f, 'quick');
       }

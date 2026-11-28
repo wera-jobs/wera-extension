@@ -4,7 +4,7 @@
 // files, and checking each value took. What to enter comes from
 // values.ts; which choice means it, from match.ts.
 import type { FieldPurpose, FillResult } from '../shared/types';
-import { isHidden, isPressed, isWorkdayPrompt, listboxValue, promptChoice, scopeOf, type Field, type Option } from './fields';
+import { ariaChecked, type Field, isHidden, isPressed, isRichText, isWorkdayPrompt, listboxValue, type Option, promptChoice, scopeOf } from './fields';
 import { isPlaceholderOption, isProperName, matchOption, searchText } from './match';
 import { norm } from './places';
 import { alternatives, choicesOf, firstChoice, formatFor } from './values';
@@ -424,6 +424,23 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
   switch (f.kind) {
     case 'text':
     case 'textarea': {
+      if (isRichText(f.el)) {
+        value = firstChoice(value);
+        const had = (f.el.textContent ?? '').trim();
+        if (had && (!overwrite || had === value)) {
+          res.status = 'already';
+          res.value = had;
+          return;
+        }
+        if (setRichText(f.el, value)) {
+          res.status = 'filled';
+          res.value = value;
+        } else {
+          res.status = 'review';
+          res.note = 'this editor did not take the text: paste it yourself';
+        }
+        return;
+      }
       const el = f.el as HTMLInputElement;
       value = firstChoice(value);
       if (el.value.trim() && (!overwrite || el.value === value)) {
@@ -516,7 +533,7 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
     case 'radio':
     case 'checkboxes':
     case 'buttons': {
-      const chosen = (o: Option) => (f.kind === 'buttons' ? isPressed(o.el!) : (o.el as HTMLInputElement).checked);
+      const chosen = (o: Option) => (f.kind === 'buttons' ? isPressed(o.el!) : o.el instanceof HTMLInputElement ? o.el.checked : ariaChecked(o.el!));
       const wanted = f.kind === 'checkboxes' ? choicesOf(value, purpose) : [value];
       const hits = wanted.map((w) => matchOption(f.options, w, purpose)).filter((o): o is Option => o != null);
       if (f.options.some(chosen) && (!overwrite || (hits.length > 0 && hits.every(chosen)))) {
@@ -531,8 +548,8 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
       }
       for (const hit of hits) {
         if (chosen(hit)) continue;
-        if (f.kind === 'buttons') press(hit.el!);
-        else check(hit.el as HTMLInputElement);
+        if (f.kind === 'buttons' || !(hit.el instanceof HTMLInputElement)) press(hit.el!);
+        else check(hit.el);
       }
       res.status = 'filled';
       res.value = hits.map((o) => o.label).join(' | ');
@@ -540,14 +557,21 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
     }
     case 'checkbox': {
       // A lone box ("I am willing to relocate"): ticked for yes, left alone for no.
-      const box = f.el as HTMLInputElement;
-      if (box.checked) {
+      const box = f.el;
+      const on = () => (box instanceof HTMLInputElement ? box.checked : ariaChecked(box));
+      if (on()) {
         res.status = 'already';
         res.value = 'yes';
         return;
       }
       if (norm(firstChoice(value)) !== 'yes') return;
-      check(box);
+      if (box instanceof HTMLInputElement) check(box);
+      else press(box);
+      if (!on()) {
+        res.status = 'review';
+        res.note = 'tick it yourself';
+        return;
+      }
       res.status = 'filled';
       res.value = 'yes';
       return;
@@ -557,8 +581,43 @@ export async function enterValue(f: Field, purpose: FieldPurpose | null, value: 
   }
 }
 
+/**
+ * Text into a rich-text editor the way typing does (editors such as Quill, ProseMirror and
+ * Draft.js keep their own model and ignore a changed DOM): select what is there, insert, and check.
+ */
+export function setRichText(el: HTMLElement, text: string): boolean {
+  const doc = el.ownerDocument;
+  el.focus?.();
+  const sel = doc.getSelection?.();
+  if (sel) {
+    const range = doc.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  let done: boolean;
+  try {
+    done = typeof doc.execCommand === 'function' && doc.execCommand('insertText', false, text);
+  } catch {
+    done = false;
+  }
+  const head = text.trim().slice(0, 30);
+  if (!done || !(el.textContent ?? '').includes(head)) {
+    el.textContent = text;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+  }
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  el.dispatchEvent(new Event('blur', { bubbles: true }));
+  return (el.textContent ?? '').includes(head);
+}
+
 /** Puts text into one field (an AI-drafted answer or a cover letter). */
 export function insertText(el: HTMLElement | null, text: string): boolean {
+  if (el && isRichText(el)) {
+    const ok = setRichText(el, text);
+    if (ok) mark(el, 'filled');
+    return ok;
+  }
   if (!el || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
   setNativeValue(el, text);
   mark(el, 'filled');
