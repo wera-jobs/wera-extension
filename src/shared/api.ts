@@ -199,6 +199,10 @@ export interface ResumeSummary {
   id: number;
   title: string;
   job_id: number | null;
+  /** The base resume used unless another is chosen (a user may keep several: ML, Backend...). */
+  is_default?: boolean;
+  /** For a tailored copy: the base resume it was written from. */
+  base_id?: number | null;
   fit_score?: { before: number; after: number } | null;
 }
 
@@ -389,10 +393,12 @@ export class WeraApi {
     }
   }
 
-  tailorResume(jobId: number, request = '') {
+  /** Writes a copy of a base resume (the default one unless baseId names another) toward the job. */
+  tailorResume(jobId: number, request = '', baseId?: number | null) {
+    const body = { ...(request.trim() ? { request: request.trim() } : {}), ...(baseId != null ? { base_resume_id: baseId } : {}) };
     return this.call<{ resume: ResumeDoc; coverage_before: Coverage }>(`/api/jobs/${jobId}/resume`, {
       method: 'POST',
-      body: request.trim() ? JSON.stringify({ request: request.trim() }) : undefined,
+      body: Object.keys(body).length ? JSON.stringify(body) : undefined,
     });
   }
 
@@ -558,9 +564,12 @@ export class WeraApi {
    * The best resume to attach for a job: the copy tailored to it, else
    * the main resume, else the uploaded file; null if there is none.
    */
-  async resumeFile(jobId: number | null): Promise<ResumeFile | null> {
-    const { resumes } = await this.call<{ resumes: { id: number; job_id: number | null }[] }>('/api/resumes').catch(() => ({ resumes: [] }));
-    const doc = (jobId != null && resumes.find((r) => r.job_id === jobId)) || resumes.find((r) => r.job_id == null);
+  async resumeFile(jobId: number | null, preferId?: number | null): Promise<ResumeFile | null> {
+    const { resumes } = await this.call<{ resumes: ResumeSummary[] }>('/api/resumes').catch(() => ({ resumes: [] as ResumeSummary[] }));
+    // The one the user chose in the panel, else this job's tailored copy, else the default base resume.
+    const doc = (preferId != null && resumes.find((r) => r.id === preferId))
+      || (jobId != null && resumes.find((r) => r.job_id === jobId))
+      || resumes.find((r) => r.job_id == null && r.is_default) || resumes.find((r) => r.job_id == null);
     if (doc) {
       const f = await this.resumeDocPdf(doc.id).catch(() => null);
       if (f) return { ...f, id: doc.id, kind: doc.job_id == null ? 'base' : 'tailored' };

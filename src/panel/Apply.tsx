@@ -290,7 +290,7 @@ function Docs({ api, page, a }: { api: WeraApi; page: PanelPageState; a: ReturnT
             }}
             className="w-full rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-text focus:border-accent/60 focus:outline-none">
             {a.resumes.map((r) => {
-              const tag = r.job_id == null ? 'Main' : r.job_id === job?.id ? 'Tailored for this job' : 'Tailored';
+              const tag = r.job_id == null ? (r.is_default ? 'Default' : 'Base') : r.job_id === job?.id ? 'Tailored for this job' : 'Tailored';
               const fit = r.fit_score ? ` · Fit ${r.fit_score.after}` : r.job_id == null && job?.fit_score != null ? ` · Fit ${job.fit_score}` : '';
               return <option key={r.id} value={r.id}>{r.title || tag} ({tag}{fit})</option>;
             })}

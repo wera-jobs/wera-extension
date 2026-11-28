@@ -64,6 +64,8 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
   const [resume, setResume] = useState<ResumeFile | null>(null);
   const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  // The resume the user picked in the panel: it stays through Autofill and later steps.
+  const picked = useRef<number | null>(null);
   const [letter, setLetter] = useState('');
   const [flow, setFlow] = useState<Flow | null>(null);
   const [thinking, setThinking] = useState(0);
@@ -133,7 +135,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       if (cached) void fetchProfile(true).catch(() => {});
       const [{ view, saved }, file, cover] = await Promise.all([
         cached ? Promise.resolve(cached) : fetchProfile(false),
-        api.resumeFile(jobId).catch((e: unknown) => {
+        api.resumeFile(jobId, picked.current).catch((e: unknown) => {
           warn(describeError(e, "Couldn't load your resume, so Wera won't attach it"), e);
           return null;
         }),
@@ -722,7 +724,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
     void api.listResumes().then((list) => {
       if (!live) return;
       setResumes(list);
-      setSelectedResumeId((cur) => cur ?? ((jobId != null ? list.find((r) => r.job_id === jobId) : null) ?? list.find((r) => r.job_id == null))?.id ?? null);
+      setSelectedResumeId((cur) => cur ?? ((jobId != null ? list.find((r) => r.job_id === jobId) : null) ?? list.find((r) => r.job_id == null && r.is_default) ?? list.find((r) => r.job_id == null))?.id ?? null);
     }).catch(() => {});
     return () => {
       live = false;
@@ -743,6 +745,7 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       files.current = { ...files.current, resume: file };
       setResume(file);
       setSelectedResumeId(doc.id);
+      picked.current = doc.id;
       const attached = latest.current.find((r) => r.value === RESUME && (r.status === 'filled' || r.status === 'already'));
       if (attached) {
         await fill([{ ...attached, checked: true }]);
@@ -764,7 +767,10 @@ export function useAutofill(api: WeraApi, page: PanelPageState, settings: Settin
       return false;
     }
     try {
-      await api.tailorResume(forJob);
+      // Written from the base resume the user picked, if they picked one.
+      const base = resumes.find((r) => r.id === picked.current && r.job_id == null)?.id;
+      await api.tailorResume(forJob, '', base);
+      picked.current = null;
       const [file, list] = await Promise.all([api.resumeFile(forJob), api.listResumes().catch(() => resumes)]);
       files.current = { ...files.current, resume: file };
       setResume(file);

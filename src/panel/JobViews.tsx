@@ -4,7 +4,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { Ban, Bookmark, ChevronDown, FileText, PartyPopper, Send, Sparkles, X, Zap } from 'lucide-react';
-import type { ApplicationStatus, JobH1B, JobKeywords, WeraApi, WeraJob } from '../shared/api';
+import type { ApplicationStatus, JobH1B, JobKeywords, ResumeSummary, WeraApi, WeraJob } from '../shared/api';
 import type { JobDraft } from '../shared/types';
 import { describeError } from '../shared/errors';
 import { applyingSince, markApplying } from '../shared/flow';
@@ -332,6 +332,21 @@ function ReviewJob({ draft, onSave, onCancel }: { draft: JobDraft; onSave: (d: J
 /** Tailor the resume to a saved job before applying, and see what it does to the fit. */
 function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
   const [version, setVersion] = useState(0);
+  // Several base resumes (ML, Backend...): the user picks the one to start from.
+  const [bases, setBases] = useState<ResumeSummary[]>([]);
+  const [base, setBase] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api.listResumes().then((list) => {
+      if (!live) return;
+      const b = list.filter((r) => r.job_id == null);
+      setBases(b);
+      setBase((b.find((r) => r.is_default) ?? b[0])?.id ?? null);
+    }, (e: unknown) => log.warn('tailor', 'listing your resumes failed', e));
+    return () => {
+      live = false;
+    };
+  }, [api]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const score = useTailoredScore(api, jobId, version);
@@ -339,7 +354,7 @@ function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
     setBusy(true);
     setError('');
     try {
-      await api.tailorResume(jobId);
+      await api.tailorResume(jobId, '', bases.length > 1 ? base : null);
       setVersion((n) => n + 1);
     } catch (e) {
       setError(describeError(e, "Couldn't tailor your resume"));
@@ -357,7 +372,15 @@ function TailorResume({ api, jobId }: { api: WeraApi; jobId: number }) {
       {score ? (
         <a href={api.dashboardUrl(`/jobs/${jobId}`)} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-accent hover:underline">Edit</a>
       ) : (
-        <Button className="px-2 py-1" busy={busy} onClick={() => void tailor()}>{!busy && <Sparkles className="size-3.5" />} Tailor</Button>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Button className="px-2 py-1" busy={busy} onClick={() => void tailor()}>{!busy && <Sparkles className="size-3.5" />} Tailor</Button>
+          {bases.length > 1 && (
+            <select aria-label="Start from" value={base ?? ''} onChange={(e) => setBase(Number(e.target.value) || null)}
+              className="max-w-36 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-text">
+              {bases.map((r) => <option key={r.id} value={r.id}>{r.title || 'Resume'}{r.is_default ? ' (default)' : ''}</option>)}
+            </select>
+          )}
+        </div>
       )}
     </div>
   );

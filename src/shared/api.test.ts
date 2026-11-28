@@ -160,3 +160,35 @@ describe('the AI request marker', () => {
     expect(splitNeedsInput('A plain answer.')).toEqual(['A plain answer.', '']);
   });
 });
+
+describe('several base resumes', () => {
+  const list = { resumes: [
+    { id: 1, title: 'Backend', job_id: null, is_default: false },
+    { id: 2, title: 'ML', job_id: null, is_default: true },
+    { id: 3, title: 'ML for Acme', job_id: 9, base_id: 2 },
+  ] };
+  const pdf = () => new Response(new Blob(['%PDF']), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="r.pdf"' } });
+
+  it('attaches the one the user picked, else the job\'s copy, else the default', async () => {
+    const urls: string[] = [];
+    const fetcher = vi.fn(async (u: string) => {
+      urls.push(u);
+      return u.endsWith('/api/resumes') ? json(200, list) : pdf();
+    });
+    const api = new WeraApi('https://w', 't', fetcher as never);
+    expect((await api.resumeFile(null, 1))?.id).toBe(1);
+    expect((await api.resumeFile(9))?.id).toBe(3);
+    expect((await api.resumeFile(null))?.id).toBe(2);
+  });
+
+  it('tailors from the base resume asked for', async () => {
+    const fetcher = vi.fn(async () => json(200, { resume: {}, coverage_before: {} }));
+    const api = new WeraApi('https://w', 't', fetcher);
+    await api.tailorResume(9, '', 1);
+    await api.tailorResume(9);
+    const [, first] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    const [, second] = fetcher.mock.calls[1] as unknown as [string, RequestInit];
+    expect(JSON.parse(first.body as string)).toEqual({ base_resume_id: 1 });
+    expect(second.body).toBeUndefined();
+  });
+});
