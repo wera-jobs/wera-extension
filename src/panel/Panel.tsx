@@ -37,7 +37,8 @@ export interface PanelProps {
   onSignedIn: () => void;
   onSignedOut: () => void;
   /** The user turned Wera off on this site: it goes away now. */
-  onHideSite: () => void;
+  /** Wera goes from this page; how says which way the user chose (the tab's × is 'visit'). */
+  onHideSite: (how?: HideChoice) => void;
   /** A wide window: the panel is a sidebar the page makes room for, flush with the edge (as Simplify's and Jobright's are). */
   docked?: boolean;
 }
@@ -54,7 +55,7 @@ export function Panel(props: PanelProps) {
       // Until the next visit: gone from this page. On this site, or everywhere: remembered.
       if (how === 'site') void setSiteHidden(siteKey(document), true).catch(() => {});
       if (how === 'everywhere') props.setSettings({ launcher: false });
-      props.onHideSite();
+      props.onHideSite(how);
     };
     return <Launcher onOpen={() => onOpen(true)} onHide={hide} />;
   }
