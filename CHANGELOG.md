@@ -39,9 +39,7 @@
 * **autofill:** wait for an upload to end before judging it ([fcbc506](https://github.com/wera-jobs/wera-extension/commit/fcbc5062d41a96d79edc0a70701fee231c39fb72)), closes [#246](https://github.com/wera-jobs/wera-extension/issues/246)
 * dashboard edits reach the next Autofill, and self-hosted connect works ([e1ec4cf](https://github.com/wera-jobs/wera-extension/commit/e1ec4cf4c0bc736515e7ae3860b39ce589ae46fd)), closes [#250](https://github.com/wera-jobs/wera-extension/issues/250)
 * lighter on sites that are not job sites, and tidy for the store ([a88792b](https://github.com/wera-jobs/wera-extension/commit/a88792bd9c2af06b76fc5495799a6595d1cfaa1f)), closes [#247](https://github.com/wera-jobs/wera-extension/issues/247)
-* **panel:** the × hides Wera at once, and only the user brings it back ([7ab6011](https://github.com/wera-jobs/wera-extension/commit/7ab6011011dae14ec2e3d4eac8ffcfcf758624a0))
 * **panel:** the × hides Wera at once, and only the user brings it back ([035535c](https://github.com/wera-jobs/wera-extension/commit/035535ca15d8dc135999970d2d07a7733ab60657)), closes [#232](https://github.com/wera-jobs/wera-extension/issues/232)
-* the Nov 28 audit batch: smarter fills, faster, Jobright-grade panel ([6f4c0f7](https://github.com/wera-jobs/wera-extension/commit/6f4c0f72bac3c83df295e2cfef0869b2b02fee30))
 * the panel shows again on pages with icons ([3264564](https://github.com/wera-jobs/wera-extension/commit/3264564f60ea8d9c2ed2ae3ff94f5d39abeda169)), closes [#245](https://github.com/wera-jobs/wera-extension/issues/245)
 * **tracking:** mark Applied on single-page and embedded forms, never on a refused submit ([4671298](https://github.com/wera-jobs/wera-extension/commit/467129818fbaa3c477f81afdb93a777775fd8f37)), closes [#242](https://github.com/wera-jobs/wera-extension/issues/242)
 
@@ -54,7 +52,7 @@
 
 ### Documentation
 
-* Chrome Web Store listing kit ([f5a826f](https://github.com/wera-jobs/wera-extension/commit/f5a826f7d765ff1b5d51595be35051c52b1f9c53)), closes [#124](https://github.com/wera-jobs/wera-extension/issues/124)
+* Chrome Web Store listing kit ([f5a826f](https://github.com/wera-jobs/wera-extension/commit/f5a826f7d765ff1b5d51595be35051c52b1f9c53))
 
 ## [0.21.0](https://github.com/wera-jobs/wera-extension/compare/wera-extension-v0.20.1...wera-extension-v0.21.0) (2026-11-23)
 
