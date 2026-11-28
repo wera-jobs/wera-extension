@@ -34,11 +34,13 @@ export type PanelRequest =
   /** The application went through and the user wants the tab gone (see panel/AppliedAlert.tsx). */
   | { type: 'wera:tab-close' }
   /** The user takes up the next match from the application they just sent: it opens in this tab. */
-  | { type: 'wera:open-next'; jobId: number; url: string };
+  | { type: 'wera:open-next'; jobId: number; url: string }
+  /** Signed out, the user is connecting through another Wera server's dashboard: its connect page may hand over a key. */
+  | { type: 'wera:pending-server'; server: string };
 
 export const isPanelRequest = (m: unknown): m is PanelRequest => {
   const t = (m as { type?: unknown } | null)?.type;
-  return t === 'wera:api' || t === 'wera:frames' || t === 'wera:sign-in' || t === 'wera:sign-out' || t === 'wera:panel-ensure' || t === 'wera:tab-close' || t === 'wera:open-next';
+  return t === 'wera:api' || t === 'wera:frames' || t === 'wera:sign-in' || t === 'wera:sign-out' || t === 'wera:panel-ensure' || t === 'wera:tab-close' || t === 'wera:open-next' || t === 'wera:pending-server';
 };
 
 export type RpcReply<T = unknown> = { ok: true; value: T } | { ok: false; status: number; error: string };

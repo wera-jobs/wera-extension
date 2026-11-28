@@ -8,10 +8,11 @@ import { markApplying, passApplying } from '../shared/flow';
 import { isJobRequest } from '../shared/jobs';
 import { log } from '../shared/log';
 import { isPanelRequest } from '../shared/rpc';
-import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob } from '../shared/storage';
+import { DEFAULT_SERVER, forgetTab, loadSession, passTabJob, pendingServer } from '../shared/storage';
 import { acceptDashboardKey } from './connect';
 import type { ContentEvent } from '../shared/types';
-import { handleJobRequest } from './jobs';
+import { clearBadgeCache, handleJobRequest } from './jobs';
+import { clearProfileCache } from '../shared/profileCache';
 import { frameField } from './frames';
 import { ensurePanel, handlePanel } from './panel';
 
@@ -43,7 +44,7 @@ function syncAll(): Promise<void> {
   syncing = syncing.then(async () => {
     const s = await loadSession();
     // Signed out, the bridge waits on the default server, whose dashboard can connect the extension.
-    await syncBridge(s?.server ?? DEFAULT_SERVER);
+    await syncBridge(s?.server ?? DEFAULT_SERVER, s ? null : await pendingServer());
   }).catch(() => {});
   return syncing;
 }
@@ -116,6 +117,18 @@ chrome.runtime.onMessage.addListener((msg: { type?: string; token?: unknown }, s
   const from = sender.origin ?? (sender.url ? new URL(sender.url).origin : '');
   void acceptDashboardKey(from, msg.token).then((ok) => reply({ ok }));
   return true;
+});
+
+// The user changed their details, answers or resumes in the dashboard: the next Autofill reads them fresh.
+chrome.runtime.onMessage.addListener((msg: { type?: string }, sender) => {
+  if (msg?.type !== 'wera:dashboard-changed') return false;
+  void loadSession().then((s) => {
+    const from = sender.origin ?? (sender.url ? new URL(sender.url).origin : '');
+    if (!s || from !== s.server) return; // only the user's own Wera
+    void clearProfileCache();
+    clearBadgeCache();
+  });
+  return false;
 });
 
 // "Apply on Acme's site" in the dashboard: remember the job, then tie it to the tab that click opens.

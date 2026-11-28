@@ -14,13 +14,13 @@ export type BridgeMessage =
   | { type: 'connect'; token: string };
 
 /** Puts the bridge on the user's Wera dashboard (and its open tabs), or removes it after sign-out. */
-export async function syncBridge(server: string | null): Promise<void> {
+export async function syncBridge(server: string | null, also: string | null = null): Promise<void> {
   if (!chrome.scripting?.registerContentScripts) return;
   const have = await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID] }).catch(() => []);
-  const matches = server ? [`${server}/*`] : [];
+  const matches = [...new Set([server, also].filter((x): x is string => !!x))].map((s) => `${s}/*`);
   if (have.length && JSON.stringify(have[0]!.matches) === JSON.stringify(matches)) return;
   if (have.length) await chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] }).catch(() => {});
-  if (!server) return;
+  if (!matches.length) return;
   try {
     await chrome.scripting.registerContentScripts([
       { id: SCRIPT_ID, matches, js: ['bridge.js'], runAt: 'document_start', persistAcrossSessions: true },

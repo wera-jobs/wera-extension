@@ -123,3 +123,17 @@ export async function forgetTab(tabId: number): Promise<void> {
   }
   if (Object.keys(next).length) await chrome.storage.session.set(next);
 }
+
+const PENDING_SERVER = 'wera.pendingServer';
+
+/** The other Wera server the user is connecting through (signed out), for an hour. */
+export async function pendingServer(): Promise<string | null> {
+  const got: Record<string, unknown> = await chrome.storage.session.get(PENDING_SERVER).catch(() => ({}));
+  const p = got[PENDING_SERVER] as { server: string; at: number } | undefined;
+  return p && Date.now() - p.at < 3_600_000 ? p.server : null;
+}
+
+export async function setPendingServer(server: string | null): Promise<void> {
+  if (server) await chrome.storage.session.set({ [PENDING_SERVER]: { server, at: Date.now() } });
+  else await chrome.storage.session.remove(PENDING_SERVER);
+}

@@ -55,6 +55,7 @@ export function SignIn({ onSignedIn, forJob }: { onSignedIn: () => void; forJob?
       )}
       {/* The easy way: the dashboard, where the person may already be signed in, connects this browser. */}
       <a href={`${site}/connect-extension`} target="_blank" rel="noreferrer"
+        onClick={() => { if (site !== DEFAULT_SERVER) void rpc({ type: 'wera:pending-server', server: site }).catch(() => {}); }}
         className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-bg hover:bg-accent/85">
         Connect with Wera
       </a>

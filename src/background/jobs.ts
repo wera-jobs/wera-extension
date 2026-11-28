@@ -161,6 +161,11 @@ export async function learnDetails(api: WeraApi, entries: { purpose: FieldPurpos
 
 const BOARD_HOST = /(^|\.)(linkedin\.com|indeed\.[a-z.]+|glassdoor\.[a-z.]+)$/i;
 const badgeCache = new Map<string, { at: number; res: BadgeResult }>();
+
+/** Forgets the job boards' badges (the user's jobs changed in the dashboard). */
+export function clearBadgeCache() {
+  badgeCache.clear();
+}
 const BADGE_TTL = 10 * 60_000;
 
 /** Looks up Wera's fit score (or falls back to quick resume-skill match) for search-list cards. */
